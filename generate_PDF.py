@@ -144,6 +144,20 @@ def fetch_product(db_path: Path, product_id: int) -> dict:
     return dict(row) if row else {}
 
 
+def fetch_system(db_path: Path, system_id: int) -> dict:
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            """
+            SELECT id, name, gal_datei, gal_link
+            FROM systems
+            WHERE id = ?
+            """,
+            (system_id,),
+        ).fetchone()
+    return dict(row) if row else {}
+
+
 def fetch_system_parts(db_path: Path, system_id: int) -> list[dict]:
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
@@ -179,7 +193,7 @@ def build_inputs_from_system_parts(parts: list[dict]) -> dict[str, str]:
     inputs: dict[str, str] = {}
     for part in parts:
         index = part.get("part_index")
-        if index not in (2, 3):
+        if index not in (1, 2, 3):
             continue
         prefix = f"t{index}_"
         inputs.update(
@@ -229,6 +243,7 @@ def _build_typst_command(
 def generate_einsatzdokumentation_pdf(
     output_dir: str = "PDF-Dokumente",
     inputs: dict[str, str] | None = None,
+    system_name: str | None = None,
 ) -> Path:
     """
     Generiert Einsatzdokumentation.pdf aus der Typst-Vorlage.
@@ -236,6 +251,7 @@ def generate_einsatzdokumentation_pdf(
     Args:
         output_dir: Ausgabeverzeichnis für die PDF-Datei
         inputs: Optional dictionary mit Typst-Eingabevariablen
+        system_name: Optional name des Systems für Dateinamen
         
     Returns:
         Path zum generierten PDF
@@ -245,10 +261,18 @@ def generate_einsatzdokumentation_pdf(
         raise RuntimeError("Typst wurde nicht gefunden.")
     template_path = Path("Typst_Vorlagen/Einsatzdokumentation.typ")
     
-    # Verwende Einzelidentifikation als Präfix wenn vorhanden
+    # Verwende Systemname oder Einzelidentifikation als Präfix
     prefix = ""
-    if inputs and "t1_Einzelidentifikation" in inputs:
+    if system_name:
+        prefix = system_name + "_"
+    elif inputs and "t1_Einzelidentifikation" in inputs:
         prefix = inputs["t1_Einzelidentifikation"] + "_"
+    
+    # Füge systemname zu inputs hinzu wenn vorhanden
+    if inputs is None:
+        inputs = {}
+    if system_name:
+        inputs = {**inputs, "systemname": system_name}
     
     output_path = Path(output_dir) / f"{prefix}Einsatzdokumentation.pdf"
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -269,6 +293,7 @@ def generate_einsatzdokumentation_pdf(
 def generate_haftungsausschluss_pdf(
     output_dir: str = "PDF-Dokumente",
     inputs: dict[str, str] | None = None,
+    system_name: str | None = None,
 ) -> Path:
     """
     Generiert Haftungsausschluss.pdf aus der Typst-Vorlage.
@@ -276,6 +301,7 @@ def generate_haftungsausschluss_pdf(
     Args:
         output_dir: Ausgabeverzeichnis für die PDF-Datei
         inputs: Optional dictionary mit Typst-Eingabevariablen
+        system_name: Optional name des Systems für Dateinamen
         
     Returns:
         Path zum generierten PDF
@@ -285,10 +311,18 @@ def generate_haftungsausschluss_pdf(
         raise RuntimeError("Typst wurde nicht gefunden.")
     template_path = Path("Typst_Vorlagen/Haftungsausschluss.typ")
     
-    # Verwende Einzelidentifikation als Präfix wenn vorhanden
+    # Verwende Systemname oder Einzelidentifikation als Präfix
     prefix = ""
-    if inputs and "t1_Einzelidentifikation" in inputs:
+    if system_name:
+        prefix = system_name + "_"
+    elif inputs and "t1_Einzelidentifikation" in inputs:
         prefix = inputs["t1_Einzelidentifikation"] + "_"
+    
+    # Füge systemname zu inputs hinzu wenn vorhanden
+    if inputs is None:
+        inputs = {}
+    if system_name:
+        inputs = {**inputs, "systemname": system_name}
     
     output_path = Path(output_dir) / f"{prefix}Haftungsausschluss.pdf"
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -309,6 +343,7 @@ def generate_haftungsausschluss_pdf(
 def generate_pd_pdf(
     output_dir: str = "PDF-Dokumente",
     inputs: dict[str, str] | None = None,
+    system_name: str | None = None,
 ) -> Path:
     """
     Generiert PD.pdf (Produktdatenblatt) aus der Typst-Vorlage.
@@ -316,6 +351,7 @@ def generate_pd_pdf(
     Args:
         output_dir: Ausgabeverzeichnis für die PDF-Datei
         inputs: Optional dictionary mit Typst-Eingabevariablen
+        system_name: Optional name des Systems für Dateinamen
         
     Returns:
         Path zum generierten PDF
@@ -325,10 +361,18 @@ def generate_pd_pdf(
         raise RuntimeError("Typst wurde nicht gefunden.")
     template_path = Path("Typst_Vorlagen/PD.typ")
     
-    # Verwende Einzelidentifikation als Präfix wenn vorhanden
+    # Verwende Systemname oder Einzelidentifikation als Präfix
     prefix = ""
-    if inputs and "t1_Einzelidentifikation" in inputs:
+    if system_name:
+        prefix = system_name + "_"
+    elif inputs and "t1_Einzelidentifikation" in inputs:
         prefix = inputs["t1_Einzelidentifikation"] + "_"
+    
+    # Füge systemname zu inputs hinzu wenn vorhanden
+    if inputs is None:
+        inputs = {}
+    if system_name:
+        inputs = {**inputs, "systemname": system_name}
     
     output_path = Path(output_dir) / f"{prefix}PD.pdf"
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -373,7 +417,11 @@ def generate_einsatzdokumentation_pdf_from_db(
     Generiert die Einsatzdokumentation mit Daten aus der Datenbank.
     """
     inputs = build_inputs_from_db(product_id, system_id, db_path)
-    return generate_einsatzdokumentation_pdf(output_dir, inputs=inputs)
+    system_name = None
+    if system_id is not None:
+        system = fetch_system(db_path, system_id)
+        system_name = system.get("name") if system else None
+    return generate_einsatzdokumentation_pdf(output_dir, inputs=inputs, system_name=system_name)
 
 
 def generate_pd_pdf_from_db(
@@ -383,7 +431,11 @@ def generate_pd_pdf_from_db(
     db_path: Path = DEFAULT_DB_PATH,
 ) -> Path:
     inputs = build_inputs_from_db(product_id, system_id, db_path)
-    return generate_pd_pdf(output_dir, inputs=inputs)
+    system_name = None
+    if system_id is not None:
+        system = fetch_system(db_path, system_id)
+        system_name = system.get("name") if system else None
+    return generate_pd_pdf(output_dir, inputs=inputs, system_name=system_name)
 
 
 def generate_haftungsausschluss_pdf_from_db(
@@ -393,7 +445,11 @@ def generate_haftungsausschluss_pdf_from_db(
     db_path: Path = DEFAULT_DB_PATH,
 ) -> Path:
     inputs = build_inputs_from_db(product_id, system_id, db_path)
-    return generate_haftungsausschluss_pdf(output_dir, inputs=inputs)
+    system_name = None
+    if system_id is not None:
+        system = fetch_system(db_path, system_id)
+        system_name = system.get("name") if system else None
+    return generate_haftungsausschluss_pdf(output_dir, inputs=inputs, system_name=system_name)
 
 
 if __name__ == "__main__":

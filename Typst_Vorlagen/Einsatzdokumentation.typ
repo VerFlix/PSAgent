@@ -28,6 +28,8 @@
 #let t3_Einzelidentifikation = if "t3_Einzelidentifikation" in sys.inputs { sys.inputs.t3_Einzelidentifikation } else { "--" }
 #let t3_Seriennummer = if "t3_Seriennummer" in sys.inputs { sys.inputs.t3_Seriennummer } else { "--" }
 
+#let systemname = if "systemname" in sys.inputs { sys.inputs.systemname } else { "" }
+
 // t1_Produktbezeichnung
 // t1_gem_EN
 // t1_Produktname
@@ -118,7 +120,7 @@
   ]
 )
   ], [
-    *Für Systeme*
+    *Für Systeme*~~~~~~~~~~~~~~~~~~~#systemname
 
     #grid(
       columns: (1fr, 1fr),
