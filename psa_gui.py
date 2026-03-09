@@ -23,6 +23,23 @@ def _db_connect(db_path: Path):
 def ensure_db_schema(db_path: Path) -> None:
     """Fügt fehlende Spalten hinzu, falls eine alte DB verwendet wird."""
     with _db_connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS item_locks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_type TEXT NOT NULL,
+                item_id INTEGER NOT NULL,
+                is_locked INTEGER NOT NULL DEFAULT 1,
+                lock_comment TEXT,
+                unlock_comment TEXT,
+                lock_at TEXT,
+                unlock_at TEXT,
+                unlock_source TEXT,
+                UNIQUE(item_type, item_id)
+            )
+            """
+        )
+
         product_cols = {row[1] for row in conn.execute("PRAGMA table_info(products)")}
         system_cols = {row[1] for row in conn.execute("PRAGMA table_info(systems)")}
 
@@ -103,15 +120,19 @@ def fetch_products(db_path: Path) -> list[tuple[int, str]]:
     with _db_connect(db_path) as conn:
         rows = conn.execute(
             """
-            SELECT id, produktname, seriennummer
+            SELECT p.id, p.produktname, p.seriennummer,
+                   COALESCE(l.is_locked, 0) AS is_locked
             FROM products
-            ORDER BY id DESC
+            p LEFT JOIN item_locks l
+              ON l.item_type = 'product' AND l.item_id = p.id
+                        ORDER BY p.id DESC
             """
         ).fetchall()
     result = []
     for row in rows:
-        pid, name, sn = row
-        label = f"#{pid} | {name or 'Ohne Name'} | SN: {sn or '-'}"
+        pid, name, sn, is_locked = row
+        lock_tag = " | [GESPERRT]" if is_locked else ""
+        label = f"#{pid} | {name or 'Ohne Name'} | SN: {sn or '-'}{lock_tag}"
         result.append((pid, label))
     return result
 
@@ -120,17 +141,39 @@ def fetch_systems(db_path: Path) -> list[tuple[int, str]]:
     with _db_connect(db_path) as conn:
         rows = conn.execute(
             """
-            SELECT id, name
+            SELECT s.id, s.name,
+                   COALESCE(l.is_locked, 0) AS is_locked
             FROM systems
-            ORDER BY id DESC
+            s LEFT JOIN item_locks l
+              ON l.item_type = 'system' AND l.item_id = s.id
+                        ORDER BY s.id DESC
             """
         ).fetchall()
     result = []
     for row in rows:
-        sid, name = row
-        label = f"#{sid} | {name or 'System'}"
+        sid, name, is_locked = row
+        lock_tag = " | [GESPERRT]" if is_locked else ""
+        label = f"#{sid} | {name or 'System'}{lock_tag}"
         result.append((sid, label))
     return result
+
+
+def unlock_item(db_path: Path, *, item_type: str, item_id: int, unlock_comment: str) -> bool:
+    with _db_connect(db_path) as conn:
+        cur = conn.execute(
+            """
+            UPDATE item_locks
+            SET is_locked = 0,
+                unlock_comment = ?,
+                unlock_at = datetime('now'),
+                unlock_source = 'psa_gui'
+            WHERE item_type = ?
+              AND item_id = ?
+              AND is_locked = 1
+            """,
+            (unlock_comment, item_type, item_id),
+        )
+    return cur.rowcount > 0
 
 
 class PSAApp(ttk.Frame):
@@ -299,9 +342,19 @@ class PSAApp(ttk.Frame):
             row=0, column=1, sticky="ew", padx=4
         )
 
+        unlock_frame = ttk.LabelFrame(parent, text="Sperren-Verwaltung (nur hier entsperren)")
+        unlock_frame.grid(row=4, column=0, columnspan=2, sticky="ew", padx=6, pady=6)
+        unlock_frame.columnconfigure(1, weight=1)
+        ttk.Label(unlock_frame, text="Entsperr-Kommentar").grid(row=0, column=0, sticky="w", padx=6, pady=2)
+        self.unlock_comment_entry = ttk.Entry(unlock_frame)
+        self.unlock_comment_entry.grid(row=0, column=1, sticky="ew", padx=6, pady=2)
+        ttk.Button(unlock_frame, text="Ausgewähltes Produkt/System entsperren", command=self.unlock_selected_item).grid(
+            row=1, column=0, columnspan=2, sticky="ew", padx=6, pady=6
+        )
+
         self.status_var = tk.StringVar(value="Bereit")
         ttk.Label(parent, textvariable=self.status_var).grid(
-            row=4, column=0, columnspan=2, sticky="w", padx=6, pady=4
+            row=5, column=0, columnspan=2, sticky="w", padx=6, pady=4
         )
 
     def _collect_entries(self, entries: dict) -> dict:
@@ -423,6 +476,40 @@ class PSAApp(ttk.Frame):
             return None
         index = selection[0]
         return self.systems[index][0]
+
+    def unlock_selected_item(self):
+        product_selection = self.product_list.curselection()
+        system_selection = self.system_list.curselection()
+
+        if product_selection and system_selection:
+            messagebox.showerror("Fehler", "Bitte nur ein Produkt ODER ein System auswählen.")
+            return
+
+        item_type = ""
+        item_id = None
+        if product_selection:
+            item_type = "product"
+            item_id = self.products[product_selection[0]][0]
+        elif system_selection:
+            item_type = "system"
+            item_id = self.systems[system_selection[0]][0]
+        else:
+            messagebox.showerror("Fehler", "Bitte ein gesperrtes Produkt oder System auswählen.")
+            return
+
+        comment = self.unlock_comment_entry.get().strip()
+        if not comment:
+            messagebox.showerror("Fehler", "Zum Entsperren ist ein Kommentar erforderlich.")
+            return
+
+        changed = unlock_item(self.db_path, item_type=item_type, item_id=int(item_id), unlock_comment=comment)
+        if not changed:
+            messagebox.showinfo("Hinweis", "Der ausgewählte Eintrag ist nicht gesperrt oder wurde bereits entsperrt.")
+            return
+
+        self.unlock_comment_entry.delete(0, tk.END)
+        self.refresh_lists()
+        self.status_var.set(f"{item_type} #{item_id} entsperrt")
 
     def generate_selected_pdfs(self):
         product_id = self._selected_product_id()
