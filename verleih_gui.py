@@ -1,6 +1,8 @@
 import json
+import os
 import sqlite3
 import tkinter as tk
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 from tkinter import messagebox, ttk
@@ -46,6 +48,7 @@ def ensure_verleih_schema(db_path: Path) -> None:
                 entleiher_adresse TEXT,
                 signature_data TEXT,
                 quick_check_out INTEGER NOT NULL DEFAULT 0,
+                gal_provided_out INTEGER NOT NULL DEFAULT 0,
                 status TEXT NOT NULL DEFAULT 'lent',
                 checkout_at TEXT,
                 return_comment TEXT,
@@ -72,6 +75,8 @@ def ensure_verleih_schema(db_path: Path) -> None:
             conn.execute("ALTER TABLE verleih_planung ADD COLUMN entleiher_adresse TEXT")
         if "quick_check_out" not in existing_cols:
             conn.execute("ALTER TABLE verleih_planung ADD COLUMN quick_check_out INTEGER NOT NULL DEFAULT 0")
+        if "gal_provided_out" not in existing_cols:
+            conn.execute("ALTER TABLE verleih_planung ADD COLUMN gal_provided_out INTEGER NOT NULL DEFAULT 0")
         if "return_comment" not in existing_cols:
             conn.execute("ALTER TABLE verleih_planung ADD COLUMN return_comment TEXT")
         if "return_signature_data" not in existing_cols:
@@ -164,6 +169,7 @@ def insert_verleih(
     entleiher_adresse: str,
     signature_data: str,
     quick_check_out: bool,
+    gal_provided_out: bool,
     status: str,
     checkout_at: str | None,
 ) -> int:
@@ -173,8 +179,8 @@ def insert_verleih(
             INSERT INTO verleih_planung (
                 item_type, item_id, item_label, von_datum, rueckgabe_datum,
                 entleiher, entleiher_email, entleiher_telefon, entleiher_adresse,
-                signature_data, quick_check_out, status, checkout_at, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                signature_data, quick_check_out, gal_provided_out, status, checkout_at, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 item_type,
@@ -188,6 +194,7 @@ def insert_verleih(
                 entleiher_adresse,
                 signature_data,
                 1 if quick_check_out else 0,
+                1 if gal_provided_out else 0,
                 status,
                 checkout_at,
                 datetime.now().isoformat(timespec="seconds"),
@@ -196,7 +203,13 @@ def insert_verleih(
         return cur.lastrowid
 
 
-def checkout_reserved_verleih(db_path: Path, verleih_id: int, signature_data: str, quick_check_out: bool) -> None:
+def checkout_reserved_verleih(
+    db_path: Path,
+    verleih_id: int,
+    signature_data: str,
+    quick_check_out: bool,
+    gal_provided_out: bool,
+) -> None:
     with _db_connect(db_path) as conn:
         conn.execute(
             """
@@ -204,12 +217,19 @@ def checkout_reserved_verleih(db_path: Path, verleih_id: int, signature_data: st
             SET status = 'lent',
                 signature_data = ?,
                 quick_check_out = ?,
+                gal_provided_out = ?,
                 checkout_at = ?,
                 returned_at = NULL
             WHERE id = ?
               AND COALESCE(status, 'lent') = 'reserved'
             """,
-            (signature_data, 1 if quick_check_out else 0, datetime.now().isoformat(timespec="seconds"), verleih_id),
+            (
+                signature_data,
+                1 if quick_check_out else 0,
+                1 if gal_provided_out else 0,
+                datetime.now().isoformat(timespec="seconds"),
+                verleih_id,
+            ),
         )
 
 
@@ -281,6 +301,41 @@ def is_item_locked(db_path: Path, *, item_type: str, item_id: int) -> bool:
             (item_type, item_id),
         ).fetchone()
     return bool(row and int(row[0]) == 1)
+
+
+def fetch_item_gal_data(db_path: Path, *, item_type: str, item_id: int) -> tuple[str, str]:
+    with _db_connect(db_path) as conn:
+        if item_type == "product":
+            row = conn.execute(
+                "SELECT COALESCE(gal_datei, ''), COALESCE(gal_link, '') FROM products WHERE id = ?",
+                (item_id,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT COALESCE(gal_datei, ''), COALESCE(gal_link, '') FROM systems WHERE id = ?",
+                (item_id,),
+            ).fetchone()
+    if not row:
+        return "", ""
+    return str(row[0] or ""), str(row[1] or "")
+
+
+def open_reference(target: str) -> None:
+    value = (target or "").strip()
+    if not value:
+        messagebox.showerror("Fehler", "Kein GAL-Link oder keine GAL-Datei vorhanden.")
+        return
+
+    if value.lower().startswith("http://") or value.lower().startswith("https://"):
+        webbrowser.open(value)
+        return
+
+    path = Path(value)
+    if path.exists():
+        os.startfile(str(path))
+        return
+
+    messagebox.showerror("Fehler", "GAL-Link/Datei konnte nicht geöffnet werden.")
 
 
 def update_verleih_contact(
@@ -515,11 +570,12 @@ class SignatureDialog(tk.Toplevel):
 
 
 class CheckoutDialog(tk.Toplevel):
-    def __init__(self, master: tk.Misc, context_text: str = ""):
+    def __init__(self, master: tk.Misc, context_text: str = "", gal_display: str = "", gal_target: str = ""):
         super().__init__(master)
         self.title("Reservierung ausleihen")
-        self.geometry("580x430")
-        self.resizable(False, False)
+        self.geometry("620x620")
+        self.minsize(620, 560)
+        self.resizable(True, True)
         self.transient(master)
         self.grab_set()
 
@@ -527,14 +583,23 @@ class CheckoutDialog(tk.Toplevel):
         self._strokes: list[list[tuple[int, int]]] = []
         self._current_stroke: list[tuple[int, int]] = []
         self.quick_check_var = tk.BooleanVar(value=False)
+        self.gal_provided_var = tk.BooleanVar(value=False)
+        self.gal_target = gal_target
 
         ttk.Label(self, text="Digitale Unterschrift für die Ausleihe").pack(anchor="w", padx=8, pady=(8, 2))
         if context_text:
             ttk.Label(self, text=context_text, justify="left", wraplength=560).pack(anchor="w", padx=8, pady=(0, 6))
 
-        ttk.Checkbutton(self, text="Kurzkontrolle durchgeführt", variable=self.quick_check_var).pack(anchor="w", padx=8, pady=(0, 4))
+        if gal_display:
+            ttk.Label(self, text=f"GAL: {gal_display}", justify="left", wraplength=560).pack(anchor="w", padx=8, pady=(0, 2))
+            ttk.Button(self, text="GAL öffnen", command=lambda: open_reference(self.gal_target)).pack(anchor="w", padx=8, pady=(0, 4))
+        else:
+            ttk.Label(self, text="GAL: Kein Link/keine Datei hinterlegt", justify="left", wraplength=560).pack(anchor="w", padx=8, pady=(0, 4))
 
-        self.canvas = tk.Canvas(self, width=560, height=240, bg="white", highlightthickness=1, highlightbackground="#888")
+        ttk.Checkbutton(self, text="Kurzkontrolle durchgeführt", variable=self.quick_check_var).pack(anchor="w", padx=8, pady=(0, 4))
+        ttk.Checkbutton(self, text="GAL bereitgestellt", variable=self.gal_provided_var).pack(anchor="w", padx=8, pady=(0, 4))
+
+        self.canvas = tk.Canvas(self, width=580, height=260, bg="white", highlightthickness=1, highlightbackground="#888")
         self.canvas.pack(padx=8, pady=6)
         self.canvas.bind("<ButtonPress-1>", self._start_stroke)
         self.canvas.bind("<B1-Motion>", self._draw)
@@ -571,12 +636,16 @@ class CheckoutDialog(tk.Toplevel):
         if not self.quick_check_var.get():
             messagebox.showerror("Fehler", "Bitte Kurzkontrolle bestätigen.", parent=self)
             return
+        if not self.gal_provided_var.get():
+            messagebox.showerror("Fehler", "Bitte GAL bereitgestellt bestätigen.", parent=self)
+            return
         if not self._strokes:
             messagebox.showwarning("Hinweis", "Bitte zuerst unterschreiben.", parent=self)
             return
         self.result = {
             "signature": json.dumps(self._strokes),
             "quick_check_out": True,
+            "gal_provided_out": True,
         }
         self.destroy()
 
@@ -700,6 +769,7 @@ class VerleihOverviewDialog(tk.Toplevel):
             ("Telefon", plan.get("entleiher_telefon", "")),
             ("Adresse", plan.get("entleiher_adresse", "")),
             ("Kurzkontrolle Ausleihe", "Ja" if int(plan.get("quick_check_out") or 0) else "Nein"),
+            ("GAL bereitgestellt", "Ja" if int(plan.get("gal_provided_out") or 0) else "Nein"),
             ("Kurzkontrolle Rückgabe", "Ja" if int(plan.get("quick_check_return") or 0) else "Nein"),
             ("Rückgabe-Kommentar", plan.get("return_comment", "") or "-"),
             ("Erstellt", plan.get("created_at", "")),
@@ -795,6 +865,8 @@ class VerleihApp(ttk.Frame):
 
         self.selection_map: dict[str, tuple[str, int]] = {}
         self.signature_data = ""
+        self.current_gal_target = ""
+        self.gal_display_var = tk.StringVar(value="GAL: -")
 
         self._build_ui()
         self.refresh_data()
@@ -829,6 +901,42 @@ class VerleihApp(ttk.Frame):
         self.status_var = tk.StringVar(value="Bereit")
         ttk.Label(self, textvariable=self.status_var).grid(row=1, column=0, sticky="w", padx=10, pady=(0, 8))
 
+    def _selected_item_type_id(self) -> tuple[str, int] | None:
+        label = self.item_combo.get().strip()
+        if not label or label not in self.selection_map:
+            return None
+        return self.selection_map[label]
+
+    def _update_selected_item_gal(self, _event=None):
+        self.gal_provided_out_var.set(False)
+        selected = self._selected_item_type_id()
+        if not selected:
+            self.current_gal_target = ""
+            self.gal_display_var.set("GAL: -")
+            self.open_gal_btn.configure(state=tk.DISABLED)
+            return
+
+        item_type, item_id = selected
+        gal_file, gal_link = fetch_item_gal_data(self.db_path, item_type=item_type, item_id=item_id)
+
+        if gal_link:
+            self.current_gal_target = gal_link
+            self.gal_display_var.set(f"GAL-Link: {gal_link}")
+            self.open_gal_btn.configure(state=tk.NORMAL)
+            return
+        if gal_file:
+            self.current_gal_target = gal_file
+            self.gal_display_var.set(f"GAL-Datei: {gal_file}")
+            self.open_gal_btn.configure(state=tk.NORMAL)
+            return
+
+        self.current_gal_target = ""
+        self.gal_display_var.set("GAL: Kein Link/keine Datei hinterlegt")
+        self.open_gal_btn.configure(state=tk.DISABLED)
+
+    def _open_current_gal(self):
+        open_reference(self.current_gal_target)
+
     def _build_plan_tab(self, parent: ttk.Frame):
         parent.columnconfigure(0, weight=1)
         parent.rowconfigure(2, weight=1)
@@ -841,8 +949,20 @@ class VerleihApp(ttk.Frame):
 
         mode_frame = ttk.Frame(form)
         mode_frame.grid(row=0, column=0, columnspan=2, sticky="w", padx=6, pady=4)
-        ttk.Radiobutton(mode_frame, text="Nur reservieren", variable=self.create_mode_var, value="reserve").pack(side=tk.LEFT)
-        ttk.Radiobutton(mode_frame, text="Direkt ausleihen", variable=self.create_mode_var, value="lend").pack(side=tk.LEFT, padx=(12, 0))
+        ttk.Radiobutton(
+            mode_frame,
+            text="Nur reservieren",
+            variable=self.create_mode_var,
+            value="reserve",
+            command=self._update_mode_visibility,
+        ).pack(side=tk.LEFT)
+        ttk.Radiobutton(
+            mode_frame,
+            text="Direkt ausleihen",
+            variable=self.create_mode_var,
+            value="lend",
+            command=self._update_mode_visibility,
+        ).pack(side=tk.LEFT, padx=(12, 0))
 
         ttk.Label(form, text="Von (YYYY-MM-DD)").grid(row=1, column=0, sticky="w", padx=6, pady=2)
         self.von_entry = ttk.Entry(form)
@@ -863,37 +983,52 @@ class VerleihApp(ttk.Frame):
         ttk.Label(form, text="Auswahl (nur verfügbare)").grid(row=5, column=0, sticky="w", padx=6, pady=2)
         self.item_combo = ttk.Combobox(form, state="readonly")
         self.item_combo.grid(row=5, column=1, sticky="ew", padx=6, pady=2)
+        self.item_combo.bind("<<ComboboxSelected>>", self._update_selected_item_gal)
 
-        ttk.Label(form, text="Entleiher").grid(row=6, column=0, sticky="w", padx=6, pady=2)
+        gal_frame = ttk.Frame(form)
+        gal_frame.grid(row=6, column=0, columnspan=2, sticky="ew", padx=6, pady=(2, 4))
+        gal_frame.columnconfigure(0, weight=1)
+        ttk.Label(gal_frame, textvariable=self.gal_display_var, wraplength=580).grid(row=0, column=0, sticky="w")
+        self.open_gal_btn = ttk.Button(gal_frame, text="GAL öffnen", command=self._open_current_gal, state=tk.DISABLED)
+        self.open_gal_btn.grid(row=0, column=1, sticky="e", padx=(8, 0))
+
+        ttk.Label(form, text="Entleiher").grid(row=7, column=0, sticky="w", padx=6, pady=2)
         self.entleiher_entry = ttk.Entry(form)
-        self.entleiher_entry.grid(row=6, column=1, sticky="ew", padx=6, pady=2)
+        self.entleiher_entry.grid(row=7, column=1, sticky="ew", padx=6, pady=2)
 
-        ttk.Label(form, text="E-Mail").grid(row=7, column=0, sticky="w", padx=6, pady=2)
+        ttk.Label(form, text="E-Mail").grid(row=8, column=0, sticky="w", padx=6, pady=2)
         self.email_entry = ttk.Entry(form)
-        self.email_entry.grid(row=7, column=1, sticky="ew", padx=6, pady=2)
+        self.email_entry.grid(row=8, column=1, sticky="ew", padx=6, pady=2)
 
-        ttk.Label(form, text="Telefonnummer").grid(row=8, column=0, sticky="w", padx=6, pady=2)
+        ttk.Label(form, text="Telefonnummer").grid(row=9, column=0, sticky="w", padx=6, pady=2)
         self.phone_entry = ttk.Entry(form)
-        self.phone_entry.grid(row=8, column=1, sticky="ew", padx=6, pady=2)
+        self.phone_entry.grid(row=9, column=1, sticky="ew", padx=6, pady=2)
 
-        ttk.Label(form, text="Adresse").grid(row=9, column=0, sticky="w", padx=6, pady=2)
+        ttk.Label(form, text="Adresse").grid(row=10, column=0, sticky="w", padx=6, pady=2)
         self.address_entry = ttk.Entry(form)
-        self.address_entry.grid(row=9, column=1, sticky="ew", padx=6, pady=2)
+        self.address_entry.grid(row=10, column=1, sticky="ew", padx=6, pady=2)
 
         self.quick_check_out_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(form, text="Kurzkontrolle durchgeführt", variable=self.quick_check_out_var).grid(
-            row=10, column=0, columnspan=2, sticky="w", padx=6, pady=2
+        self.quick_check_out_cb = ttk.Checkbutton(form, text="Kurzkontrolle durchgeführt", variable=self.quick_check_out_var)
+        self.quick_check_out_cb.grid(
+            row=11, column=0, columnspan=2, sticky="w", padx=6, pady=2
         )
 
-        sig_frame = ttk.Frame(form)
-        sig_frame.grid(row=11, column=0, columnspan=2, sticky="ew", padx=6, pady=6)
-        sig_frame.columnconfigure(1, weight=1)
-        ttk.Button(sig_frame, text="Digitale Unterschrift", command=self.capture_signature).grid(row=0, column=0, sticky="w")
+        self.gal_provided_out_var = tk.BooleanVar(value=False)
+        self.gal_provided_out_cb = ttk.Checkbutton(form, text="GAL bereitgestellt", variable=self.gal_provided_out_var)
+        self.gal_provided_out_cb.grid(
+            row=12, column=0, columnspan=2, sticky="w", padx=6, pady=2
+        )
+
+        self.sig_frame = ttk.Frame(form)
+        self.sig_frame.grid(row=13, column=0, columnspan=2, sticky="ew", padx=6, pady=6)
+        self.sig_frame.columnconfigure(1, weight=1)
+        ttk.Button(self.sig_frame, text="Digitale Unterschrift", command=self.capture_signature).grid(row=0, column=0, sticky="w")
         self.sig_status_var = tk.StringVar(value="Keine Unterschrift erfasst")
-        ttk.Label(sig_frame, textvariable=self.sig_status_var).grid(row=0, column=1, sticky="w", padx=8)
+        ttk.Label(self.sig_frame, textvariable=self.sig_status_var).grid(row=0, column=1, sticky="w", padx=8)
 
         action_frame = ttk.Frame(form)
-        action_frame.grid(row=12, column=0, columnspan=2, sticky="ew", padx=6, pady=(0, 8))
+        action_frame.grid(row=14, column=0, columnspan=2, sticky="ew", padx=6, pady=(0, 8))
         action_frame.columnconfigure(0, weight=1)
         action_frame.columnconfigure(1, weight=1)
         ttk.Button(action_frame, text="Speichern", command=self.save_verleih).grid(row=0, column=0, sticky="ew", padx=(0, 4))
@@ -948,6 +1083,24 @@ class VerleihApp(ttk.Frame):
         ttk.Button(table_action_frame, text="Rückgabe bestätigen", command=self.confirm_selected_return).grid(
             row=0, column=2, sticky="ew", padx=(4, 0)
         )
+
+        self._update_mode_visibility()
+
+    def _update_mode_visibility(self):
+        is_lend_mode = self.create_mode_var.get() == "lend"
+
+        if is_lend_mode:
+            self.quick_check_out_cb.grid()
+            self.gal_provided_out_cb.grid()
+            self.sig_frame.grid()
+        else:
+            self.quick_check_out_cb.grid_remove()
+            self.gal_provided_out_cb.grid_remove()
+            self.sig_frame.grid_remove()
+            self.quick_check_out_var.set(False)
+            self.gal_provided_out_var.set(False)
+            self.signature_data = ""
+            self.sig_status_var.set("Keine Unterschrift erfasst")
 
     def _build_search_tab(self, parent: ttk.Frame):
         parent.columnconfigure(0, weight=1)
@@ -1018,10 +1171,14 @@ class VerleihApp(ttk.Frame):
             self.item_combo.current(0)
         else:
             self.item_combo.set("")
+        self._update_selected_item_gal()
 
     def refresh_data(self):
         self._refresh_item_combobox([])
         self._refresh_plan_list()
+        self.current_gal_target = ""
+        self.gal_display_var.set("GAL: -")
+        self.open_gal_btn.configure(state=tk.DISABLED)
         self.status_var.set("Daten aktualisiert")
 
     def load_available_items_for_period(self):
@@ -1177,6 +1334,12 @@ class VerleihApp(ttk.Frame):
             if not self.quick_check_out_var.get():
                 messagebox.showerror("Fehler", "Bitte Kurzkontrolle für die Ausleihe bestätigen.")
                 return
+            if not self.gal_provided_out_var.get():
+                messagebox.showerror("Fehler", "Bitte GAL bereitgestellt bestätigen.")
+                return
+            if not self.current_gal_target:
+                messagebox.showerror("Fehler", "Für dieses Produkt/System ist kein GAL-Link und keine GAL-Datei hinterlegt.")
+                return
             if not self.signature_data:
                 messagebox.showerror("Fehler", "Für direktes Ausleihen wird eine Unterschrift benötigt.")
                 return
@@ -1197,6 +1360,7 @@ class VerleihApp(ttk.Frame):
             entleiher_adresse=adresse,
             signature_data=signature_data,
             quick_check_out=self.quick_check_out_var.get() if mode == "lend" else False,
+            gal_provided_out=self.gal_provided_out_var.get() if mode == "lend" else False,
             status=status,
             checkout_at=checkout_at,
         )
@@ -1214,7 +1378,11 @@ class VerleihApp(ttk.Frame):
         self.item_combo["values"] = []
         self.signature_data = ""
         self.quick_check_out_var.set(False)
+        self.gal_provided_out_var.set(False)
         self.sig_status_var.set("Keine Unterschrift erfasst")
+        self.current_gal_target = ""
+        self.gal_display_var.set("GAL: -")
+        self.open_gal_btn.configure(state=tk.DISABLED)
         self._refresh_plan_list()
 
     def edit_selected_contact(self):
@@ -1280,7 +1448,14 @@ class VerleihApp(ttk.Frame):
             f"Objekt: {plan.get('item_label', '')}\n"
             f"Zeitraum: {plan.get('von_datum', '')} bis {plan.get('rueckgabe_datum', '')}"
         )
-        dialog = CheckoutDialog(self, details)
+
+        item_type = str(plan.get("item_type") or "")
+        item_id = int(plan.get("item_id") or 0)
+        gal_file, gal_link = fetch_item_gal_data(self.db_path, item_type=item_type, item_id=item_id)
+        gal_target = gal_link or gal_file
+        gal_display = gal_link if gal_link else gal_file
+
+        dialog = CheckoutDialog(self, details, gal_display=gal_display, gal_target=gal_target)
         self.wait_window(dialog)
         if not dialog.result:
             return
@@ -1290,6 +1465,7 @@ class VerleihApp(ttk.Frame):
             plan_id,
             dialog.result.get("signature", ""),
             bool(dialog.result.get("quick_check_out", False)),
+            bool(dialog.result.get("gal_provided_out", False)),
         )
         self.status_var.set(f"Reservierung {plan_id} wurde ausgeliehen")
         self._refresh_plan_list()
