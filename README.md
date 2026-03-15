@@ -72,6 +72,81 @@ Das bedeutet: digitales Verleih-Tracking ist optional, wenn ihr den Prozess orga
 
 Hinweis: Ohne Typst läuft die Datenpflege, aber PDF-Generierung ist nicht möglich.
 
+### Voraussetzungen für eine virtuelle Umgebung (`venv`)
+
+- Python ist installiert und im PATH verfügbar (`python --version` funktioniert)
+- Das Projekt wurde lokal in einen Ordner geklont/kopiert
+- Schreibrechte im Projektordner (für den `.venv`-Ordner)
+
+---
+
+## `venv` einrichten (empfohlen)
+
+### 1) In den Projektordner wechseln
+
+```powershell
+cd \PSAgent
+```
+
+### 2) Virtuelle Umgebung erstellen
+
+```powershell
+python -m venv .venv
+```
+
+### 3) Virtuelle Umgebung aktivieren (Windows / PowerShell)
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Falls PowerShell die Ausführung blockiert, einmalig in der aktuellen Sitzung erlauben:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+### 4) Abhängigkeiten installieren
+
+Aktuell werden **keine zusätzlichen Python-Pakete** aus PyPI benötigt.
+Die Anwendung nutzt nur Standardbibliothek-Module (z. B. `tkinter`, `sqlite3`, `json`, `pathlib`).
+
+Optional für PDF-Erzeugung:
+- **Typst** (separates Tool, kein `pip`-Paket)
+
+Wenn eine `requirements.txt` vorhanden ist:
+
+```powershell
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Wenn keine `requirements.txt` vorhanden ist, ist aktuell keine weitere `pip`-Installation nötig.
+
+Optional prüfen, welche Pakete in der aktiven Umgebung installiert sind:
+
+```powershell
+pip list
+```
+
+### 5) GUI starten
+
+```powershell
+python psa_gui.py
+```
+
+oder
+
+```powershell
+python verleih_gui.py
+```
+
+### 6) `venv` verlassen
+
+```powershell
+deactivate
+```
+
 ---
 
 ## Setup (Windows, kurz)
