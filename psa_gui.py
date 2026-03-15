@@ -84,6 +84,57 @@ def ensure_db_schema(db_path: Path) -> None:
 
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS verleih_planung (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_type TEXT NOT NULL,
+                item_id INTEGER NOT NULL,
+                item_label TEXT,
+                von_datum TEXT NOT NULL,
+                rueckgabe_datum TEXT NOT NULL,
+                entleiher TEXT,
+                entleiher_email TEXT,
+                entleiher_telefon TEXT,
+                entleiher_adresse TEXT,
+                signature_data TEXT,
+                quick_check_out INTEGER NOT NULL DEFAULT 0,
+                gal_provided_out INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'lent',
+                checkout_at TEXT,
+                return_comment TEXT,
+                return_signature_data TEXT,
+                quick_check_return INTEGER NOT NULL DEFAULT 0,
+                returned_at TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+
+        verleih_cols = {row[1] for row in conn.execute("PRAGMA table_info(verleih_planung)")}
+        if "status" not in verleih_cols:
+            conn.execute("ALTER TABLE verleih_planung ADD COLUMN status TEXT NOT NULL DEFAULT 'lent'")
+        if "checkout_at" not in verleih_cols:
+            conn.execute("ALTER TABLE verleih_planung ADD COLUMN checkout_at TEXT")
+        if "returned_at" not in verleih_cols:
+            conn.execute("ALTER TABLE verleih_planung ADD COLUMN returned_at TEXT")
+        if "entleiher_email" not in verleih_cols:
+            conn.execute("ALTER TABLE verleih_planung ADD COLUMN entleiher_email TEXT")
+        if "entleiher_telefon" not in verleih_cols:
+            conn.execute("ALTER TABLE verleih_planung ADD COLUMN entleiher_telefon TEXT")
+        if "entleiher_adresse" not in verleih_cols:
+            conn.execute("ALTER TABLE verleih_planung ADD COLUMN entleiher_adresse TEXT")
+        if "quick_check_out" not in verleih_cols:
+            conn.execute("ALTER TABLE verleih_planung ADD COLUMN quick_check_out INTEGER NOT NULL DEFAULT 0")
+        if "gal_provided_out" not in verleih_cols:
+            conn.execute("ALTER TABLE verleih_planung ADD COLUMN gal_provided_out INTEGER NOT NULL DEFAULT 0")
+        if "return_comment" not in verleih_cols:
+            conn.execute("ALTER TABLE verleih_planung ADD COLUMN return_comment TEXT")
+        if "return_signature_data" not in verleih_cols:
+            conn.execute("ALTER TABLE verleih_planung ADD COLUMN return_signature_data TEXT")
+        if "quick_check_return" not in verleih_cols:
+            conn.execute("ALTER TABLE verleih_planung ADD COLUMN quick_check_return INTEGER NOT NULL DEFAULT 0")
+
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS psa_pruefungsberichte (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 created_at TEXT NOT NULL,
