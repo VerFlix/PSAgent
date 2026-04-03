@@ -3,7 +3,8 @@ import os
 import sqlite3
 import tkinter as tk
 import webbrowser
-from datetime import datetime
+import calendar
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from tkinter import messagebox, ttk
 
@@ -43,6 +44,7 @@ def ensure_verleih_schema(db_path: Path) -> None:
                 von_datum TEXT NOT NULL,
                 rueckgabe_datum TEXT NOT NULL,
                 entleiher TEXT,
+                ausgebende_person TEXT,
                 entleiher_email TEXT,
                 entleiher_telefon TEXT,
                 entleiher_adresse TEXT,
@@ -52,6 +54,7 @@ def ensure_verleih_schema(db_path: Path) -> None:
                 status TEXT NOT NULL DEFAULT 'lent',
                 checkout_at TEXT,
                 return_comment TEXT,
+                ruecknehmende_person TEXT,
                 return_signature_data TEXT,
                 quick_check_return INTEGER NOT NULL DEFAULT 0,
                 returned_at TEXT,
@@ -73,12 +76,16 @@ def ensure_verleih_schema(db_path: Path) -> None:
             conn.execute("ALTER TABLE verleih_planung ADD COLUMN entleiher_telefon TEXT")
         if "entleiher_adresse" not in existing_cols:
             conn.execute("ALTER TABLE verleih_planung ADD COLUMN entleiher_adresse TEXT")
+        if "ausgebende_person" not in existing_cols:
+            conn.execute("ALTER TABLE verleih_planung ADD COLUMN ausgebende_person TEXT")
         if "quick_check_out" not in existing_cols:
             conn.execute("ALTER TABLE verleih_planung ADD COLUMN quick_check_out INTEGER NOT NULL DEFAULT 0")
         if "gal_provided_out" not in existing_cols:
             conn.execute("ALTER TABLE verleih_planung ADD COLUMN gal_provided_out INTEGER NOT NULL DEFAULT 0")
         if "return_comment" not in existing_cols:
             conn.execute("ALTER TABLE verleih_planung ADD COLUMN return_comment TEXT")
+        if "ruecknehmende_person" not in existing_cols:
+            conn.execute("ALTER TABLE verleih_planung ADD COLUMN ruecknehmende_person TEXT")
         if "return_signature_data" not in existing_cols:
             conn.execute("ALTER TABLE verleih_planung ADD COLUMN return_signature_data TEXT")
         if "quick_check_return" not in existing_cols:
@@ -155,6 +162,23 @@ def fetch_verleih_by_id(db_path: Path, verleih_id: int) -> dict | None:
     return dict(row) if row else None
 
 
+def fetch_calendar_entries(db_path: Path, *, from_date: str, to_date: str) -> list[dict]:
+    with _db_connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT id, item_label, von_datum, rueckgabe_datum, entleiher, status
+            FROM verleih_planung
+            WHERE COALESCE(status, 'lent') IN ('reserved', 'lent')
+              AND von_datum <= ?
+              AND rueckgabe_datum >= ?
+            ORDER BY von_datum ASC, rueckgabe_datum ASC, item_label COLLATE NOCASE ASC
+            """,
+            (to_date, from_date),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def insert_verleih(
     db_path: Path,
     *,
@@ -164,6 +188,7 @@ def insert_verleih(
     von_datum: str,
     rueckgabe_datum: str,
     entleiher: str,
+    ausgebende_person: str,
     entleiher_email: str,
     entleiher_telefon: str,
     entleiher_adresse: str,
@@ -178,9 +203,9 @@ def insert_verleih(
             """
             INSERT INTO verleih_planung (
                 item_type, item_id, item_label, von_datum, rueckgabe_datum,
-                entleiher, entleiher_email, entleiher_telefon, entleiher_adresse,
+                entleiher, ausgebende_person, entleiher_email, entleiher_telefon, entleiher_adresse,
                 signature_data, quick_check_out, gal_provided_out, status, checkout_at, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 item_type,
@@ -189,6 +214,7 @@ def insert_verleih(
                 von_datum,
                 rueckgabe_datum,
                 entleiher,
+                ausgebende_person,
                 entleiher_email,
                 entleiher_telefon,
                 entleiher_adresse,
@@ -209,6 +235,7 @@ def checkout_reserved_verleih(
     signature_data: str,
     quick_check_out: bool,
     gal_provided_out: bool,
+    ausgebende_person: str,
 ) -> None:
     with _db_connect(db_path) as conn:
         conn.execute(
@@ -218,6 +245,7 @@ def checkout_reserved_verleih(
                 signature_data = ?,
                 quick_check_out = ?,
                 gal_provided_out = ?,
+                ausgebende_person = ?,
                 checkout_at = ?,
                 returned_at = NULL
             WHERE id = ?
@@ -227,6 +255,7 @@ def checkout_reserved_verleih(
                 signature_data,
                 1 if quick_check_out else 0,
                 1 if gal_provided_out else 0,
+                ausgebende_person,
                 datetime.now().isoformat(timespec="seconds"),
                 verleih_id,
             ),
@@ -238,6 +267,7 @@ def confirm_return(
     verleih_id: int,
     *,
     return_comment: str,
+    ruecknehmende_person: str,
     return_signature_data: str,
     quick_check_return: bool,
 ) -> None:
@@ -247,6 +277,7 @@ def confirm_return(
             UPDATE verleih_planung
             SET status = 'returned',
                 return_comment = ?,
+                                ruecknehmende_person = ?,
                 return_signature_data = ?,
                 quick_check_return = ?,
                 returned_at = ?
@@ -255,6 +286,7 @@ def confirm_return(
             """,
             (
                 return_comment,
+                                ruecknehmende_person,
                 return_signature_data,
                 1 if quick_check_return else 0,
                 datetime.now().isoformat(timespec="seconds"),
@@ -596,6 +628,10 @@ class CheckoutDialog(tk.Toplevel):
         else:
             ttk.Label(self, text="GAL: Kein Link/keine Datei hinterlegt", justify="left", wraplength=560).pack(anchor="w", padx=8, pady=(0, 4))
 
+        ttk.Label(self, text="Ausgebende Person").pack(anchor="w", padx=8, pady=(0, 2))
+        self.ausgebende_person_entry = ttk.Entry(self)
+        self.ausgebende_person_entry.pack(fill="x", padx=8, pady=(0, 6))
+
         ttk.Checkbutton(self, text="Kurzkontrolle durchgeführt", variable=self.quick_check_var).pack(anchor="w", padx=8, pady=(0, 4))
         ttk.Checkbutton(self, text="GAL bereitgestellt", variable=self.gal_provided_var).pack(anchor="w", padx=8, pady=(0, 4))
 
@@ -633,6 +669,10 @@ class CheckoutDialog(tk.Toplevel):
         self._current_stroke = []
 
     def save(self):
+        ausgebende_person = self.ausgebende_person_entry.get().strip()
+        if not ausgebende_person:
+            messagebox.showerror("Fehler", "Bitte die ausgebende Person eintragen.", parent=self)
+            return
         if not self.quick_check_var.get():
             messagebox.showerror("Fehler", "Bitte Kurzkontrolle bestätigen.", parent=self)
             return
@@ -646,6 +686,7 @@ class CheckoutDialog(tk.Toplevel):
             "signature": json.dumps(self._strokes),
             "quick_check_out": True,
             "gal_provided_out": True,
+            "ausgebende_person": ausgebende_person,
         }
         self.destroy()
 
@@ -683,6 +724,10 @@ class ReturnDialog(tk.Toplevel):
         self.lock_comment_entry = ttk.Entry(self)
         self.lock_comment_entry.pack(padx=8, pady=(0, 6), fill="x")
 
+        ttk.Label(self, text="Ausgebende Person (Rückgabe)").pack(anchor="w", padx=8, pady=(0, 2))
+        self.ruecknehmende_person_entry = ttk.Entry(self)
+        self.ruecknehmende_person_entry.pack(padx=8, pady=(0, 6), fill="x")
+
         ttk.Checkbutton(self, text="Kurzprüfung bei Rückgabe durchgeführt", variable=self.quick_check_var).pack(anchor="w", padx=8, pady=(0, 4))
 
         self.canvas = tk.Canvas(self, width=580, height=240, bg="white", highlightthickness=1, highlightbackground="#888")
@@ -719,6 +764,10 @@ class ReturnDialog(tk.Toplevel):
         self._current_stroke = []
 
     def save(self):
+        ruecknehmende_person = self.ruecknehmende_person_entry.get().strip()
+        if not ruecknehmende_person:
+            messagebox.showerror("Fehler", "Bitte die ausgebende Person für die Rückgabe eintragen.", parent=self)
+            return
         if not self.quick_check_var.get():
             messagebox.showerror("Fehler", "Bitte Kurzprüfung bei Rückgabe bestätigen.", parent=self)
             return
@@ -737,6 +786,7 @@ class ReturnDialog(tk.Toplevel):
             "quick_check_return": True,
             "lock_item": self.lock_item_var.get(),
             "lock_comment": lock_comment,
+            "ruecknehmende_person": ruecknehmende_person,
         }
         self.destroy()
 
@@ -765,6 +815,8 @@ class VerleihOverviewDialog(tk.Toplevel):
             ("Status", plan.get("status", "")),
             ("Zeitraum", f"{plan.get('von_datum', '')} bis {plan.get('rueckgabe_datum', '')}"),
             ("Entleiher", plan.get("entleiher", "")),
+            ("Ausgebende Person", plan.get("ausgebende_person", "") or "-"),
+            ("Ausgebende Person (Rückgabe)", plan.get("ruecknehmende_person", "") or "-"),
             ("E-Mail", plan.get("entleiher_email", "")),
             ("Telefon", plan.get("entleiher_telefon", "")),
             ("Adresse", plan.get("entleiher_adresse", "")),
@@ -867,6 +919,10 @@ class VerleihApp(ttk.Frame):
         self.signature_data = ""
         self.current_gal_target = ""
         self.gal_display_var = tk.StringVar(value="GAL: -")
+        self.calendar_entries_for_month: list[dict] = []
+        today = date.today()
+        self.calendar_year = today.year
+        self.calendar_month = today.month
 
         self._build_ui()
         self.refresh_data()
@@ -892,20 +948,34 @@ class VerleihApp(ttk.Frame):
 
         plan_tab = ttk.Frame(notebook)
         search_tab = ttk.Frame(notebook)
+        calendar_tab = ttk.Frame(notebook)
         notebook.add(plan_tab, text="Verleih planen")
         notebook.add(search_tab, text="Verfügbarkeit suchen")
+        notebook.add(calendar_tab, text="Belegungs-Kalender")
 
         self._build_plan_tab(plan_tab)
         self._build_search_tab(search_tab)
+        self._build_calendar_tab(calendar_tab)
 
         self.status_var = tk.StringVar(value="Bereit")
         ttk.Label(self, textvariable=self.status_var).grid(row=1, column=0, sticky="w", padx=10, pady=(0, 8))
 
+    def _selected_item_labels(self) -> list[str]:
+        if not hasattr(self, "item_listbox"):
+            return []
+        selected: list[str] = []
+        for idx in self.item_listbox.curselection():
+            selected.append(str(self.item_listbox.get(idx)))
+        return selected
+
     def _selected_item_type_id(self) -> tuple[str, int] | None:
-        label = self.item_combo.get().strip()
-        if not label or label not in self.selection_map:
+        labels = self._selected_item_labels()
+        if not labels:
             return None
-        return self.selection_map[label]
+        first = labels[0]
+        if first not in self.selection_map:
+            return None
+        return self.selection_map[first]
 
     def _update_selected_item_gal(self, _event=None):
         self.gal_provided_out_var.set(False)
@@ -980,10 +1050,16 @@ class VerleihApp(ttk.Frame):
             row=4, column=0, columnspan=2, sticky="ew", padx=6, pady=4
         )
 
-        ttk.Label(form, text="Auswahl (nur verfügbare)").grid(row=5, column=0, sticky="w", padx=6, pady=2)
-        self.item_combo = ttk.Combobox(form, state="readonly")
-        self.item_combo.grid(row=5, column=1, sticky="ew", padx=6, pady=2)
-        self.item_combo.bind("<<ComboboxSelected>>", self._update_selected_item_gal)
+        ttk.Label(form, text="Auswahl (nur verfügbare, Mehrfachwahl mit Strg/Shift)").grid(row=5, column=0, sticky="nw", padx=6, pady=2)
+        list_container = ttk.Frame(form)
+        list_container.grid(row=5, column=1, sticky="ew", padx=6, pady=2)
+        list_container.columnconfigure(0, weight=1)
+        self.item_listbox = tk.Listbox(list_container, selectmode=tk.EXTENDED, height=6, exportselection=False)
+        self.item_listbox.grid(row=0, column=0, sticky="ew")
+        item_scrollbar = ttk.Scrollbar(list_container, orient="vertical", command=self.item_listbox.yview)
+        item_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.item_listbox.configure(yscrollcommand=item_scrollbar.set)
+        self.item_listbox.bind("<<ListboxSelect>>", self._update_selected_item_gal)
 
         gal_frame = ttk.Frame(form)
         gal_frame.grid(row=6, column=0, columnspan=2, sticky="ew", padx=6, pady=(2, 4))
@@ -992,43 +1068,47 @@ class VerleihApp(ttk.Frame):
         self.open_gal_btn = ttk.Button(gal_frame, text="GAL öffnen", command=self._open_current_gal, state=tk.DISABLED)
         self.open_gal_btn.grid(row=0, column=1, sticky="e", padx=(8, 0))
 
-        ttk.Label(form, text="Entleiher").grid(row=7, column=0, sticky="w", padx=6, pady=2)
+        ttk.Label(form, text="Ausgebende Person").grid(row=7, column=0, sticky="w", padx=6, pady=2)
+        self.ausgebende_person_entry = ttk.Entry(form)
+        self.ausgebende_person_entry.grid(row=7, column=1, sticky="ew", padx=6, pady=2)
+
+        ttk.Label(form, text="Entleiher").grid(row=8, column=0, sticky="w", padx=6, pady=2)
         self.entleiher_entry = ttk.Entry(form)
-        self.entleiher_entry.grid(row=7, column=1, sticky="ew", padx=6, pady=2)
+        self.entleiher_entry.grid(row=8, column=1, sticky="ew", padx=6, pady=2)
 
-        ttk.Label(form, text="E-Mail").grid(row=8, column=0, sticky="w", padx=6, pady=2)
+        ttk.Label(form, text="E-Mail").grid(row=9, column=0, sticky="w", padx=6, pady=2)
         self.email_entry = ttk.Entry(form)
-        self.email_entry.grid(row=8, column=1, sticky="ew", padx=6, pady=2)
+        self.email_entry.grid(row=9, column=1, sticky="ew", padx=6, pady=2)
 
-        ttk.Label(form, text="Telefonnummer").grid(row=9, column=0, sticky="w", padx=6, pady=2)
+        ttk.Label(form, text="Telefonnummer").grid(row=10, column=0, sticky="w", padx=6, pady=2)
         self.phone_entry = ttk.Entry(form)
-        self.phone_entry.grid(row=9, column=1, sticky="ew", padx=6, pady=2)
+        self.phone_entry.grid(row=10, column=1, sticky="ew", padx=6, pady=2)
 
-        ttk.Label(form, text="Adresse").grid(row=10, column=0, sticky="w", padx=6, pady=2)
+        ttk.Label(form, text="Adresse").grid(row=11, column=0, sticky="w", padx=6, pady=2)
         self.address_entry = ttk.Entry(form)
-        self.address_entry.grid(row=10, column=1, sticky="ew", padx=6, pady=2)
+        self.address_entry.grid(row=11, column=1, sticky="ew", padx=6, pady=2)
 
         self.quick_check_out_var = tk.BooleanVar(value=False)
         self.quick_check_out_cb = ttk.Checkbutton(form, text="Kurzkontrolle durchgeführt", variable=self.quick_check_out_var)
         self.quick_check_out_cb.grid(
-            row=11, column=0, columnspan=2, sticky="w", padx=6, pady=2
+            row=12, column=0, columnspan=2, sticky="w", padx=6, pady=2
         )
 
         self.gal_provided_out_var = tk.BooleanVar(value=False)
         self.gal_provided_out_cb = ttk.Checkbutton(form, text="GAL bereitgestellt", variable=self.gal_provided_out_var)
         self.gal_provided_out_cb.grid(
-            row=12, column=0, columnspan=2, sticky="w", padx=6, pady=2
+            row=13, column=0, columnspan=2, sticky="w", padx=6, pady=2
         )
 
         self.sig_frame = ttk.Frame(form)
-        self.sig_frame.grid(row=13, column=0, columnspan=2, sticky="ew", padx=6, pady=6)
+        self.sig_frame.grid(row=14, column=0, columnspan=2, sticky="ew", padx=6, pady=6)
         self.sig_frame.columnconfigure(1, weight=1)
         ttk.Button(self.sig_frame, text="Digitale Unterschrift", command=self.capture_signature).grid(row=0, column=0, sticky="w")
         self.sig_status_var = tk.StringVar(value="Keine Unterschrift erfasst")
         ttk.Label(self.sig_frame, textvariable=self.sig_status_var).grid(row=0, column=1, sticky="w", padx=8)
 
         action_frame = ttk.Frame(form)
-        action_frame.grid(row=14, column=0, columnspan=2, sticky="ew", padx=6, pady=(0, 8))
+        action_frame.grid(row=15, column=0, columnspan=2, sticky="ew", padx=6, pady=(0, 8))
         action_frame.columnconfigure(0, weight=1)
         action_frame.columnconfigure(1, weight=1)
         ttk.Button(action_frame, text="Speichern", command=self.save_verleih).grid(row=0, column=0, sticky="ew", padx=(0, 4))
@@ -1102,6 +1182,149 @@ class VerleihApp(ttk.Frame):
             self.signature_data = ""
             self.sig_status_var.set("Keine Unterschrift erfasst")
 
+    def _build_calendar_tab(self, parent: ttk.Frame):
+        parent.columnconfigure(0, weight=1)
+        parent.rowconfigure(2, weight=1)
+
+        head = ttk.Frame(parent)
+        head.grid(row=0, column=0, sticky="ew", padx=6, pady=(6, 4))
+        head.columnconfigure(1, weight=1)
+
+        ttk.Button(head, text="◀ Monat", command=lambda: self._shift_calendar_month(-1)).grid(row=0, column=0, sticky="w")
+        self.calendar_title_var = tk.StringVar(value="")
+        ttk.Label(head, textvariable=self.calendar_title_var, anchor="center").grid(row=0, column=1, sticky="ew")
+        ttk.Button(head, text="Monat ▶", command=lambda: self._shift_calendar_month(1)).grid(row=0, column=2, sticky="e")
+
+        grid_frame = ttk.LabelFrame(parent, text="Monatsübersicht (aktive Reservierungen/Ausleihen)")
+        grid_frame.grid(row=1, column=0, sticky="ew", padx=6, pady=(0, 6))
+        for c in range(7):
+            grid_frame.columnconfigure(c, weight=1)
+
+        for col, title in enumerate(["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]):
+            ttk.Label(grid_frame, text=title, anchor="center").grid(row=0, column=col, sticky="ew", padx=2, pady=(2, 4))
+
+        self.calendar_day_buttons: list[ttk.Button] = []
+        for row in range(1, 7):
+            for col in range(7):
+                btn = ttk.Button(grid_frame, text="", command=lambda: None)
+                btn.grid(row=row, column=col, sticky="nsew", padx=2, pady=2)
+                self.calendar_day_buttons.append(btn)
+
+        day_frame = ttk.LabelFrame(parent, text="Belegung am ausgewählten Tag")
+        day_frame.grid(row=2, column=0, sticky="nsew", padx=6, pady=(0, 6))
+        day_frame.columnconfigure(0, weight=1)
+        day_frame.rowconfigure(1, weight=1)
+
+        self.calendar_day_var = tk.StringVar(value="Tag auswählen")
+        ttk.Label(day_frame, textvariable=self.calendar_day_var).grid(row=0, column=0, sticky="w", padx=6, pady=(6, 4))
+
+        self.calendar_tree = ttk.Treeview(
+            day_frame,
+            columns=("item", "status", "von", "bis", "entleiher"),
+            show="headings",
+            height=10,
+        )
+        self.calendar_tree.heading("item", text="Produkt/System")
+        self.calendar_tree.heading("status", text="Status")
+        self.calendar_tree.heading("von", text="Von")
+        self.calendar_tree.heading("bis", text="Bis")
+        self.calendar_tree.heading("entleiher", text="Entleiher")
+        self.calendar_tree.column("item", width=380, anchor="w")
+        self.calendar_tree.column("status", width=110, anchor="center")
+        self.calendar_tree.column("von", width=110, anchor="center")
+        self.calendar_tree.column("bis", width=110, anchor="center")
+        self.calendar_tree.column("entleiher", width=180, anchor="w")
+        self.calendar_tree.grid(row=1, column=0, sticky="nsew", padx=6, pady=(0, 6))
+
+        cal_scroll = ttk.Scrollbar(day_frame, orient="vertical", command=self.calendar_tree.yview)
+        cal_scroll.grid(row=1, column=1, sticky="ns", pady=(0, 6))
+        self.calendar_tree.configure(yscrollcommand=cal_scroll.set)
+
+    def _shift_calendar_month(self, delta: int):
+        month = self.calendar_month + delta
+        year = self.calendar_year
+        if month < 1:
+            month = 12
+            year -= 1
+        elif month > 12:
+            month = 1
+            year += 1
+        self.calendar_month = month
+        self.calendar_year = year
+        self._refresh_calendar()
+
+    def _refresh_calendar(self):
+        month_name = calendar.month_name[self.calendar_month]
+        self.calendar_title_var.set(f"{month_name} {self.calendar_year}")
+
+        first_weekday, days_in_month = calendar.monthrange(self.calendar_year, self.calendar_month)
+        month_start = date(self.calendar_year, self.calendar_month, 1)
+        month_end = date(self.calendar_year, self.calendar_month, days_in_month)
+
+        self.calendar_entries_for_month = fetch_calendar_entries(
+            self.db_path,
+            from_date=month_start.isoformat(),
+            to_date=month_end.isoformat(),
+        )
+
+        counts: dict[int, int] = {d: 0 for d in range(1, days_in_month + 1)}
+        for entry in self.calendar_entries_for_month:
+            try:
+                start_d = parse_date(str(entry.get("von_datum") or "")).date()
+                end_d = parse_date(str(entry.get("rueckgabe_datum") or "")).date()
+            except ValueError:
+                continue
+            start_d = max(start_d, month_start)
+            end_d = min(end_d, month_end)
+            cur = start_d
+            while cur <= end_d:
+                counts[cur.day] = counts.get(cur.day, 0) + 1
+                cur += timedelta(days=1)
+
+        for btn in self.calendar_day_buttons:
+            btn.configure(text="", state=tk.DISABLED, command=lambda: None)
+
+        start_idx = first_weekday
+        for day in range(1, days_in_month + 1):
+            btn = self.calendar_day_buttons[start_idx + day - 1]
+            count = counts.get(day, 0)
+            label = f"{day}\n({count})" if count > 0 else str(day)
+            btn.configure(text=label, state=tk.NORMAL, command=lambda d=day: self._show_calendar_day(d))
+
+        if date.today().year == self.calendar_year and date.today().month == self.calendar_month:
+            self._show_calendar_day(date.today().day)
+        else:
+            self._show_calendar_day(1)
+
+    def _show_calendar_day(self, day: int):
+        day_date = date(self.calendar_year, self.calendar_month, day)
+        self.calendar_day_var.set(f"Tag: {day_date.isoformat()}")
+
+        for row in self.calendar_tree.get_children():
+            self.calendar_tree.delete(row)
+
+        for entry in self.calendar_entries_for_month:
+            try:
+                start_d = parse_date(str(entry.get("von_datum") or "")).date()
+                end_d = parse_date(str(entry.get("rueckgabe_datum") or "")).date()
+            except ValueError:
+                continue
+            if not (start_d <= day_date <= end_d):
+                continue
+            status = (entry.get("status") or "").strip().lower()
+            status_label = "Reserviert" if status == "reserved" else "Ausgeliehen"
+            self.calendar_tree.insert(
+                "",
+                tk.END,
+                values=(
+                    entry.get("item_label", ""),
+                    status_label,
+                    entry.get("von_datum", ""),
+                    entry.get("rueckgabe_datum", ""),
+                    entry.get("entleiher", ""),
+                ),
+            )
+
     def _build_search_tab(self, parent: ttk.Frame):
         parent.columnconfigure(0, weight=1)
         parent.rowconfigure(1, weight=1)
@@ -1166,16 +1389,17 @@ class VerleihApp(ttk.Frame):
             self.selection_map[label] = (item_type, item_id)
             labels.append(label)
 
-        self.item_combo["values"] = labels
+        self.item_listbox.delete(0, tk.END)
+        for label in labels:
+            self.item_listbox.insert(tk.END, label)
         if labels:
-            self.item_combo.current(0)
-        else:
-            self.item_combo.set("")
+            self.item_listbox.selection_set(0)
         self._update_selected_item_gal()
 
     def refresh_data(self):
         self._refresh_item_combobox([])
         self._refresh_plan_list()
+        self._refresh_calendar()
         self.current_gal_target = ""
         self.gal_display_var.set("GAL: -")
         self.open_gal_btn.configure(state=tk.DISABLED)
@@ -1266,12 +1490,15 @@ class VerleihApp(ttk.Frame):
         VerleihOverviewDialog(self, plan)
 
     def capture_signature(self):
-        selection_label = self.item_combo.get().strip()
+        selected_labels = self._selected_item_labels()
         von = self.von_entry.get().strip()
         rueck = self.rueck_entry.get().strip()
         details = ""
-        if selection_label:
-            details += f"Objekt: {selection_label}\n"
+        if selected_labels:
+            if len(selected_labels) == 1:
+                details += f"Objekt: {selected_labels[0]}\n"
+            else:
+                details += f"Objekte: {len(selected_labels)} ausgewählt\n"
         if von and rueck:
             details += f"Zeitraum: {von} bis {rueck}"
 
@@ -1282,14 +1509,15 @@ class VerleihApp(ttk.Frame):
             self.sig_status_var.set("Unterschrift erfasst")
 
     def save_verleih(self):
-        selection_label = self.item_combo.get().strip()
-        if not selection_label or selection_label not in self.selection_map:
-            messagebox.showerror("Fehler", "Bitte ein Produkt oder System auswählen.")
+        selected_labels = [label for label in self._selected_item_labels() if label in self.selection_map]
+        if not selected_labels:
+            messagebox.showerror("Fehler", "Bitte mindestens ein Produkt oder System auswählen.")
             return
 
         von = self.von_entry.get().strip()
         rueck = self.rueck_entry.get().strip()
         entleiher = self.entleiher_entry.get().strip()
+        ausgebende_person = self.ausgebende_person_entry.get().strip()
         email = self.email_entry.get().strip()
         telefon = self.phone_entry.get().strip()
         adresse = self.address_entry.get().strip()
@@ -1313,23 +1541,26 @@ class VerleihApp(ttk.Frame):
         checkout_at = None
         signature_data = ""
 
-        item_type, item_id = self.selection_map[selection_label]
-
-        if not is_item_available(
-            self.db_path,
-            item_type=item_type,
-            item_id=item_id,
-            von_datum=von,
-            bis_datum=rueck,
-        ):
-            if is_item_locked(self.db_path, item_type=item_type, item_id=item_id):
-                messagebox.showerror("Gesperrt", "Das gewählte Produkt/System ist gesperrt und kann nicht reserviert oder ausgeliehen werden.")
-            else:
-                messagebox.showerror("Nicht verfügbar", "Das gewählte Produkt/System ist im Zeitraum bereits vergeben.")
-            return
+        for selection_label in selected_labels:
+            item_type, item_id = self.selection_map[selection_label]
+            if not is_item_available(
+                self.db_path,
+                item_type=item_type,
+                item_id=item_id,
+                von_datum=von,
+                bis_datum=rueck,
+            ):
+                if is_item_locked(self.db_path, item_type=item_type, item_id=item_id):
+                    messagebox.showerror("Gesperrt", f"{selection_label}\nist gesperrt und kann nicht reserviert oder ausgeliehen werden.")
+                else:
+                    messagebox.showerror("Nicht verfügbar", f"{selection_label}\nist im Zeitraum bereits vergeben.")
+                return
 
         if mode == "lend":
             if not self._validate_contact_for_lending(entleiher, adresse, email, telefon):
+                return
+            if not ausgebende_person:
+                messagebox.showerror("Fehler", "Bitte die ausgebende Person eintragen.")
                 return
             if not self.quick_check_out_var.get():
                 messagebox.showerror("Fehler", "Bitte Kurzkontrolle für die Ausleihe bestätigen.")
@@ -1337,9 +1568,12 @@ class VerleihApp(ttk.Frame):
             if not self.gal_provided_out_var.get():
                 messagebox.showerror("Fehler", "Bitte GAL bereitgestellt bestätigen.")
                 return
-            if not self.current_gal_target:
-                messagebox.showerror("Fehler", "Für dieses Produkt/System ist kein GAL-Link und keine GAL-Datei hinterlegt.")
-                return
+            for selection_label in selected_labels:
+                item_type, item_id = self.selection_map[selection_label]
+                gal_file, gal_link = fetch_item_gal_data(self.db_path, item_type=item_type, item_id=item_id)
+                if not (gal_file or gal_link):
+                    messagebox.showerror("Fehler", f"Für {selection_label} ist kein GAL-Link und keine GAL-Datei hinterlegt.")
+                    return
             if not self.signature_data:
                 messagebox.showerror("Fehler", "Für direktes Ausleihen wird eine Unterschrift benötigt.")
                 return
@@ -1347,35 +1581,40 @@ class VerleihApp(ttk.Frame):
             checkout_at = datetime.now().isoformat(timespec="seconds")
             signature_data = self.signature_data
 
-        new_id = insert_verleih(
-            self.db_path,
-            item_type=item_type,
-            item_id=item_id,
-            item_label=selection_label,
-            von_datum=von,
-            rueckgabe_datum=rueck,
-            entleiher=entleiher,
-            entleiher_email=email,
-            entleiher_telefon=telefon,
-            entleiher_adresse=adresse,
-            signature_data=signature_data,
-            quick_check_out=self.quick_check_out_var.get() if mode == "lend" else False,
-            gal_provided_out=self.gal_provided_out_var.get() if mode == "lend" else False,
-            status=status,
-            checkout_at=checkout_at,
-        )
+        created_ids: list[int] = []
+        for selection_label in selected_labels:
+            item_type, item_id = self.selection_map[selection_label]
+            new_id = insert_verleih(
+                self.db_path,
+                item_type=item_type,
+                item_id=item_id,
+                item_label=selection_label,
+                von_datum=von,
+                rueckgabe_datum=rueck,
+                entleiher=entleiher,
+                ausgebende_person=ausgebende_person,
+                entleiher_email=email,
+                entleiher_telefon=telefon,
+                entleiher_adresse=adresse,
+                signature_data=signature_data,
+                quick_check_out=self.quick_check_out_var.get() if mode == "lend" else False,
+                gal_provided_out=self.gal_provided_out_var.get() if mode == "lend" else False,
+                status=status,
+                checkout_at=checkout_at,
+            )
+            created_ids.append(new_id)
 
-        self.status_var.set(f"Eintrag gespeichert (ID {new_id})")
+        self.status_var.set(f"{len(created_ids)} Eintrag/Einträge gespeichert")
         self.von_entry.delete(0, tk.END)
         self.rueck_entry.delete(0, tk.END)
+        self.ausgebende_person_entry.delete(0, tk.END)
         self.entleiher_entry.delete(0, tk.END)
         self.email_entry.delete(0, tk.END)
         self.phone_entry.delete(0, tk.END)
         self.address_entry.delete(0, tk.END)
         self.item_filter_entry.delete(0, tk.END)
-        self.item_combo.set("")
         self.selection_map.clear()
-        self.item_combo["values"] = []
+        self.item_listbox.delete(0, tk.END)
         self.signature_data = ""
         self.quick_check_out_var.set(False)
         self.gal_provided_out_var.set(False)
@@ -1384,6 +1623,7 @@ class VerleihApp(ttk.Frame):
         self.gal_display_var.set("GAL: -")
         self.open_gal_btn.configure(state=tk.DISABLED)
         self._refresh_plan_list()
+        self._refresh_calendar()
 
     def edit_selected_contact(self):
         plan_id = self._selected_plan_id()
@@ -1417,6 +1657,7 @@ class VerleihApp(ttk.Frame):
         )
         self.status_var.set(f"Kontaktdaten für Eintrag {plan_id} aktualisiert")
         self._refresh_plan_list()
+        self._refresh_calendar()
 
     def checkout_selected_reservation(self):
         plan_id = self._selected_plan_id()
@@ -1466,9 +1707,11 @@ class VerleihApp(ttk.Frame):
             dialog.result.get("signature", ""),
             bool(dialog.result.get("quick_check_out", False)),
             bool(dialog.result.get("gal_provided_out", False)),
+            dialog.result.get("ausgebende_person", ""),
         )
         self.status_var.set(f"Reservierung {plan_id} wurde ausgeliehen")
         self._refresh_plan_list()
+        self._refresh_calendar()
 
     def confirm_selected_return(self):
         plan_id = self._selected_plan_id()
@@ -1497,6 +1740,7 @@ class VerleihApp(ttk.Frame):
             self.db_path,
             plan_id,
             return_comment=dialog.result.get("comment", ""),
+            ruecknehmende_person=dialog.result.get("ruecknehmende_person", ""),
             return_signature_data=dialog.result.get("signature", ""),
             quick_check_return=bool(dialog.result.get("quick_check_return", False)),
         )
@@ -1510,6 +1754,7 @@ class VerleihApp(ttk.Frame):
             )
         self.status_var.set(f"Rückgabe für Eintrag {plan_id} bestätigt")
         self._refresh_plan_list()
+        self._refresh_calendar()
 
     def search_available_products(self):
         suchtext = self.search_bez_entry.get().strip()
