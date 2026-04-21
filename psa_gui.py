@@ -182,6 +182,8 @@ def ensure_db_schema(db_path: Path) -> None:
             conn.execute("ALTER TABLE products ADD COLUMN last_psa_pruefung_am TEXT")
         if "last_psa_pruefung_kommentar" not in product_cols:
             conn.execute("ALTER TABLE products ADD COLUMN last_psa_pruefung_kommentar TEXT")
+        if "last_psa_durchgefallen_am" not in product_cols:
+            conn.execute("ALTER TABLE products ADD COLUMN last_psa_durchgefallen_am TEXT")
 
         if "gal_datei" not in system_cols:
             conn.execute("ALTER TABLE systems ADD COLUMN gal_datei TEXT")
@@ -193,6 +195,8 @@ def ensure_db_schema(db_path: Path) -> None:
             conn.execute("ALTER TABLE systems ADD COLUMN last_psa_pruefung_am TEXT")
         if "last_psa_pruefung_kommentar" not in system_cols:
             conn.execute("ALTER TABLE systems ADD COLUMN last_psa_pruefung_kommentar TEXT")
+        if "last_psa_durchgefallen_am" not in system_cols:
+            conn.execute("ALTER TABLE systems ADD COLUMN last_psa_durchgefallen_am TEXT")
 
 
 def ensure_archive_schema(archive_db_path: Path = ARCHIVE_DB_PATH) -> None:
@@ -414,7 +418,8 @@ def fetch_product_details(db_path: Path, product_id: int) -> dict | None:
             SELECT id, produktbezeichnung, gem_en, produktname, hersteller,
                    herstellungsjahr, kaufdatum, datum_einsatz,
                      einzelidentifikation, seriennummer, gal_datei, gal_link,
-                     naechste_pruefung_am, last_psa_pruefung_am, last_psa_pruefung_kommentar
+                                         naechste_pruefung_am, last_psa_pruefung_am, last_psa_pruefung_kommentar,
+                                         last_psa_durchgefallen_am
             FROM products
             WHERE id = ?
             """,
@@ -429,7 +434,8 @@ def fetch_system_details(db_path: Path, system_id: int) -> dict | None:
         system_row = conn.execute(
             """
             SELECT id, name, gal_datei, gal_link
-                  , naechste_pruefung_am, last_psa_pruefung_am, last_psa_pruefung_kommentar
+                , naechste_pruefung_am, last_psa_pruefung_am, last_psa_pruefung_kommentar,
+                  last_psa_durchgefallen_am
             FROM systems
             WHERE id = ?
             """,
@@ -472,7 +478,8 @@ def update_product(db_path: Path, product_id: int, data: dict) -> None:
                 gal_link = ?,
                 naechste_pruefung_am = ?,
                 last_psa_pruefung_am = ?,
-                last_psa_pruefung_kommentar = ?
+                last_psa_pruefung_kommentar = ?,
+                last_psa_durchgefallen_am = ?
             WHERE id = ?
             """,
             (
@@ -490,6 +497,7 @@ def update_product(db_path: Path, product_id: int, data: dict) -> None:
                 data.get("naechste_pruefung_am", ""),
                 data.get("last_psa_pruefung_am", ""),
                 data.get("last_psa_pruefung_kommentar", ""),
+                data.get("last_psa_durchgefallen_am", ""),
                 product_id,
             ),
         )
@@ -505,7 +513,8 @@ def update_system(db_path: Path, system_id: int, system_data: dict, part_data: d
                 gal_link = ?,
                 naechste_pruefung_am = ?,
                 last_psa_pruefung_am = ?,
-                last_psa_pruefung_kommentar = ?
+                last_psa_pruefung_kommentar = ?,
+                last_psa_durchgefallen_am = ?
             WHERE id = ?
             """,
             (
@@ -515,6 +524,7 @@ def update_system(db_path: Path, system_id: int, system_data: dict, part_data: d
                 system_data.get("naechste_pruefung_am", ""),
                 system_data.get("last_psa_pruefung_am", ""),
                 system_data.get("last_psa_pruefung_kommentar", ""),
+                system_data.get("last_psa_durchgefallen_am", ""),
                 system_id,
             ),
         )
@@ -719,6 +729,7 @@ def fetch_due_items(db_path: Path) -> list[dict]:
                     ('EI: ' || COALESCE(p.einzelidentifikation, '-') || ' | PB: ' || COALESCE(p.produktbezeichnung, '-') || ' | Name: ' || COALESCE(p.produktname, 'Ohne Name') || ' | SN: ' || COALESCE(p.seriennummer, '-')) AS item_label,
                     COALESCE(p.naechste_pruefung_am, '') AS naechste_pruefung_am,
                     COALESCE(p.last_psa_pruefung_am, '') AS last_psa_pruefung_am,
+                    COALESCE(p.last_psa_durchgefallen_am, '') AS last_psa_durchgefallen_am,
                     COALESCE(p.last_psa_pruefung_kommentar, '') AS last_psa_pruefung_kommentar,
                     COALESCE(l.is_locked, 0) AS is_locked
                 FROM products p
@@ -733,6 +744,7 @@ def fetch_due_items(db_path: Path) -> list[dict]:
                     ('EI: ' || COALESCE(sp.einzelidentifikation, '-') || ' | Name: ' || COALESCE(s.name, 'System')) AS item_label,
                     COALESCE(s.naechste_pruefung_am, '') AS naechste_pruefung_am,
                     COALESCE(s.last_psa_pruefung_am, '') AS last_psa_pruefung_am,
+                    COALESCE(s.last_psa_durchgefallen_am, '') AS last_psa_durchgefallen_am,
                     COALESCE(s.last_psa_pruefung_kommentar, '') AS last_psa_pruefung_kommentar,
                     COALESCE(l.is_locked, 0) AS is_locked
                 FROM systems s
@@ -817,6 +829,20 @@ def fetch_item_vorgaenge(db_path: Path, *, item_type: str, item_id: int) -> list
                 r["created_at"],
                 f"PSA-Prüfung | Aktion: {r['aktion'] or '-'} | Nächste Prüfung: {r['naechste_pruefung_am'] or '-'} | Kommentar: {r['kommentar'] or '-'}"
             )
+
+        if item_type == "product":
+            fail_row = conn.execute(
+                "SELECT COALESCE(last_psa_durchgefallen_am, '') FROM products WHERE id = ?",
+                (item_id,),
+            ).fetchone()
+        else:
+            fail_row = conn.execute(
+                "SELECT COALESCE(last_psa_durchgefallen_am, '') FROM systems WHERE id = ?",
+                (item_id,),
+            ).fetchone()
+        fail_ts = str(fail_row[0] or "").strip() if fail_row else ""
+        if fail_ts:
+            _add_event(fail_ts, "PSA-Prüfung: Durchgefallen")
 
     events.sort(key=lambda t: (t[0] is None, t[0] if t[0] else datetime.min), reverse=True)
     lines: list[str] = []
@@ -1106,15 +1132,16 @@ class ItemPruefungDialog(tk.Toplevel):
 
         ttk.Label(wrap, text=item.get("item_label", "")).grid(row=0, column=0, sticky="w")
         ttk.Label(wrap, text=f"Nächste Prüfung: {item.get('naechste_pruefung_am') or '-'}").grid(row=1, column=0, sticky="w", pady=(0, 6))
+        ttk.Label(wrap, text=f"Letzter Durchfall: {item.get('last_psa_durchgefallen_am') or '-'}").grid(row=2, column=0, sticky="w", pady=(0, 6))
 
         hist = tk.Text(wrap, height=16, wrap="word")
-        hist.grid(row=2, column=0, sticky="nsew")
-        wrap.rowconfigure(2, weight=1)
+        hist.grid(row=3, column=0, sticky="nsew")
+        wrap.rowconfigure(3, weight=1)
         hist.insert("1.0", "\n".join(vorgaenge) if vorgaenge else "Keine Vorgänge vorhanden.")
         hist.configure(state=tk.DISABLED)
 
         form = ttk.LabelFrame(wrap, text="PSA-Prüfung")
-        form.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        form.grid(row=4, column=0, sticky="ew", pady=(8, 0))
         form.columnconfigure(1, weight=1)
 
         self.psa_done_var = tk.BooleanVar(value=bool((initial or {}).get("psa_done", False)))
@@ -1168,7 +1195,7 @@ class ItemPruefungDialog(tk.Toplevel):
             self.unlock_comment_entry.configure(state=tk.DISABLED)
 
         actions = ttk.Frame(wrap)
-        actions.grid(row=4, column=0, sticky="ew", pady=(8, 0))
+        actions.grid(row=5, column=0, sticky="ew", pady=(8, 0))
         ttk.Button(actions, text="Haftungsausschluss erzeugen", command=self._gen_haftung).pack(side=tk.LEFT)
         ttk.Button(actions, text="Abbrechen", command=self._cancel).pack(side=tk.RIGHT)
         ttk.Button(actions, text="In Prüfungsrunde übernehmen", command=self._save).pack(side=tk.RIGHT, padx=(0, 6))
@@ -2060,6 +2087,8 @@ class PSAApp(ttk.Frame):
                 if pending.get("psa_done"):
                     details["last_psa_pruefung_am"] = now
                     details["last_psa_pruefung_kommentar"] = pending.get("kommentar", "")
+                if pending.get("lock"):
+                    details["last_psa_durchgefallen_am"] = datetime.now().isoformat(timespec="seconds")
                 update_product(self.db_path, item_id, details)
             else:
                 details = fetch_system_details(self.db_path, item_id)
@@ -2070,6 +2099,8 @@ class PSAApp(ttk.Frame):
                 if pending.get("psa_done"):
                     system_data["last_psa_pruefung_am"] = now
                     system_data["last_psa_pruefung_kommentar"] = pending.get("kommentar", "")
+                if pending.get("lock"):
+                    system_data["last_psa_durchgefallen_am"] = datetime.now().isoformat(timespec="seconds")
                 update_system(self.db_path, item_id, system_data, details["parts"])
 
             refresh_verleih_item_label(self.db_path, item_type=item_type, item_id=item_id)
