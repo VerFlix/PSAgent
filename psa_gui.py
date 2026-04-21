@@ -17,6 +17,7 @@ from generate_PDF import (
 
 GAL_DIR = Path("GAL")
 GAL_DIR.mkdir(exist_ok=True)
+ARCHIVE_DB_PATH = Path("psa_archiv.db")
 
 PRODUCT_FIELDS = [
     ("Produktbezeichnung", "produktbezeichnung"),
@@ -92,6 +93,7 @@ def ensure_db_schema(db_path: Path) -> None:
                 von_datum TEXT NOT NULL,
                 rueckgabe_datum TEXT NOT NULL,
                 entleiher TEXT,
+                ausgebende_person TEXT,
                 entleiher_email TEXT,
                 entleiher_telefon TEXT,
                 entleiher_adresse TEXT,
@@ -101,6 +103,7 @@ def ensure_db_schema(db_path: Path) -> None:
                 status TEXT NOT NULL DEFAULT 'lent',
                 checkout_at TEXT,
                 return_comment TEXT,
+                ruecknehmende_person TEXT,
                 return_signature_data TEXT,
                 quick_check_return INTEGER NOT NULL DEFAULT 0,
                 returned_at TEXT,
@@ -122,12 +125,16 @@ def ensure_db_schema(db_path: Path) -> None:
             conn.execute("ALTER TABLE verleih_planung ADD COLUMN entleiher_telefon TEXT")
         if "entleiher_adresse" not in verleih_cols:
             conn.execute("ALTER TABLE verleih_planung ADD COLUMN entleiher_adresse TEXT")
+        if "ausgebende_person" not in verleih_cols:
+            conn.execute("ALTER TABLE verleih_planung ADD COLUMN ausgebende_person TEXT")
         if "quick_check_out" not in verleih_cols:
             conn.execute("ALTER TABLE verleih_planung ADD COLUMN quick_check_out INTEGER NOT NULL DEFAULT 0")
         if "gal_provided_out" not in verleih_cols:
             conn.execute("ALTER TABLE verleih_planung ADD COLUMN gal_provided_out INTEGER NOT NULL DEFAULT 0")
         if "return_comment" not in verleih_cols:
             conn.execute("ALTER TABLE verleih_planung ADD COLUMN return_comment TEXT")
+        if "ruecknehmende_person" not in verleih_cols:
+            conn.execute("ALTER TABLE verleih_planung ADD COLUMN ruecknehmende_person TEXT")
         if "return_signature_data" not in verleih_cols:
             conn.execute("ALTER TABLE verleih_planung ADD COLUMN return_signature_data TEXT")
         if "quick_check_return" not in verleih_cols:
@@ -186,6 +193,147 @@ def ensure_db_schema(db_path: Path) -> None:
             conn.execute("ALTER TABLE systems ADD COLUMN last_psa_pruefung_am TEXT")
         if "last_psa_pruefung_kommentar" not in system_cols:
             conn.execute("ALTER TABLE systems ADD COLUMN last_psa_pruefung_kommentar TEXT")
+
+
+def ensure_archive_schema(archive_db_path: Path = ARCHIVE_DB_PATH) -> None:
+    init_db(archive_db_path)
+    ensure_db_schema(archive_db_path)
+    with _db_connect(archive_db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS archived_items (
+                archived_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_type TEXT NOT NULL,
+                source_item_id INTEGER NOT NULL,
+                item_label TEXT NOT NULL,
+                archived_at TEXT NOT NULL,
+                archived_by TEXT,
+                kommentar TEXT
+            )
+            """
+        )
+
+
+def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
+    return {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
+
+
+def _copy_rows_between_dbs(
+    src_conn: sqlite3.Connection,
+    dst_conn: sqlite3.Connection,
+    *,
+    table_name: str,
+    where_sql: str,
+    where_params: tuple,
+) -> int:
+    src_conn.row_factory = sqlite3.Row
+    rows = src_conn.execute(f"SELECT * FROM {table_name} {where_sql}", where_params).fetchall()
+    if not rows:
+        return 0
+
+    dst_cols = _table_columns(dst_conn, table_name)
+    first_keys = list(rows[0].keys())
+    cols = [c for c in first_keys if c in dst_cols]
+    if not cols:
+        return 0
+
+    col_sql = ", ".join(cols)
+    placeholders = ", ".join(["?"] * len(cols))
+    sql = f"INSERT OR REPLACE INTO {table_name} ({col_sql}) VALUES ({placeholders})"
+    count = 0
+    for row in rows:
+        dst_conn.execute(sql, tuple(row[c] for c in cols))
+        count += 1
+    return count
+
+
+def archive_item_with_history(
+    db_path: Path,
+    *,
+    item_type: str,
+    item_id: int,
+    item_label: str,
+    kommentar: str,
+    archived_by: str,
+    archive_db_path: Path = ARCHIVE_DB_PATH,
+) -> bool:
+    ensure_archive_schema(archive_db_path)
+
+    with _db_connect(db_path) as src, _db_connect(archive_db_path) as dst:
+        src.row_factory = sqlite3.Row
+
+        if item_type == "product":
+            exists = src.execute("SELECT 1 FROM products WHERE id = ? LIMIT 1", (item_id,)).fetchone()
+            if not exists:
+                return False
+            _copy_rows_between_dbs(src, dst, table_name="products", where_sql="WHERE id = ?", where_params=(item_id,))
+        else:
+            exists = src.execute("SELECT 1 FROM systems WHERE id = ? LIMIT 1", (item_id,)).fetchone()
+            if not exists:
+                return False
+            _copy_rows_between_dbs(src, dst, table_name="systems", where_sql="WHERE id = ?", where_params=(item_id,))
+            _copy_rows_between_dbs(src, dst, table_name="system_parts", where_sql="WHERE system_id = ?", where_params=(item_id,))
+
+        _copy_rows_between_dbs(
+            src,
+            dst,
+            table_name="verleih_planung",
+            where_sql="WHERE item_type = ? AND item_id = ?",
+            where_params=(item_type, item_id),
+        )
+        _copy_rows_between_dbs(
+            src,
+            dst,
+            table_name="item_locks",
+            where_sql="WHERE item_type = ? AND item_id = ?",
+            where_params=(item_type, item_id),
+        )
+
+        report_ids = src.execute(
+            """
+            SELECT DISTINCT report_id
+            FROM psa_pruefungsbericht_items
+            WHERE item_type = ? AND item_id = ?
+            """,
+            (item_type, item_id),
+        ).fetchall()
+
+        for rid_row in report_ids:
+            rid = int(rid_row[0])
+            _copy_rows_between_dbs(src, dst, table_name="psa_pruefungsberichte", where_sql="WHERE id = ?", where_params=(rid,))
+            _copy_rows_between_dbs(src, dst, table_name="psa_pruefungsbericht_items", where_sql="WHERE report_id = ?", where_params=(rid,))
+
+        dst.execute(
+            """
+            INSERT INTO archived_items (
+                item_type, source_item_id, item_label, archived_at, archived_by, kommentar
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                item_type,
+                item_id,
+                item_label,
+                datetime.now().isoformat(timespec="seconds"),
+                archived_by,
+                kommentar,
+            ),
+        )
+    return True
+
+
+def fetch_archived_items(archive_db_path: Path = ARCHIVE_DB_PATH) -> list[dict]:
+    ensure_archive_schema(archive_db_path)
+    with _db_connect(archive_db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT archived_item_id, item_type, source_item_id, item_label,
+                   archived_at, archived_by, kommentar
+            FROM archived_items
+            ORDER BY archived_at DESC, archived_item_id DESC
+            """
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def insert_product(db_path: Path, data: dict) -> int:
@@ -438,20 +586,25 @@ def refresh_verleih_item_label(db_path: Path, *, item_type: str, item_id: int) -
         with _db_connect(db_path) as conn:
             if item_type == "product":
                 row = conn.execute(
-                    "SELECT produktname, seriennummer FROM products WHERE id = ?",
+                    "SELECT einzelidentifikation, produktbezeichnung, produktname, seriennummer FROM products WHERE id = ?",
                     (item_id,),
                 ).fetchone()
                 if not row:
                     return
-                label = f"#{item_id} | {row[0] or 'Ohne Name'} | SN: {row[1] or '-'}"
+                label = f"EI: {row[0] or '-'} | PB: {row[1] or '-'} | Name: {row[2] or 'Ohne Name'} | SN: {row[3] or '-'}"
             else:
                 row = conn.execute(
-                    "SELECT name FROM systems WHERE id = ?",
+                    """
+                    SELECT sp.einzelidentifikation, s.name
+                    FROM systems s
+                    LEFT JOIN system_parts sp ON sp.system_id = s.id AND sp.part_index = 1
+                    WHERE s.id = ?
+                    """,
                     (item_id,),
                 ).fetchone()
                 if not row:
                     return
-                label = f"#{item_id} | {row[0] or 'System'}"
+                label = f"EI: {row[0] or '-'} | Name: {row[1] or 'System'}"
 
             conn.execute(
                 """
@@ -470,19 +623,20 @@ def fetch_products(db_path: Path) -> list[tuple[int, str]]:
     with _db_connect(db_path) as conn:
         rows = conn.execute(
             """
-            SELECT p.id, p.produktname, p.seriennummer,
+                 SELECT p.id, p.einzelidentifikation, p.produktbezeichnung, p.produktname, p.seriennummer,
                    COALESCE(l.is_locked, 0) AS is_locked
             FROM products
             p LEFT JOIN item_locks l
               ON l.item_type = 'product' AND l.item_id = p.id
-                        ORDER BY p.id DESC
+            ORDER BY COALESCE(p.einzelidentifikation, '') COLLATE NOCASE ASC,
+                     p.id ASC
             """
         ).fetchall()
     result = []
     for row in rows:
-        pid, name, sn, is_locked = row
+        pid, ei, pb, name, sn, is_locked = row
         lock_tag = " | [GESPERRT]" if is_locked else ""
-        label = f"#{pid} | {name or 'Ohne Name'} | SN: {sn or '-'}{lock_tag}"
+        label = f"EI: {ei or '-'} | PB: {pb or '-'} | Name: {name or 'Ohne Name'} | SN: {sn or '-'}{lock_tag}"
         result.append((pid, label))
     return result
 
@@ -491,19 +645,22 @@ def fetch_systems(db_path: Path) -> list[tuple[int, str]]:
     with _db_connect(db_path) as conn:
         rows = conn.execute(
             """
-            SELECT s.id, s.name,
+                     SELECT s.id, sp.einzelidentifikation, s.name,
                    COALESCE(l.is_locked, 0) AS is_locked
             FROM systems
-            s LEFT JOIN item_locks l
+            s LEFT JOIN system_parts sp
+              ON sp.system_id = s.id AND sp.part_index = 1
+            LEFT JOIN item_locks l
               ON l.item_type = 'system' AND l.item_id = s.id
-                        ORDER BY s.id DESC
+            ORDER BY COALESCE(sp.einzelidentifikation, '') COLLATE NOCASE ASC,
+                     s.id ASC
             """
         ).fetchall()
     result = []
     for row in rows:
-        sid, name, is_locked = row
+        sid, ei, name, is_locked = row
         lock_tag = " | [GESPERRT]" if is_locked else ""
-        label = f"#{sid} | {name or 'System'}{lock_tag}"
+        label = f"EI: {ei or '-'} | Name: {name or 'System'}{lock_tag}"
         result.append((sid, label))
     return result
 
@@ -526,6 +683,28 @@ def unlock_item(db_path: Path, *, item_type: str, item_id: int, unlock_comment: 
     return cur.rowcount > 0
 
 
+def lock_item(db_path: Path, *, item_type: str, item_id: int, lock_comment: str) -> bool:
+    with _db_connect(db_path) as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO item_locks (
+                item_type, item_id, is_locked, lock_comment,
+                lock_at, unlock_comment, unlock_at, unlock_source
+            ) VALUES (?, ?, 1, ?, ?, NULL, NULL, NULL)
+            ON CONFLICT(item_type, item_id)
+            DO UPDATE SET
+                is_locked = 1,
+                lock_comment = excluded.lock_comment,
+                lock_at = excluded.lock_at,
+                unlock_comment = NULL,
+                unlock_at = NULL,
+                unlock_source = NULL
+            """,
+            (item_type, item_id, lock_comment, datetime.now().isoformat(timespec="seconds")),
+        )
+    return cur.rowcount > 0
+
+
 def fetch_due_items(db_path: Path) -> list[dict]:
     with _db_connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
@@ -536,7 +715,8 @@ def fetch_due_items(db_path: Path) -> list[dict]:
                 SELECT
                     'product' AS item_type,
                     p.id AS item_id,
-                    ('#' || p.id || ' | Produkt | ' || COALESCE(p.produktname, 'Ohne Name') || ' | SN: ' || COALESCE(p.seriennummer, '-')) AS item_label,
+                    COALESCE(p.einzelidentifikation, '') AS sort_ei,
+                    ('EI: ' || COALESCE(p.einzelidentifikation, '-') || ' | PB: ' || COALESCE(p.produktbezeichnung, '-') || ' | Name: ' || COALESCE(p.produktname, 'Ohne Name') || ' | SN: ' || COALESCE(p.seriennummer, '-')) AS item_label,
                     COALESCE(p.naechste_pruefung_am, '') AS naechste_pruefung_am,
                     COALESCE(p.last_psa_pruefung_am, '') AS last_psa_pruefung_am,
                     COALESCE(p.last_psa_pruefung_kommentar, '') AS last_psa_pruefung_kommentar,
@@ -549,17 +729,20 @@ def fetch_due_items(db_path: Path) -> list[dict]:
                 SELECT
                     'system' AS item_type,
                     s.id AS item_id,
-                    ('#' || s.id || ' | System | ' || COALESCE(s.name, 'System')) AS item_label,
+                    COALESCE(sp.einzelidentifikation, '') AS sort_ei,
+                    ('EI: ' || COALESCE(sp.einzelidentifikation, '-') || ' | Name: ' || COALESCE(s.name, 'System')) AS item_label,
                     COALESCE(s.naechste_pruefung_am, '') AS naechste_pruefung_am,
                     COALESCE(s.last_psa_pruefung_am, '') AS last_psa_pruefung_am,
                     COALESCE(s.last_psa_pruefung_kommentar, '') AS last_psa_pruefung_kommentar,
                     COALESCE(l.is_locked, 0) AS is_locked
                 FROM systems s
+                LEFT JOIN system_parts sp ON sp.system_id = s.id AND sp.part_index = 1
                 LEFT JOIN item_locks l ON l.item_type = 'system' AND l.item_id = s.id
             ) items
             ORDER BY is_locked DESC,
                      CASE WHEN naechste_pruefung_am = '' THEN 1 ELSE 0 END,
                      naechste_pruefung_am ASC,
+                     sort_ei COLLATE NOCASE ASC,
                      item_label COLLATE NOCASE ASC
             """
         ).fetchall()
@@ -956,16 +1139,30 @@ class ItemPruefungDialog(tk.Toplevel):
         ttk.Checkbutton(form, text="Produkt/System löschen", variable=self.delete_var).grid(row=4, column=0, columnspan=2, sticky="w", padx=6, pady=2)
 
         is_locked = int(item.get("is_locked", 0)) == 1
+        self.lock_var = tk.BooleanVar(value=bool((initial or {}).get("lock", False)))
+        lock_cb = ttk.Checkbutton(form, text="Produkt/System sperren", variable=self.lock_var)
+        lock_cb.grid(row=5, column=0, columnspan=2, sticky="w", padx=6, pady=2)
+        if is_locked:
+            self.lock_var.set(False)
+            lock_cb.configure(state=tk.DISABLED)
+
+        ttk.Label(form, text="Sperr-Kommentar").grid(row=6, column=0, sticky="w", padx=6, pady=2)
+        self.lock_comment_entry = ttk.Entry(form)
+        self.lock_comment_entry.grid(row=6, column=1, sticky="ew", padx=6, pady=2)
+        self.lock_comment_entry.insert(0, str((initial or {}).get("lock_comment", "")))
+        if is_locked:
+            self.lock_comment_entry.configure(state=tk.DISABLED)
+
         self.unlock_var = tk.BooleanVar(value=bool((initial or {}).get("unlock", False)))
         unlock_cb = ttk.Checkbutton(form, text="Produkt/System entsperren", variable=self.unlock_var)
-        unlock_cb.grid(row=5, column=0, columnspan=2, sticky="w", padx=6, pady=2)
+        unlock_cb.grid(row=7, column=0, columnspan=2, sticky="w", padx=6, pady=2)
         if not is_locked:
             self.unlock_var.set(False)
             unlock_cb.configure(state=tk.DISABLED)
 
-        ttk.Label(form, text="Entsperr-Kommentar").grid(row=6, column=0, sticky="w", padx=6, pady=2)
+        ttk.Label(form, text="Entsperr-Kommentar").grid(row=8, column=0, sticky="w", padx=6, pady=2)
         self.unlock_comment_entry = ttk.Entry(form)
-        self.unlock_comment_entry.grid(row=6, column=1, sticky="ew", padx=6, pady=2)
+        self.unlock_comment_entry.grid(row=8, column=1, sticky="ew", padx=6, pady=2)
         self.unlock_comment_entry.insert(0, str((initial or {}).get("unlock_comment", "")))
         if not is_locked:
             self.unlock_comment_entry.configure(state=tk.DISABLED)
@@ -1011,9 +1208,18 @@ class ItemPruefungDialog(tk.Toplevel):
             "kommentar": self.comment_text.get("1.0", tk.END).strip(),
             "naechste_pruefung_am": next_date,
             "delete": bool(self.delete_var.get()),
+            "lock": bool(self.lock_var.get()),
+            "lock_comment": self.lock_comment_entry.get().strip(),
             "unlock": bool(self.unlock_var.get()),
             "unlock_comment": self.unlock_comment_entry.get().strip(),
         }
+
+        if self.result["lock"] and self.result["unlock"]:
+            messagebox.showerror("Fehler", "Sperren und Entsperren gleichzeitig ist nicht möglich.", parent=self)
+            return
+        if self.result["lock"] and not self.result["lock_comment"]:
+            messagebox.showerror("Fehler", "Zum Sperren ist ein Kommentar erforderlich.", parent=self)
+            return
 
         if self.result["unlock"] and not self.result["unlock_comment"]:
             messagebox.showerror("Fehler", "Zum Entsperren ist ein Kommentar erforderlich.", parent=self)
@@ -1159,6 +1365,71 @@ class ReportDetailsDialog(tk.Toplevel):
         ttk.Button(wrap, text="Schließen", command=self.destroy).grid(row=5, column=0, sticky='e', pady=(8,0))
 
 
+class ArchivedItemDetailsDialog(tk.Toplevel):
+    def __init__(self, master: tk.Misc, *, archived_item: dict, details: dict | None, vorgaenge: list[str]):
+        super().__init__(master)
+        self.title("Archivdetails")
+        self.geometry("980x760")
+        self.transient(master)
+
+        wrap = ttk.Frame(self)
+        wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        wrap.columnconfigure(0, weight=1)
+
+        ttk.Label(wrap, text=archived_item.get("item_label", "")).grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            wrap,
+            text=f"Archiviert am: {archived_item.get('archived_at', '')} | Von: {archived_item.get('archived_by', '') or '-'}",
+        ).grid(row=1, column=0, sticky="w", pady=(0, 6))
+        ttk.Label(wrap, text=f"Kommentar: {archived_item.get('kommentar', '') or '-'}").grid(row=2, column=0, sticky="w", pady=(0, 6))
+
+        info_frame = ttk.LabelFrame(wrap, text="Stammdaten")
+        info_frame.grid(row=3, column=0, sticky="nsew")
+        info_frame.columnconfigure(0, weight=1)
+
+        info_text = tk.Text(info_frame, height=10, wrap="word")
+        info_text.grid(row=0, column=0, sticky="nsew", padx=6, pady=6)
+        info_frame.rowconfigure(0, weight=1)
+
+        if details:
+            lines: list[str] = []
+            if "system" in details:
+                lines.append("System:")
+                for k, v in details.get("system", {}).items():
+                    lines.append(f"- {k}: {v}")
+                parts = details.get("parts", {})
+                if parts:
+                    lines.append("")
+                    lines.append("Systemteile:")
+                    for idx in sorted(parts.keys()):
+                        lines.append(f"Teil {idx}:")
+                        for k, v in parts[idx].items():
+                            if k == "part_index":
+                                continue
+                            lines.append(f"  - {k}: {v}")
+            else:
+                lines.append("Produkt:")
+                for k, v in details.items():
+                    lines.append(f"- {k}: {v}")
+            info_text.insert("1.0", "\n".join(lines))
+        else:
+            info_text.insert("1.0", "Keine Stammdaten gefunden.")
+        info_text.configure(state=tk.DISABLED)
+
+        hist_frame = ttk.LabelFrame(wrap, text="Vorgänge")
+        hist_frame.grid(row=4, column=0, sticky="nsew", pady=(8, 0))
+        hist_frame.columnconfigure(0, weight=1)
+        hist_frame.rowconfigure(0, weight=1)
+        wrap.rowconfigure(4, weight=1)
+
+        hist_text = tk.Text(hist_frame, height=16, wrap="word")
+        hist_text.grid(row=0, column=0, sticky="nsew", padx=6, pady=6)
+        hist_text.insert("1.0", "\n".join(vorgaenge) if vorgaenge else "Keine Vorgänge vorhanden.")
+        hist_text.configure(state=tk.DISABLED)
+
+        ttk.Button(wrap, text="Schließen", command=self.destroy).grid(row=5, column=0, sticky="e", pady=(8, 0))
+
+
 class PSAApp(ttk.Frame):
     def __init__(self, master: tk.Tk, db_path: Path):
         super().__init__(master)
@@ -1170,6 +1441,7 @@ class PSAApp(ttk.Frame):
         self.refresh_lists()
         self.refresh_due_list()
         self.refresh_reports_list()
+        self.refresh_archive_list()
 
     def _build_ui(self):
         self.columnconfigure(0, weight=1)
@@ -1181,9 +1453,11 @@ class PSAApp(ttk.Frame):
         main_tab = ttk.Frame(notebook)
         due_tab = ttk.Frame(notebook)
         report_tab = ttk.Frame(notebook)
+        archive_tab = ttk.Frame(notebook)
         notebook.add(main_tab, text="Stammdaten & PDF")
         notebook.add(due_tab, text="Nächste Prüfungen")
         notebook.add(report_tab, text="PSA-Prüfungsberichte")
+        notebook.add(archive_tab, text="Archiv (Aussortiert)")
 
         main_tab.columnconfigure(0, weight=1)
         main_tab.columnconfigure(1, weight=1)
@@ -1202,6 +1476,7 @@ class PSAApp(ttk.Frame):
         self._build_select_area(select_frame)
         self._build_due_tab(due_tab)
         self._build_report_tab(report_tab)
+        self._build_archive_tab(archive_tab)
 
     def _build_due_tab(self, parent: ttk.Frame):
         parent.columnconfigure(0, weight=1)
@@ -1209,17 +1484,15 @@ class PSAApp(ttk.Frame):
 
         self.due_tree = ttk.Treeview(
             parent,
-            columns=("typ", "label", "next", "locked", "last"),
+            columns=("label", "next", "locked", "last"),
             show="headings",
             height=18,
         )
-        self.due_tree.heading("typ", text="Typ")
-        self.due_tree.heading("label", text="Produkt/System")
+        self.due_tree.heading("label", text="Bezeichnung")
         self.due_tree.heading("next", text="Nächste Prüfung")
         self.due_tree.heading("locked", text="Gesperrt")
         self.due_tree.heading("last", text="Letzte PSA-Prüfung")
-        self.due_tree.column("typ", width=90, anchor="center")
-        self.due_tree.column("label", width=360, anchor="w")
+        self.due_tree.column("label", width=450, anchor="w")
         self.due_tree.column("next", width=130, anchor="center")
         self.due_tree.column("locked", width=100, anchor="center")
         self.due_tree.column("last", width=150, anchor="center")
@@ -1257,6 +1530,32 @@ class PSAApp(ttk.Frame):
         actions = ttk.Frame(parent)
         actions.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 8))
         ttk.Button(actions, text="Berichte aktualisieren", command=self.refresh_reports_list).pack(side=tk.LEFT)
+
+    def _build_archive_tab(self, parent: ttk.Frame):
+        parent.columnconfigure(0, weight=1)
+        parent.rowconfigure(0, weight=1)
+
+        self.archive_tree = ttk.Treeview(
+            parent,
+            columns=("label", "date", "by", "comment"),
+            show="headings",
+            height=18,
+        )
+        self.archive_tree.heading("label", text="Bezeichnung")
+        self.archive_tree.heading("date", text="Archiviert am")
+        self.archive_tree.heading("by", text="Archiviert von")
+        self.archive_tree.heading("comment", text="Kommentar")
+        self.archive_tree.column("label", width=360, anchor="w")
+        self.archive_tree.column("date", width=160, anchor="center")
+        self.archive_tree.column("by", width=160, anchor="w")
+        self.archive_tree.column("comment", width=340, anchor="w")
+        self.archive_tree.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        self.archive_tree.bind("<Double-1>", self._open_archive_item)
+
+        actions = ttk.Frame(parent)
+        actions.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 8))
+        ttk.Button(actions, text="Archiv aktualisieren", command=self.refresh_archive_list).pack(side=tk.LEFT)
+        ttk.Button(actions, text="Haftungsausschluss erzeugen", command=self.generate_archive_haftung).pack(side=tk.RIGHT)
 
     def _build_product_form(self, parent: ttk.LabelFrame):
         self.product_entries = {}
@@ -1639,7 +1938,6 @@ class PSAApp(ttk.Frame):
                 tk.END,
                 iid=f"{item['item_type']}:{item['item_id']}",
                 values=(
-                    "Produkt" if item["item_type"] == "product" else "System",
                     item.get("item_label", ""),
                     item.get("naechste_pruefung_am", "") or "-",
                     "Ja" if int(item.get("is_locked", 0)) else "Nein",
@@ -1682,6 +1980,8 @@ class PSAApp(ttk.Frame):
             "kommentar": str(dlg.result.get("kommentar", "")),
             "naechste_pruefung_am": str(dlg.result.get("naechste_pruefung_am", "")),
             "delete": bool(dlg.result.get("delete", False)),
+            "lock": bool(dlg.result.get("lock", False)),
+            "lock_comment": str(dlg.result.get("lock_comment", "")),
             "unlock": bool(dlg.result.get("unlock", False)),
             "unlock_comment": str(dlg.result.get("unlock_comment", "")),
         }
@@ -1706,6 +2006,20 @@ class PSAApp(ttk.Frame):
             action = "update"
 
             if pending.get("delete"):
+                archived_ok = archive_item_with_history(
+                    self.db_path,
+                    item_type=item_type,
+                    item_id=item_id,
+                    item_label=str(pending.get("item_label", "")),
+                    kommentar=str(pending.get("kommentar", "")),
+                    archived_by=str(sign.result.get("name", "")),
+                )
+                if not archived_ok:
+                    messagebox.showerror(
+                        "Fehler",
+                        f"Archivierung fehlgeschlagen für {pending.get('item_label', '')}. Löschen wurde nicht durchgeführt.",
+                    )
+                    continue
                 delete_item(self.db_path, item_type=item_type, item_id=item_id)
                 report_items.append({
                     "item_type": item_type,
@@ -1714,7 +2028,7 @@ class PSAApp(ttk.Frame):
                     "psa_done": pending.get("psa_done", False),
                     "kommentar": pending.get("kommentar", ""),
                     "naechste_pruefung_am": pending.get("naechste_pruefung_am", ""),
-                    "aktion": "delete",
+                    "aktion": "archived+delete",
                 })
                 continue
 
@@ -1727,6 +2041,16 @@ class PSAApp(ttk.Frame):
                 )
                 if changed:
                     action = "unlock+update"
+
+            if pending.get("lock"):
+                changed = lock_item(
+                    self.db_path,
+                    item_type=item_type,
+                    item_id=item_id,
+                    lock_comment=pending.get("lock_comment", ""),
+                )
+                if changed:
+                    action = "lock+update" if action == "update" else f"{action}+lock"
 
             if item_type == "product":
                 details = fetch_product_details(self.db_path, item_id)
@@ -1770,6 +2094,7 @@ class PSAApp(ttk.Frame):
         self.refresh_lists()
         self.refresh_due_list()
         self.refresh_reports_list()
+        self.refresh_archive_list()
         self.status_var.set(f"Prüfungsrunde gespeichert (Bericht #{report_id})")
 
     def refresh_reports_list(self):
@@ -1783,6 +2108,79 @@ class PSAApp(ttk.Frame):
                 iid=str(r.get("id")),
                 values=(r.get("id"), r.get("created_at"), r.get("sachkundiger_name"), r.get("item_count")),
             )
+
+    def refresh_archive_list(self):
+        if not hasattr(self, "archive_tree"):
+            return
+        self.archive_tree.delete(*self.archive_tree.get_children())
+        self.archived_items = fetch_archived_items(ARCHIVE_DB_PATH)
+        for item in self.archived_items:
+            iid = str(item.get("archived_item_id"))
+            self.archive_tree.insert(
+                "",
+                tk.END,
+                iid=iid,
+                values=(
+                    item.get("item_label", ""),
+                    item.get("archived_at", ""),
+                    item.get("archived_by", "") or "-",
+                    item.get("kommentar", "") or "-",
+                ),
+            )
+
+    def generate_archive_haftung(self):
+        if not hasattr(self, "archive_tree"):
+            return
+        selection = self.archive_tree.selection()
+        if not selection:
+            messagebox.showerror("Fehler", "Bitte zuerst einen archivierten Eintrag auswählen.")
+            return
+        archived_id = int(selection[0])
+        item = next((x for x in getattr(self, "archived_items", []) if int(x.get("archived_item_id", 0)) == archived_id), None)
+        if not item:
+            messagebox.showerror("Fehler", "Archiv-Eintrag wurde nicht gefunden.")
+            return
+
+        item_type = str(item.get("item_type") or "")
+        source_item_id = int(item.get("source_item_id") or 0)
+        if source_item_id <= 0:
+            messagebox.showerror("Fehler", "Ungültige Archiv-ID.")
+            return
+
+        try:
+            if item_type == "product":
+                generate_haftungsausschluss_pdf_from_db(product_id=source_item_id, system_id=None, db_path=ARCHIVE_DB_PATH)
+            else:
+                generate_haftungsausschluss_pdf_from_db(product_id=None, system_id=source_item_id, db_path=ARCHIVE_DB_PATH)
+            messagebox.showinfo("OK", "Haftungsausschluss aus dem Archiv wurde erzeugt.")
+        except Exception as e:
+            messagebox.showerror("Fehler", f"Konnte Haftungsausschluss nicht erzeugen: {e}")
+
+    def _open_archive_item(self, _event=None):
+        if not hasattr(self, "archive_tree"):
+            return
+        selection = self.archive_tree.selection()
+        if not selection:
+            return
+        archived_id = int(selection[0])
+        item = next((x for x in getattr(self, "archived_items", []) if int(x.get("archived_item_id", 0)) == archived_id), None)
+        if not item:
+            messagebox.showerror("Fehler", "Archiv-Eintrag wurde nicht gefunden.")
+            return
+
+        item_type = str(item.get("item_type") or "")
+        source_item_id = int(item.get("source_item_id") or 0)
+        if source_item_id <= 0:
+            messagebox.showerror("Fehler", "Ungültige Archiv-ID.")
+            return
+
+        if item_type == "product":
+            details = fetch_product_details(ARCHIVE_DB_PATH, source_item_id)
+        else:
+            details = fetch_system_details(ARCHIVE_DB_PATH, source_item_id)
+
+        vorgaenge = fetch_item_vorgaenge(ARCHIVE_DB_PATH, item_type=item_type, item_id=source_item_id)
+        ArchivedItemDetailsDialog(self, archived_item=item, details=details, vorgaenge=vorgaenge)
 
     def _open_report_details(self, _event=None):
         selection = self.report_tree.selection()

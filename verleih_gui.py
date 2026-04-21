@@ -91,6 +91,14 @@ def ensure_verleih_schema(db_path: Path) -> None:
         if "quick_check_return" not in existing_cols:
             conn.execute("ALTER TABLE verleih_planung ADD COLUMN quick_check_return INTEGER NOT NULL DEFAULT 0")
 
+        # PSA-Spalten absichern (falls DB nur über Verleih-GUI initialisiert wurde)
+        product_cols = {row[1] for row in conn.execute("PRAGMA table_info(products)").fetchall()}
+        system_cols = {row[1] for row in conn.execute("PRAGMA table_info(systems)").fetchall()}
+        if "naechste_pruefung_am" not in product_cols:
+            conn.execute("ALTER TABLE products ADD COLUMN naechste_pruefung_am TEXT")
+        if "naechste_pruefung_am" not in system_cols:
+            conn.execute("ALTER TABLE systems ADD COLUMN naechste_pruefung_am TEXT")
+
         conn.execute(
             """
             UPDATE verleih_planung
@@ -108,9 +116,10 @@ def fetch_products(db_path: Path) -> list[dict]:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """
-            SELECT id, produktbezeichnung, produktname, seriennummer
+            SELECT id, einzelidentifikation, produktbezeichnung, produktname, seriennummer
             FROM products
-            ORDER BY id DESC
+            ORDER BY COALESCE(einzelidentifikation, '') COLLATE NOCASE ASC,
+                     id ASC
             """
         ).fetchall()
     return [dict(row) for row in rows]
@@ -121,12 +130,86 @@ def fetch_systems(db_path: Path) -> list[dict]:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """
-            SELECT id, name
-            FROM systems
-            ORDER BY id DESC
+            SELECT s.id, sp.einzelidentifikation, s.name
+            FROM systems s
+            LEFT JOIN system_parts sp ON sp.system_id = s.id AND sp.part_index = 1
+            ORDER BY COALESCE(sp.einzelidentifikation, '') COLLATE NOCASE ASC,
+                     s.id ASC
             """
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def fetch_distinct_produktbezeichnungen(db_path: Path) -> list[str]:
+    with _db_connect(db_path) as conn:
+        rows = conn.execute(
+            """
+                        SELECT DISTINCT value
+                        FROM (
+                                SELECT TRIM(COALESCE(produktbezeichnung, '')) AS value
+                                FROM products
+                                WHERE TRIM(COALESCE(produktbezeichnung, '')) <> ''
+                                    AND COALESCE(naechste_pruefung_am, '') <> ''
+                                    AND naechste_pruefung_am >= DATE('now')
+
+                                UNION
+
+                                SELECT TRIM(COALESCE(name, '')) AS value
+                                FROM systems
+                                WHERE TRIM(COALESCE(name, '')) <> ''
+                                    AND COALESCE(naechste_pruefung_am, '') <> ''
+                                    AND naechste_pruefung_am >= DATE('now')
+                        ) vals
+                        ORDER BY value COLLATE NOCASE ASC
+            """
+        ).fetchall()
+    return [str(row[0]) for row in rows]
+
+
+def is_item_psa_current(db_path: Path, *, item_type: str, item_id: int) -> bool:
+    with _db_connect(db_path) as conn:
+        if item_type == "product":
+            row = conn.execute(
+                """
+                SELECT 1
+                FROM products
+                WHERE id = ?
+                  AND COALESCE(naechste_pruefung_am, '') <> ''
+                  AND naechste_pruefung_am >= DATE('now')
+                LIMIT 1
+                """,
+                (item_id,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """
+                SELECT 1
+                FROM systems
+                WHERE id = ?
+                  AND COALESCE(naechste_pruefung_am, '') <> ''
+                  AND naechste_pruefung_am >= DATE('now')
+                LIMIT 1
+                """,
+                (item_id,),
+            ).fetchone()
+    return row is not None
+
+
+def fetch_item_next_pruefung_am(db_path: Path, *, item_type: str, item_id: int) -> str:
+    with _db_connect(db_path) as conn:
+        if item_type == "product":
+            row = conn.execute(
+                "SELECT COALESCE(naechste_pruefung_am, '') FROM products WHERE id = ?",
+                (item_id,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT COALESCE(naechste_pruefung_am, '') FROM systems WHERE id = ?",
+                (item_id,),
+            ).fetchone()
+    if not row:
+        return ""
+    return str(row[0] or "").strip()
 
 
 def fetch_pending_verleihplaene(db_path: Path) -> list[dict]:
@@ -134,15 +217,39 @@ def fetch_pending_verleihplaene(db_path: Path) -> list[dict]:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """
-            SELECT id, item_type, item_id, item_label, von_datum, rueckgabe_datum,
-                   entleiher, status, checkout_at, returned_at, created_at
-            FROM verleih_planung
+            SELECT
+                v.id,
+                v.item_type,
+                v.item_id,
+                CASE
+                    WHEN v.item_type = 'product' THEN
+                        ('EI: ' || COALESCE(p.einzelidentifikation, '-') || ' | PB: ' || COALESCE(p.produktbezeichnung, '-') ||
+                         ' | Name: ' || COALESCE(p.produktname, 'Ohne Name') || ' | SN: ' || COALESCE(p.seriennummer, '-'))
+                    WHEN v.item_type = 'system' THEN
+                        ('EI: ' || COALESCE(sp.einzelidentifikation, '-') ||
+                         ' | Name: ' || COALESCE(s.name, 'System'))
+                    ELSE COALESCE(v.item_label, '')
+                END AS item_label,
+                v.von_datum,
+                v.rueckgabe_datum,
+                v.entleiher,
+                v.status,
+                v.checkout_at,
+                v.returned_at,
+                v.created_at
+            FROM verleih_planung v
+            LEFT JOIN products p ON v.item_type = 'product' AND p.id = v.item_id
+            LEFT JOIN systems s ON v.item_type = 'system' AND s.id = v.item_id
+            LEFT JOIN system_parts sp ON sp.system_id = s.id AND sp.part_index = 1
             WHERE COALESCE(status, 'lent') IN ('reserved', 'lent')
               AND (
                     (COALESCE(status, 'lent') = 'reserved' AND von_datum >= DATE('now'))
                  OR COALESCE(status, 'lent') = 'lent'
               )
-            ORDER BY rueckgabe_datum ASC, von_datum ASC, id ASC
+            ORDER BY COALESCE(sp.einzelidentifikation, p.einzelidentifikation, '') COLLATE NOCASE ASC,
+                     rueckgabe_datum ASC,
+                     von_datum ASC,
+                     v.id ASC
             """
         ).fetchall()
     return [dict(row) for row in rows]
@@ -167,12 +274,32 @@ def fetch_calendar_entries(db_path: Path, *, from_date: str, to_date: str) -> li
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """
-            SELECT id, item_label, von_datum, rueckgabe_datum, entleiher, status
-            FROM verleih_planung
+            SELECT
+                v.id,
+                CASE
+                    WHEN v.item_type = 'product' THEN
+                        ('EI: ' || COALESCE(p.einzelidentifikation, '-') || ' | PB: ' || COALESCE(p.produktbezeichnung, '-') ||
+                         ' | Name: ' || COALESCE(p.produktname, 'Ohne Name') || ' | SN: ' || COALESCE(p.seriennummer, '-'))
+                    WHEN v.item_type = 'system' THEN
+                        ('EI: ' || COALESCE(sp.einzelidentifikation, '-') ||
+                         ' | Name: ' || COALESCE(s.name, 'System'))
+                    ELSE COALESCE(v.item_label, '')
+                END AS item_label,
+                v.von_datum,
+                v.rueckgabe_datum,
+                v.entleiher,
+                v.status
+            FROM verleih_planung v
+            LEFT JOIN products p ON v.item_type = 'product' AND p.id = v.item_id
+            LEFT JOIN systems s ON v.item_type = 'system' AND s.id = v.item_id
+            LEFT JOIN system_parts sp ON sp.system_id = s.id AND sp.part_index = 1
             WHERE COALESCE(status, 'lent') IN ('reserved', 'lent')
               AND von_datum <= ?
               AND rueckgabe_datum >= ?
-            ORDER BY von_datum ASC, rueckgabe_datum ASC, item_label COLLATE NOCASE ASC
+            ORDER BY COALESCE(sp.einzelidentifikation, p.einzelidentifikation, '') COLLATE NOCASE ASC,
+                     von_datum ASC,
+                     rueckgabe_datum ASC,
+                     item_label COLLATE NOCASE ASC
             """,
             (to_date, from_date),
         ).fetchall()
@@ -410,7 +537,7 @@ def find_available_items(
                     'product' AS item_type,
                     p.id AS item_id,
                     p.produktbezeichnung AS suchfeld,
-                    ('#' || p.id || ' | Produkt | ' || COALESCE(p.produktbezeichnung, '-') || ' | '
+                    ('EI: ' || COALESCE(p.einzelidentifikation, '-') || ' | PB: ' || COALESCE(p.produktbezeichnung, '-') || ' | '
                      || COALESCE(p.produktname, 'Ohne Name') || ' | SN: ' || COALESCE(p.seriennummer, '-')) AS item_label
                 FROM products p
                 WHERE (
@@ -418,6 +545,8 @@ def find_available_items(
                     OR COALESCE(p.produktname, '') LIKE ?
                     OR COALESCE(p.seriennummer, '') LIKE ?
                 )
+                                    AND COALESCE(p.naechste_pruefung_am, '') <> ''
+                                    AND p.naechste_pruefung_am >= DATE('now')
                   AND NOT EXISTS (
                     SELECT 1
                     FROM verleih_planung v
@@ -441,9 +570,12 @@ def find_available_items(
                     'system' AS item_type,
                     s.id AS item_id,
                     s.name AS suchfeld,
-                    ('#' || s.id || ' | System | ' || COALESCE(s.name, 'System')) AS item_label
+                    ('EI: ' || COALESCE(sp.einzelidentifikation, '-') || ' | Name: ' || COALESCE(s.name, 'System')) AS item_label
                 FROM systems s
+                LEFT JOIN system_parts sp ON sp.system_id = s.id AND sp.part_index = 1
                 WHERE COALESCE(s.name, '') LIKE ?
+                                    AND COALESCE(s.naechste_pruefung_am, '') <> ''
+                                    AND s.naechste_pruefung_am >= DATE('now')
                                     AND NOT EXISTS (
                                         SELECT 1
                                         FROM item_locks l
@@ -461,7 +593,7 @@ def find_available_items(
                       AND v.rueckgabe_datum >= ?
                   )
             ) all_items
-            ORDER BY item_label COLLATE NOCASE ASC
+            ORDER BY COALESCE(item_label, '') COLLATE NOCASE ASC
             """,
             (
                 f"%{suchtext}%",
@@ -485,6 +617,9 @@ def is_item_available(
     von_datum: str,
     bis_datum: str,
 ) -> bool:
+    if not is_item_psa_current(db_path, item_type=item_type, item_id=item_id):
+        return False
+
     if is_item_locked(db_path, item_type=item_type, item_id=item_id):
         return False
 
@@ -1041,10 +1176,12 @@ class VerleihApp(ttk.Frame):
         ttk.Label(form, text="Bis / Rückgabe (YYYY-MM-DD)").grid(row=2, column=0, sticky="w", padx=6, pady=2)
         self.rueck_entry = ttk.Entry(form)
         self.rueck_entry.grid(row=2, column=1, sticky="ew", padx=6, pady=2)
+        self.von_entry.insert(0, date.today().isoformat())
+        self.rueck_entry.insert(0, date.today().isoformat())
 
-        ttk.Label(form, text="Filter (optional)").grid(row=3, column=0, sticky="w", padx=6, pady=2)
-        self.item_filter_entry = ttk.Entry(form)
-        self.item_filter_entry.grid(row=3, column=1, sticky="ew", padx=6, pady=2)
+        ttk.Label(form, text="Filter Produktbezeichnung (optional)").grid(row=3, column=0, sticky="w", padx=6, pady=2)
+        self.item_filter_combo = ttk.Combobox(form, state="readonly")
+        self.item_filter_combo.grid(row=3, column=1, sticky="ew", padx=6, pady=2)
 
         ttk.Button(form, text="Verfügbare Produkte/Systeme laden", command=self.load_available_items_for_period).grid(
             row=4, column=0, columnspan=2, sticky="ew", padx=6, pady=4
@@ -1125,7 +1262,7 @@ class VerleihApp(ttk.Frame):
             show="headings",
             height=10,
         )
-        self.plan_tree.heading("item", text="Produkt/System")
+        self.plan_tree.heading("item", text="Bezeichnung")
         self.plan_tree.heading("von", text="Ausleihdatum")
         self.plan_tree.heading("rueck", text="Rückgabedatum")
         self.plan_tree.heading("entleiher", text="Entleiher")
@@ -1170,6 +1307,10 @@ class VerleihApp(ttk.Frame):
         is_lend_mode = self.create_mode_var.get() == "lend"
 
         if is_lend_mode:
+            self.von_entry.delete(0, tk.END)
+            self.von_entry.insert(0, date.today().isoformat())
+            self.rueck_entry.delete(0, tk.END)
+            self.rueck_entry.insert(0, date.today().isoformat())
             self.quick_check_out_cb.grid()
             self.gal_provided_out_cb.grid()
             self.sig_frame.grid()
@@ -1224,7 +1365,7 @@ class VerleihApp(ttk.Frame):
             show="headings",
             height=10,
         )
-        self.calendar_tree.heading("item", text="Produkt/System")
+        self.calendar_tree.heading("item", text="Bezeichnung")
         self.calendar_tree.heading("status", text="Status")
         self.calendar_tree.heading("von", text="Von")
         self.calendar_tree.heading("bis", text="Bis")
@@ -1356,17 +1497,12 @@ class VerleihApp(ttk.Frame):
 
         self.search_tree = ttk.Treeview(
             result_frame,
-            columns=("typ", "id", "label"),
+            columns=("label",),
             show="headings",
             height=14,
         )
-        self.search_tree.heading("typ", text="Typ")
-        self.search_tree.heading("id", text="ID")
-        self.search_tree.heading("label", text="Produkt/System")
-
-        self.search_tree.column("typ", width=100, anchor="center")
-        self.search_tree.column("id", width=80, anchor="center")
-        self.search_tree.column("label", width=540, anchor="w")
+        self.search_tree.heading("label", text="Bezeichnung")
+        self.search_tree.column("label", width=760, anchor="w")
         self.search_tree.grid(row=0, column=0, sticky="nsew")
 
         scrollbar = ttk.Scrollbar(result_frame, orient="vertical", command=self.search_tree.yview)
@@ -1397,6 +1533,9 @@ class VerleihApp(ttk.Frame):
         self._update_selected_item_gal()
 
     def refresh_data(self):
+        filter_values = [""] + fetch_distinct_produktbezeichnungen(self.db_path)
+        self.item_filter_combo["values"] = filter_values
+        self.item_filter_combo.set("")
         self._refresh_item_combobox([])
         self._refresh_plan_list()
         self._refresh_calendar()
@@ -1408,7 +1547,12 @@ class VerleihApp(ttk.Frame):
     def load_available_items_for_period(self):
         von = self.von_entry.get().strip()
         bis = self.rueck_entry.get().strip()
-        suchtext = self.item_filter_entry.get().strip()
+        suchtext = self.item_filter_combo.get().strip()
+
+        if self.create_mode_var.get() == "lend":
+            von = date.today().isoformat()
+            self.von_entry.delete(0, tk.END)
+            self.von_entry.insert(0, von)
 
         try:
             von_dt = parse_date(von)
@@ -1514,7 +1658,13 @@ class VerleihApp(ttk.Frame):
             messagebox.showerror("Fehler", "Bitte mindestens ein Produkt oder System auswählen.")
             return
 
-        von = self.von_entry.get().strip()
+        mode = self.create_mode_var.get()
+        if mode == "lend":
+            von = date.today().isoformat()
+            self.von_entry.delete(0, tk.END)
+            self.von_entry.insert(0, von)
+        else:
+            von = self.von_entry.get().strip()
         rueck = self.rueck_entry.get().strip()
         entleiher = self.entleiher_entry.get().strip()
         ausgebende_person = self.ausgebende_person_entry.get().strip()
@@ -1536,13 +1686,29 @@ class VerleihApp(ttk.Frame):
             messagebox.showerror("Fehler", "Bitte zuerst den Zeitraum eingeben und verfügbare Produkte/Systeme laden.")
             return
 
-        mode = self.create_mode_var.get()
         status = "reserved"
         checkout_at = None
         signature_data = ""
 
         for selection_label in selected_labels:
             item_type, item_id = self.selection_map[selection_label]
+
+            next_pruefung = fetch_item_next_pruefung_am(self.db_path, item_type=item_type, item_id=item_id)
+            if not next_pruefung:
+                messagebox.showerror("PSA-Prüfung", f"{selection_label}\nKeine nächste Prüfung hinterlegt.")
+                return
+            try:
+                next_pruefung_dt = parse_date(next_pruefung)
+            except ValueError:
+                messagebox.showerror("PSA-Prüfung", f"{selection_label}\nUngültiges Datum bei 'Nächste Prüfung': {next_pruefung}")
+                return
+            if rueck_dt > next_pruefung_dt:
+                messagebox.showerror(
+                    "PSA-Prüfung",
+                    f"{selection_label}\nRückgabedatum ({rueck}) liegt nach der Frist zur nächsten Prüfung ({next_pruefung}).",
+                )
+                return
+
             if not is_item_available(
                 self.db_path,
                 item_type=item_type,
@@ -1550,7 +1716,9 @@ class VerleihApp(ttk.Frame):
                 von_datum=von,
                 bis_datum=rueck,
             ):
-                if is_item_locked(self.db_path, item_type=item_type, item_id=item_id):
+                if not is_item_psa_current(self.db_path, item_type=item_type, item_id=item_id):
+                    messagebox.showerror("PSA-Prüfung", f"{selection_label}\nhat keine aktuelle PSA-Prüfung und kann nicht ausgeliehen/reserviert werden.")
+                elif is_item_locked(self.db_path, item_type=item_type, item_id=item_id):
                     messagebox.showerror("Gesperrt", f"{selection_label}\nist gesperrt und kann nicht reserviert oder ausgeliehen werden.")
                 else:
                     messagebox.showerror("Nicht verfügbar", f"{selection_label}\nist im Zeitraum bereits vergeben.")
@@ -1607,12 +1775,14 @@ class VerleihApp(ttk.Frame):
         self.status_var.set(f"{len(created_ids)} Eintrag/Einträge gespeichert")
         self.von_entry.delete(0, tk.END)
         self.rueck_entry.delete(0, tk.END)
+        self.von_entry.insert(0, date.today().isoformat())
+        self.rueck_entry.insert(0, date.today().isoformat())
         self.ausgebende_person_entry.delete(0, tk.END)
         self.entleiher_entry.delete(0, tk.END)
         self.email_entry.delete(0, tk.END)
         self.phone_entry.delete(0, tk.END)
         self.address_entry.delete(0, tk.END)
-        self.item_filter_entry.delete(0, tk.END)
+        self.item_filter_combo.set("")
         self.selection_map.clear()
         self.item_listbox.delete(0, tk.END)
         self.signature_data = ""
@@ -1671,6 +1841,32 @@ class VerleihApp(ttk.Frame):
             return
         if (plan.get("status") or "").strip().lower() != "reserved":
             messagebox.showinfo("Hinweis", "Nur Reservierungen können ausgeliehen werden.")
+            return
+
+        if not is_item_psa_current(
+            self.db_path,
+            item_type=str(plan.get("item_type") or ""),
+            item_id=int(plan.get("item_id") or 0),
+        ):
+            messagebox.showerror("PSA-Prüfung", "Dieses Produkt/System hat keine aktuelle PSA-Prüfung und kann nicht ausgeliehen werden.")
+            return
+
+        item_type_for_check = str(plan.get("item_type") or "")
+        item_id_for_check = int(plan.get("item_id") or 0)
+        rueckgabe_plan = str(plan.get("rueckgabe_datum") or "").strip()
+        next_pruefung = fetch_item_next_pruefung_am(self.db_path, item_type=item_type_for_check, item_id=item_id_for_check)
+        if not next_pruefung:
+            messagebox.showerror("PSA-Prüfung", "Keine nächste Prüfung hinterlegt. Ausleihe nicht möglich.")
+            return
+        try:
+            if parse_date(rueckgabe_plan) > parse_date(next_pruefung):
+                messagebox.showerror(
+                    "PSA-Prüfung",
+                    f"Rückgabedatum ({rueckgabe_plan}) liegt nach der Frist zur nächsten Prüfung ({next_pruefung}).",
+                )
+                return
+        except ValueError:
+            messagebox.showerror("PSA-Prüfung", "Datumsangaben zur Prüfung sind ungültig. Ausleihe nicht möglich.")
             return
 
         if not self._validate_contact_for_lending(
@@ -1777,15 +1973,10 @@ class VerleihApp(ttk.Frame):
             self.search_tree.delete(row)
 
         for item in results:
-            item_type = "Produkt" if item.get("item_type") == "product" else "System"
             self.search_tree.insert(
                 "",
                 tk.END,
-                values=(
-                    item_type,
-                    item.get("item_id", ""),
-                    item.get("item_label", ""),
-                ),
+                values=(item.get("item_label", ""),),
             )
 
         self.status_var.set(f"{len(results)} verfügbare Produkte/Systeme gefunden")
