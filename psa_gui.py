@@ -852,6 +852,39 @@ def fetch_item_vorgaenge(db_path: Path, *, item_type: str, item_id: int) -> list
     return lines
 
 
+def find_einzelidentifikation_conflict(db_path: Path, einzelidentifikation: str) -> str | None:
+    ei = (einzelidentifikation or "").strip()
+    if not ei:
+        return None
+
+    with _db_connect(db_path) as conn:
+        row = conn.execute(
+            """
+            SELECT id
+            FROM products
+            WHERE LOWER(TRIM(COALESCE(einzelidentifikation, ''))) = LOWER(TRIM(?))
+            LIMIT 1
+            """,
+            (ei,),
+        ).fetchone()
+        if row:
+            return f"bereits bei Produkt #{int(row[0])} vorhanden"
+
+        row = conn.execute(
+            """
+            SELECT system_id, part_index
+            FROM system_parts
+            WHERE LOWER(TRIM(COALESCE(einzelidentifikation, ''))) = LOWER(TRIM(?))
+            LIMIT 1
+            """,
+            (ei,),
+        ).fetchone()
+        if row:
+            return f"bereits bei System #{int(row[0])}, Teil {int(row[1])} vorhanden"
+
+    return None
+
+
 def has_active_loans(db_path: Path, *, item_type: str, item_id: int) -> bool:
     with _db_connect(db_path) as conn:
         row = conn.execute(
@@ -1777,6 +1810,15 @@ class PSAApp(ttk.Frame):
     def save_product(self):
         try:
             data = self._collect_entries(self.product_entries)
+            ei = data.get("einzelidentifikation", "").strip()
+            if not ei:
+                messagebox.showerror("Fehler", "Für Produkte ist eine Einzelidentifikation erforderlich.")
+                return
+            conflict = find_einzelidentifikation_conflict(self.db_path, ei)
+            if conflict:
+                messagebox.showerror("Fehler", f"Einzelidentifikation '{ei}' ist nicht eindeutig ({conflict}).")
+                return
+
             next_check = self.product_next_check_entry.get().strip()
             if not self._validate_date_or_empty(next_check):
                 messagebox.showerror("Fehler", "Nächste Prüfung: Datum bitte im Format YYYY-MM-DD eingeben.")
@@ -1813,6 +1855,31 @@ class PSAApp(ttk.Frame):
         if not self._validate_date_or_empty(next_check):
             messagebox.showerror("Fehler", "Nächste Prüfung: Datum bitte im Format YYYY-MM-DD eingeben.")
             return
+
+        # Teil 1 aus dem Produktformular (wird später als Systemteil 1 gespeichert)
+        part1 = self._collect_entries(self.product_entries)
+        part2 = self._collect_entries(self.system_part2)
+        part3 = self._collect_entries(self.system_part3)
+
+        system_eis: list[tuple[int, str]] = []
+        for idx, part in ((1, part1), (2, part2), (3, part3)):
+            ei = part.get("einzelidentifikation", "").strip()
+            if ei:
+                system_eis.append((idx, ei))
+
+        if not system_eis:
+            messagebox.showerror("Fehler", "Für das System muss mindestens eine Einzelidentifikation angegeben werden.")
+            return
+
+        for idx, ei in system_eis:
+            conflict = find_einzelidentifikation_conflict(self.db_path, ei)
+            if conflict:
+                messagebox.showerror(
+                    "Fehler",
+                    f"Einzelidentifikation '{ei}' in Teil {idx} ist nicht eindeutig ({conflict}).",
+                )
+                return
+
         gal_file = self.system_gal_file_var.get()
         gal_link = self.system_gal_link_entry.get().strip()
         
@@ -1822,13 +1889,7 @@ class PSAApp(ttk.Frame):
         
         system_id = insert_system(self.db_path, name, gal_file, gal_link, next_check)
 
-        # Teil 1 aus dem Produktformular
-        part1 = self._collect_entries(self.product_entries)
         insert_system_part(self.db_path, system_id, 1, part1)
-
-        # Teil 2 und 3 manuell
-        part2 = self._collect_entries(self.system_part2)
-        part3 = self._collect_entries(self.system_part3)
 
         insert_system_part(self.db_path, system_id, 2, part2)
         insert_system_part(self.db_path, system_id, 3, part3)
