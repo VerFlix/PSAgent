@@ -67,7 +67,7 @@
     #box(stroke: 1pt, inset: 6pt)[
     *Briefkopf/Stempel Besitzer*in* \
   #line()\
-  BoulderING AG TUHH
+  DAV Lübeck
   ]
   ],
 )
