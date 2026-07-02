@@ -98,6 +98,10 @@ def ensure_verleih_schema(db_path: Path) -> None:
             conn.execute("ALTER TABLE products ADD COLUMN naechste_pruefung_am TEXT")
         if "naechste_pruefung_am" not in system_cols:
             conn.execute("ALTER TABLE systems ADD COLUMN naechste_pruefung_am TEXT")
+        if "keine_psa" not in product_cols:
+            conn.execute("ALTER TABLE products ADD COLUMN keine_psa INTEGER NOT NULL DEFAULT 0")
+        if "keine_psa" not in system_cols:
+            conn.execute("ALTER TABLE systems ADD COLUMN keine_psa INTEGER NOT NULL DEFAULT 0")
 
         conn.execute(
             """
@@ -149,16 +153,20 @@ def fetch_distinct_produktbezeichnungen(db_path: Path) -> list[str]:
                                 SELECT TRIM(COALESCE(produktbezeichnung, '')) AS value
                                 FROM products
                                 WHERE TRIM(COALESCE(produktbezeichnung, '')) <> ''
-                                    AND COALESCE(naechste_pruefung_am, '') <> ''
-                                    AND naechste_pruefung_am >= DATE('now')
+                                    AND (
+                                        COALESCE(keine_psa, 0) = 1
+                                        OR (COALESCE(naechste_pruefung_am, '') <> '' AND naechste_pruefung_am >= DATE('now'))
+                                    )
 
                                 UNION
 
                                 SELECT TRIM(COALESCE(name, '')) AS value
                                 FROM systems
                                 WHERE TRIM(COALESCE(name, '')) <> ''
-                                    AND COALESCE(naechste_pruefung_am, '') <> ''
-                                    AND naechste_pruefung_am >= DATE('now')
+                                    AND (
+                                        COALESCE(keine_psa, 0) = 1
+                                        OR (COALESCE(naechste_pruefung_am, '') <> '' AND naechste_pruefung_am >= DATE('now'))
+                                    )
                         ) vals
                         ORDER BY value COLLATE NOCASE ASC
             """
@@ -174,11 +182,17 @@ def is_item_psa_current(db_path: Path, *, item_type: str, item_id: int) -> bool:
                 SELECT 1
                 FROM products
                 WHERE id = ?
+                                    AND COALESCE(keine_psa, 0) = 1
+                                UNION ALL
+                                SELECT 1
+                                FROM products
+                                WHERE id = ?
+                                    AND COALESCE(keine_psa, 0) <> 1
                   AND COALESCE(naechste_pruefung_am, '') <> ''
                   AND naechste_pruefung_am >= DATE('now')
                 LIMIT 1
                 """,
-                (item_id,),
+                                (item_id, item_id),
             ).fetchone()
         else:
             row = conn.execute(
@@ -186,11 +200,17 @@ def is_item_psa_current(db_path: Path, *, item_type: str, item_id: int) -> bool:
                 SELECT 1
                 FROM systems
                 WHERE id = ?
+                                    AND COALESCE(keine_psa, 0) = 1
+                                UNION ALL
+                                SELECT 1
+                                FROM systems
+                                WHERE id = ?
+                                    AND COALESCE(keine_psa, 0) <> 1
                   AND COALESCE(naechste_pruefung_am, '') <> ''
                   AND naechste_pruefung_am >= DATE('now')
                 LIMIT 1
                 """,
-                (item_id,),
+                                (item_id, item_id),
             ).fetchone()
     return row is not None
 
@@ -210,6 +230,21 @@ def fetch_item_next_pruefung_am(db_path: Path, *, item_type: str, item_id: int) 
     if not row:
         return ""
     return str(row[0] or "").strip()
+
+
+def is_item_keine_psa(db_path: Path, *, item_type: str, item_id: int) -> bool:
+    with _db_connect(db_path) as conn:
+        if item_type == "product":
+            row = conn.execute(
+                "SELECT COALESCE(keine_psa, 0) FROM products WHERE id = ?",
+                (item_id,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT COALESCE(keine_psa, 0) FROM systems WHERE id = ?",
+                (item_id,),
+            ).fetchone()
+    return bool(row and int(row[0] or 0))
 
 
 def fetch_pending_verleihplaene(db_path: Path) -> list[dict]:
@@ -545,8 +580,10 @@ def find_available_items(
                     OR COALESCE(p.produktname, '') LIKE ?
                     OR COALESCE(p.seriennummer, '') LIKE ?
                 )
-                                    AND COALESCE(p.naechste_pruefung_am, '') <> ''
-                                    AND p.naechste_pruefung_am >= DATE('now')
+                                    AND (
+                                        COALESCE(p.keine_psa, 0) = 1
+                                        OR (COALESCE(p.naechste_pruefung_am, '') <> '' AND p.naechste_pruefung_am >= DATE('now'))
+                                    )
                   AND NOT EXISTS (
                     SELECT 1
                     FROM verleih_planung v
@@ -574,8 +611,10 @@ def find_available_items(
                 FROM systems s
                 LEFT JOIN system_parts sp ON sp.system_id = s.id AND sp.part_index = 1
                 WHERE COALESCE(s.name, '') LIKE ?
-                                    AND COALESCE(s.naechste_pruefung_am, '') <> ''
-                                    AND s.naechste_pruefung_am >= DATE('now')
+                                    AND (
+                                        COALESCE(s.keine_psa, 0) = 1
+                                        OR (COALESCE(s.naechste_pruefung_am, '') <> '' AND s.naechste_pruefung_am >= DATE('now'))
+                                    )
                                     AND NOT EXISTS (
                                         SELECT 1
                                         FROM item_locks l
@@ -737,7 +776,14 @@ class SignatureDialog(tk.Toplevel):
 
 
 class CheckoutDialog(tk.Toplevel):
-    def __init__(self, master: tk.Misc, context_text: str = "", gal_display: str = "", gal_target: str = ""):
+    def __init__(
+        self,
+        master: tk.Misc,
+        context_text: str = "",
+        gal_display: str = "",
+        gal_target: str = "",
+        keine_psa: bool = False,
+    ):
         super().__init__(master)
         self.title("Reservierung ausleihen")
         self.geometry("620x620")
@@ -752,6 +798,7 @@ class CheckoutDialog(tk.Toplevel):
         self.quick_check_var = tk.BooleanVar(value=False)
         self.gal_provided_var = tk.BooleanVar(value=False)
         self.gal_target = gal_target
+        self.keine_psa = keine_psa
 
         ttk.Label(self, text="Digitale Unterschrift für die Ausleihe").pack(anchor="w", padx=8, pady=(8, 2))
         if context_text:
@@ -763,12 +810,19 @@ class CheckoutDialog(tk.Toplevel):
         else:
             ttk.Label(self, text="GAL: Kein Link/keine Datei hinterlegt", justify="left", wraplength=560).pack(anchor="w", padx=8, pady=(0, 4))
 
+        if self.keine_psa:
+            ttk.Label(self, text="Keine PSA erforderlich: GAL ist nicht verpflichtend.", justify="left", wraplength=560).pack(anchor="w", padx=8, pady=(0, 4))
+
         ttk.Label(self, text="Ausgebende Person").pack(anchor="w", padx=8, pady=(0, 2))
         self.ausgebende_person_entry = ttk.Entry(self)
         self.ausgebende_person_entry.pack(fill="x", padx=8, pady=(0, 6))
 
         ttk.Checkbutton(self, text="Kurzkontrolle durchgeführt", variable=self.quick_check_var).pack(anchor="w", padx=8, pady=(0, 4))
-        ttk.Checkbutton(self, text="GAL bereitgestellt", variable=self.gal_provided_var).pack(anchor="w", padx=8, pady=(0, 4))
+        self.gal_check = ttk.Checkbutton(self, text="GAL bereitgestellt", variable=self.gal_provided_var)
+        if self.keine_psa:
+            self.gal_provided_var.set(True)
+            self.gal_check.state(["disabled"])
+        self.gal_check.pack(anchor="w", padx=8, pady=(0, 4))
 
         self.canvas = tk.Canvas(self, width=580, height=260, bg="white", highlightthickness=1, highlightbackground="#888")
         self.canvas.pack(padx=8, pady=6)
@@ -1707,25 +1761,29 @@ class VerleihApp(ttk.Frame):
         status = "reserved"
         checkout_at = None
         signature_data = ""
+        requires_psa_validation = False
 
         for selection_label in selected_labels:
             item_type, item_id = self.selection_map[selection_label]
+            item_keine_psa = is_item_keine_psa(self.db_path, item_type=item_type, item_id=item_id)
 
-            next_pruefung = fetch_item_next_pruefung_am(self.db_path, item_type=item_type, item_id=item_id)
-            if not next_pruefung:
-                messagebox.showerror("PSA-Prüfung", f"{selection_label}\nKeine nächste Prüfung hinterlegt.")
-                return
-            try:
-                next_pruefung_dt = parse_date(next_pruefung)
-            except ValueError:
-                messagebox.showerror("PSA-Prüfung", f"{selection_label}\nUngültiges Datum bei 'Nächste Prüfung': {next_pruefung}")
-                return
-            if rueck_dt > next_pruefung_dt:
-                messagebox.showerror(
-                    "PSA-Prüfung",
-                    f"{selection_label}\nRückgabedatum ({rueck}) liegt nach der Frist zur nächsten Prüfung ({next_pruefung}).",
-                )
-                return
+            if not item_keine_psa:
+                requires_psa_validation = True
+                next_pruefung = fetch_item_next_pruefung_am(self.db_path, item_type=item_type, item_id=item_id)
+                if not next_pruefung:
+                    messagebox.showerror("PSA-Prüfung", f"{selection_label}\nKeine nächste Prüfung hinterlegt.")
+                    return
+                try:
+                    next_pruefung_dt = parse_date(next_pruefung)
+                except ValueError:
+                    messagebox.showerror("PSA-Prüfung", f"{selection_label}\nUngültiges Datum bei 'Nächste Prüfung': {next_pruefung}")
+                    return
+                if rueck_dt > next_pruefung_dt:
+                    messagebox.showerror(
+                        "PSA-Prüfung",
+                        f"{selection_label}\nRückgabedatum ({rueck}) liegt nach der Frist zur nächsten Prüfung ({next_pruefung}).",
+                    )
+                    return
 
             if not is_item_available(
                 self.db_path,
@@ -1751,15 +1809,18 @@ class VerleihApp(ttk.Frame):
             if not self.quick_check_out_var.get():
                 messagebox.showerror("Fehler", "Bitte Kurzkontrolle für die Ausleihe bestätigen.")
                 return
-            if not self.gal_provided_out_var.get():
-                messagebox.showerror("Fehler", "Bitte GAL bereitgestellt bestätigen.")
-                return
-            for selection_label in selected_labels:
-                item_type, item_id = self.selection_map[selection_label]
-                gal_file, gal_link = fetch_item_gal_data(self.db_path, item_type=item_type, item_id=item_id)
-                if not (gal_file or gal_link):
-                    messagebox.showerror("Fehler", f"Für {selection_label} ist kein GAL-Link und keine GAL-Datei hinterlegt.")
+            if requires_psa_validation:
+                if not self.gal_provided_out_var.get():
+                    messagebox.showerror("Fehler", "Bitte GAL bereitgestellt bestätigen.")
                     return
+                for selection_label in selected_labels:
+                    item_type, item_id = self.selection_map[selection_label]
+                    if is_item_keine_psa(self.db_path, item_type=item_type, item_id=item_id):
+                        continue
+                    gal_file, gal_link = fetch_item_gal_data(self.db_path, item_type=item_type, item_id=item_id)
+                    if not (gal_file or gal_link):
+                        messagebox.showerror("Fehler", f"Für {selection_label} ist kein GAL-Link und keine GAL-Datei hinterlegt.")
+                        return
             if not self.signature_data:
                 messagebox.showerror("Fehler", "Für direktes Ausleihen wird eine Unterschrift benötigt.")
                 return
@@ -1852,21 +1913,23 @@ class VerleihApp(ttk.Frame):
 
         item_type_for_check = str(plan.get("item_type") or "")
         item_id_for_check = int(plan.get("item_id") or 0)
+        keine_psa = is_item_keine_psa(self.db_path, item_type=item_type_for_check, item_id=item_id_for_check)
         rueckgabe_plan = str(plan.get("rueckgabe_datum") or "").strip()
-        next_pruefung = fetch_item_next_pruefung_am(self.db_path, item_type=item_type_for_check, item_id=item_id_for_check)
-        if not next_pruefung:
-            messagebox.showerror("PSA-Prüfung", "Keine nächste Prüfung hinterlegt. Ausleihe nicht möglich.")
-            return
-        try:
-            if parse_date(rueckgabe_plan) > parse_date(next_pruefung):
-                messagebox.showerror(
-                    "PSA-Prüfung",
-                    f"Rückgabedatum ({rueckgabe_plan}) liegt nach der Frist zur nächsten Prüfung ({next_pruefung}).",
-                )
+        if not keine_psa:
+            next_pruefung = fetch_item_next_pruefung_am(self.db_path, item_type=item_type_for_check, item_id=item_id_for_check)
+            if not next_pruefung:
+                messagebox.showerror("PSA-Prüfung", "Keine nächste Prüfung hinterlegt. Ausleihe nicht möglich.")
                 return
-        except ValueError:
-            messagebox.showerror("PSA-Prüfung", "Datumsangaben zur Prüfung sind ungültig. Ausleihe nicht möglich.")
-            return
+            try:
+                if parse_date(rueckgabe_plan) > parse_date(next_pruefung):
+                    messagebox.showerror(
+                        "PSA-Prüfung",
+                        f"Rückgabedatum ({rueckgabe_plan}) liegt nach der Frist zur nächsten Prüfung ({next_pruefung}).",
+                    )
+                    return
+            except ValueError:
+                messagebox.showerror("PSA-Prüfung", "Datumsangaben zur Prüfung sind ungültig. Ausleihe nicht möglich.")
+                return
 
         if not self._validate_contact_for_lending(
             (plan.get("entleiher") or "").strip(),
@@ -1891,7 +1954,7 @@ class VerleihApp(ttk.Frame):
         gal_target = gal_link or gal_file
         gal_display = gal_link if gal_link else gal_file
 
-        dialog = CheckoutDialog(self, details, gal_display=gal_display, gal_target=gal_target)
+        dialog = CheckoutDialog(self, details, gal_display=gal_display, gal_target=gal_target, keine_psa=keine_psa)
         self.wait_window(dialog)
         if not dialog.result:
             return

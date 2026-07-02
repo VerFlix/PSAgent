@@ -176,6 +176,8 @@ def ensure_db_schema(db_path: Path) -> None:
             conn.execute("ALTER TABLE products ADD COLUMN gal_datei TEXT")
         if "gal_link" not in product_cols:
             conn.execute("ALTER TABLE products ADD COLUMN gal_link TEXT")
+        if "keine_psa" not in product_cols:
+            conn.execute("ALTER TABLE products ADD COLUMN keine_psa INTEGER NOT NULL DEFAULT 0")
         if "naechste_pruefung_am" not in product_cols:
             conn.execute("ALTER TABLE products ADD COLUMN naechste_pruefung_am TEXT")
         if "last_psa_pruefung_am" not in product_cols:
@@ -189,6 +191,8 @@ def ensure_db_schema(db_path: Path) -> None:
             conn.execute("ALTER TABLE systems ADD COLUMN gal_datei TEXT")
         if "gal_link" not in system_cols:
             conn.execute("ALTER TABLE systems ADD COLUMN gal_link TEXT")
+        if "keine_psa" not in system_cols:
+            conn.execute("ALTER TABLE systems ADD COLUMN keine_psa INTEGER NOT NULL DEFAULT 0")
         if "naechste_pruefung_am" not in system_cols:
             conn.execute("ALTER TABLE systems ADD COLUMN naechste_pruefung_am TEXT")
         if "last_psa_pruefung_am" not in system_cols:
@@ -347,9 +351,9 @@ def insert_product(db_path: Path, data: dict) -> int:
             INSERT INTO products (
                 produktbezeichnung, gem_en, produktname, hersteller,
                 herstellungsjahr, kaufdatum, datum_einsatz,
-                einzelidentifikation, seriennummer, gal_datei, gal_link,
+                einzelidentifikation, seriennummer, gal_datei, gal_link, keine_psa,
                 naechste_pruefung_am
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data.get("produktbezeichnung", ""),
@@ -363,6 +367,7 @@ def insert_product(db_path: Path, data: dict) -> int:
                 data.get("seriennummer", ""),
                 data.get("gal_datei", ""),
                 data.get("gal_link", ""),
+                1 if data.get("keine_psa") else 0,
                 data.get("naechste_pruefung_am", ""),
             ),
         )
@@ -374,12 +379,13 @@ def insert_system(
     name: str,
     gal_datei: str = "",
     gal_link: str = "",
+    keine_psa: bool = False,
     naechste_pruefung_am: str = "",
 ) -> int:
     with _db_connect(db_path) as conn:
         cur = conn.execute(
-            "INSERT INTO systems (name, gal_datei, gal_link, naechste_pruefung_am) VALUES (?, ?, ?, ?)",
-            (name, gal_datei, gal_link, naechste_pruefung_am),
+            "INSERT INTO systems (name, gal_datei, gal_link, keine_psa, naechste_pruefung_am) VALUES (?, ?, ?, ?, ?)",
+            (name, gal_datei, gal_link, 1 if keine_psa else 0, naechste_pruefung_am),
         )
         return cur.lastrowid
 
@@ -417,7 +423,7 @@ def fetch_product_details(db_path: Path, product_id: int) -> dict | None:
             """
             SELECT id, produktbezeichnung, gem_en, produktname, hersteller,
                    herstellungsjahr, kaufdatum, datum_einsatz,
-                     einzelidentifikation, seriennummer, gal_datei, gal_link,
+                                         einzelidentifikation, seriennummer, gal_datei, gal_link, keine_psa,
                                          naechste_pruefung_am, last_psa_pruefung_am, last_psa_pruefung_kommentar,
                                          last_psa_durchgefallen_am
             FROM products
@@ -433,7 +439,7 @@ def fetch_system_details(db_path: Path, system_id: int) -> dict | None:
         conn.row_factory = sqlite3.Row
         system_row = conn.execute(
             """
-            SELECT id, name, gal_datei, gal_link
+            SELECT id, name, gal_datei, gal_link, keine_psa
                 , naechste_pruefung_am, last_psa_pruefung_am, last_psa_pruefung_kommentar,
                   last_psa_durchgefallen_am
             FROM systems
@@ -476,6 +482,7 @@ def update_product(db_path: Path, product_id: int, data: dict) -> None:
                 seriennummer = ?,
                 gal_datei = ?,
                 gal_link = ?,
+                keine_psa = ?,
                 naechste_pruefung_am = ?,
                 last_psa_pruefung_am = ?,
                 last_psa_pruefung_kommentar = ?,
@@ -494,6 +501,7 @@ def update_product(db_path: Path, product_id: int, data: dict) -> None:
                 data.get("seriennummer", ""),
                 data.get("gal_datei", ""),
                 data.get("gal_link", ""),
+                1 if data.get("keine_psa") else 0,
                 data.get("naechste_pruefung_am", ""),
                 data.get("last_psa_pruefung_am", ""),
                 data.get("last_psa_pruefung_kommentar", ""),
@@ -511,6 +519,7 @@ def update_system(db_path: Path, system_id: int, system_data: dict, part_data: d
             SET name = ?,
                 gal_datei = ?,
                 gal_link = ?,
+                keine_psa = ?,
                 naechste_pruefung_am = ?,
                 last_psa_pruefung_am = ?,
                 last_psa_pruefung_kommentar = ?,
@@ -521,6 +530,7 @@ def update_system(db_path: Path, system_id: int, system_data: dict, part_data: d
                 system_data.get("name", ""),
                 system_data.get("gal_datei", ""),
                 system_data.get("gal_link", ""),
+                1 if system_data.get("keine_psa") else 0,
                 system_data.get("naechste_pruefung_am", ""),
                 system_data.get("last_psa_pruefung_am", ""),
                 system_data.get("last_psa_pruefung_kommentar", ""),
@@ -1021,8 +1031,13 @@ class ProductEditDialog(tk.Toplevel):
         ttk.Button(next_row, text="+6M", width=6, command=lambda: self._set_offset(6)).grid(row=0, column=1, padx=(4, 0))
         ttk.Button(next_row, text="+1J", width=6, command=lambda: self._set_offset(12)).grid(row=0, column=2, padx=(4, 0))
 
+        self.keine_psa_var = tk.BooleanVar(value=bool(product.get("keine_psa", 0)))
+        ttk.Checkbutton(frame, text="Keine PSA erforderlich", variable=self.keine_psa_var).grid(
+            row=len(PRODUCT_FIELDS) + 3, column=0, columnspan=2, sticky="w", padx=4, pady=(4, 2)
+        )
+
         btns = ttk.Frame(frame)
-        btns.grid(row=len(PRODUCT_FIELDS) + 3, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        btns.grid(row=len(PRODUCT_FIELDS) + 4, column=0, columnspan=2, sticky="ew", pady=(8, 0))
         ttk.Button(btns, text="Abbrechen", command=self._cancel).pack(side=tk.RIGHT)
         ttk.Button(btns, text="Änderungen übernehmen", command=self._save).pack(side=tk.RIGHT, padx=(0, 6))
 
@@ -1039,6 +1054,7 @@ class ProductEditDialog(tk.Toplevel):
         data = {k: e.get().strip() for k, e in self.entries.items()}
         data["gal_datei"] = self.gal_file_var.get().strip()
         data["gal_link"] = self.gal_link_entry.get().strip()
+        data["keine_psa"] = bool(self.keine_psa_var.get())
         data["naechste_pruefung_am"] = self.next_check_entry.get().strip()
         self.result = data
         self.destroy()
@@ -1151,6 +1167,11 @@ class SystemEditDialog(tk.Toplevel):
         ttk.Button(next_row, text="+6M", width=6, command=lambda: self._set_offset(6)).grid(row=0, column=1, padx=(4, 0))
         ttk.Button(next_row, text="+1J", width=6, command=lambda: self._set_offset(12)).grid(row=0, column=2, padx=(4, 0))
 
+        self.keine_psa_var = tk.BooleanVar(value=bool(system_data.get("keine_psa", 0)))
+        ttk.Checkbutton(top, text="Keine PSA erforderlich", variable=self.keine_psa_var).grid(
+            row=4, column=0, columnspan=2, sticky="w", padx=6, pady=(4, 2)
+        )
+
         part_frame = ttk.LabelFrame(wrapper, text="Systemteile")
         part_frame.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
         wrapper.rowconfigure(1, weight=1)
@@ -1194,6 +1215,7 @@ class SystemEditDialog(tk.Toplevel):
                 "name": self.system_name_entry.get().strip(),
                 "gal_datei": self.gal_file_var.get().strip(),
                 "gal_link": self.gal_link_entry.get().strip(),
+                "keine_psa": bool(self.keine_psa_var.get()),
                 "naechste_pruefung_am": self.next_check_entry.get().strip(),
             },
             "parts": {
@@ -1709,8 +1731,13 @@ class PSAApp(ttk.Frame):
         self.product_gal_link_entry = ttk.Entry(parent, width=30)
         self.product_gal_link_entry.grid(row=len(PRODUCT_FIELDS)+3, column=1, sticky="ew", padx=6, pady=2)
 
+        self.product_keine_psa_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(parent, text="Keine PSA erforderlich", variable=self.product_keine_psa_var).grid(
+            row=len(PRODUCT_FIELDS)+4, column=0, columnspan=2, sticky="w", padx=6, pady=(2, 2)
+        )
+
         button_frame = ttk.Frame(parent)
-        button_frame.grid(row=len(PRODUCT_FIELDS)+4, column=0, columnspan=2, sticky="ew", padx=6, pady=6)
+        button_frame.grid(row=len(PRODUCT_FIELDS)+5, column=0, columnspan=2, sticky="ew", padx=6, pady=6)
         button_frame.columnconfigure(0, weight=1)
         button_frame.columnconfigure(1, weight=1)
         ttk.Button(button_frame, text="Produkt speichern", command=self.save_product).grid(row=0, column=0, sticky="ew", padx=(0, 4))
@@ -1745,8 +1772,13 @@ class PSAApp(ttk.Frame):
         self.system_gal_link_entry = ttk.Entry(parent, width=30)
         self.system_gal_link_entry.grid(row=4, column=1, sticky="ew", padx=6, pady=2)
 
+        self.system_keine_psa_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(parent, text="Keine PSA erforderlich", variable=self.system_keine_psa_var).grid(
+            row=5, column=0, columnspan=2, sticky="w", padx=6, pady=(2, 2)
+        )
+
         part_frame = ttk.Frame(parent)
-        part_frame.grid(row=5, column=0, columnspan=2, sticky="nsew", padx=6, pady=6)
+        part_frame.grid(row=6, column=0, columnspan=2, sticky="nsew", padx=6, pady=6)
         part_frame.columnconfigure(0, weight=1)
         part_frame.columnconfigure(1, weight=1)
 
@@ -1755,7 +1787,7 @@ class PSAApp(ttk.Frame):
         self.system_part3 = self._build_part_form(part_frame, "Teil 3", 1)
 
         button_frame = ttk.Frame(parent)
-        button_frame.grid(row=6, column=0, columnspan=2, sticky="ew", padx=6, pady=6)
+        button_frame.grid(row=7, column=0, columnspan=2, sticky="ew", padx=6, pady=6)
         button_frame.columnconfigure(0, weight=1)
         button_frame.columnconfigure(1, weight=1)
         ttk.Button(button_frame, text="System speichern", command=self.save_system).grid(row=0, column=0, sticky="ew", padx=(0, 4))
@@ -1841,12 +1873,14 @@ class PSAApp(ttk.Frame):
         self.product_next_check_entry.delete(0, tk.END)
         self.product_gal_file_var.set("")
         self.product_gal_link_entry.delete(0, tk.END)
+        self.product_keine_psa_var.set(False)
 
     def clear_system_form(self):
         self.system_name_entry.delete(0, tk.END)
         self.system_next_check_entry.delete(0, tk.END)
         self.system_gal_file_var.set("")
         self.system_gal_link_entry.delete(0, tk.END)
+        self.system_keine_psa_var.set(False)
         self.clear_product_form()
         for entries in (self.system_part2, self.system_part3):
             for entry in entries.values():
@@ -1921,6 +1955,7 @@ class PSAApp(ttk.Frame):
             
             data["gal_datei"] = gal_file
             data["gal_link"] = gal_link
+            data["keine_psa"] = bool(self.product_keine_psa_var.get())
             data["naechste_pruefung_am"] = next_check
             
             product_id = insert_product(self.db_path, data)
@@ -1968,7 +2003,14 @@ class PSAApp(ttk.Frame):
         if gal_file:
             gal_file = self._copy_gal_file(gal_file, name)
         
-        system_id = insert_system(self.db_path, name, gal_file, gal_link, next_check)
+        system_id = insert_system(
+            self.db_path,
+            name,
+            gal_file,
+            gal_link,
+            bool(self.system_keine_psa_var.get()),
+            next_check,
+        )
 
         insert_system_part(self.db_path, system_id, 1, part1)
 
