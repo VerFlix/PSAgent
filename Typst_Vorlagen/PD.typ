@@ -69,7 +69,7 @@
     *Briefkopf/Stempel PSA-Sachkundige*r* \
   #line()\
   Felix Gottschalk \
-  i.A. von BoulderING
+  DAV Lübeck
   ]
   ],
 )
