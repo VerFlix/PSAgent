@@ -18,6 +18,7 @@ Beide Skripte verwenden dieselbe SQLite-Datenbank (`psa.db`).
 - Doppelklick auf Produkt/System: vollständige Daten ansehen und bearbeiten (mit Bestätigungsabfrage)
 - Feld `Nächste Prüfung am` inkl. Schnellwahl `+6M` / `+1J` und manueller Eingabe
 - GAL-Dateien und Links verwalten
+- Mehrfachauswahl in den Produkt-/Systemlisten: eine GAL-Datei und/oder ein GAL-Link auf mehrere markierte Einträge gleichzeitig anwenden
 - PDF-Dokumente erzeugen (Einsatzdokumentation, PD, Haftungsausschluss)
 - PSA-Prüfungsprozess mit Prüfungsrunde, Signatur des Sachkundigen und Berichtserstellung
 - Entsperren gesperrter Produkte/Systeme **innerhalb der PSA-Prüfung** (mit Pflicht-Kommentar)

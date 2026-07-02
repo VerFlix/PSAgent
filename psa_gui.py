@@ -1048,6 +1048,64 @@ class ProductEditDialog(tk.Toplevel):
         self.destroy()
 
 
+class BulkGalDialog(tk.Toplevel):
+    def __init__(self, master: tk.Misc):
+        super().__init__(master)
+        self.title("GAL auf Auswahl anwenden")
+        self.geometry("620x240")
+        self.resizable(False, False)
+        self.transient(master)
+        self.grab_set()
+
+        self.result: dict | None = None
+
+        wrapper = ttk.Frame(self)
+        wrapper.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        wrapper.columnconfigure(1, weight=1)
+
+        ttk.Label(wrapper, text="GAL-Datei").grid(row=0, column=0, sticky="w", padx=(0, 6), pady=4)
+        self.gal_file_var = tk.StringVar(value="")
+        file_row = ttk.Frame(wrapper)
+        file_row.grid(row=0, column=1, sticky="ew", pady=4)
+        file_row.columnconfigure(0, weight=1)
+        ttk.Label(file_row, textvariable=self.gal_file_var, relief=tk.SUNKEN).grid(row=0, column=0, sticky="ew")
+        ttk.Button(file_row, text="Datei wählen", command=self._browse_file).grid(row=0, column=1, padx=(6, 0))
+
+        ttk.Label(wrapper, text="GAL-Link").grid(row=1, column=0, sticky="w", padx=(0, 6), pady=4)
+        self.gal_link_entry = ttk.Entry(wrapper)
+        self.gal_link_entry.grid(row=1, column=1, sticky="ew", pady=4)
+
+        ttk.Label(
+            wrapper,
+            text="Die Datei und/oder der Link werden auf alle markierten Produkte und Systeme übertragen.",
+            wraplength=560,
+            justify="left",
+        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 4))
+
+        buttons = ttk.Frame(wrapper)
+        buttons.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(12, 0))
+        ttk.Button(buttons, text="Abbrechen", command=self._cancel).pack(side=tk.RIGHT)
+        ttk.Button(buttons, text="Übernehmen", command=self._save).pack(side=tk.RIGHT, padx=(0, 6))
+
+    def _browse_file(self):
+        path = filedialog.askopenfilename(title="GAL-Datei auswählen", filetypes=[("PDF", "*.pdf"), ("Alle Dateien", "*.*")])
+        if path:
+            self.gal_file_var.set(path)
+
+    def _save(self):
+        gal_file = self.gal_file_var.get().strip()
+        gal_link = self.gal_link_entry.get().strip()
+        if not gal_file and not gal_link:
+            messagebox.showerror("Fehler", "Bitte mindestens eine GAL-Datei oder einen GAL-Link angeben.", parent=self)
+            return
+        self.result = {"gal_datei": gal_file, "gal_link": gal_link}
+        self.destroy()
+
+    def _cancel(self):
+        self.result = None
+        self.destroy()
+
+
 class SystemEditDialog(tk.Toplevel):
     def __init__(self, master: tk.Misc, system_data: dict, parts: dict[int, dict]):
         super().__init__(master)
@@ -1651,9 +1709,12 @@ class PSAApp(ttk.Frame):
         self.product_gal_link_entry = ttk.Entry(parent, width=30)
         self.product_gal_link_entry.grid(row=len(PRODUCT_FIELDS)+3, column=1, sticky="ew", padx=6, pady=2)
 
-        ttk.Button(parent, text="Produkt speichern", command=self.save_product).grid(
-            row=len(PRODUCT_FIELDS)+4, column=0, columnspan=2, sticky="ew", padx=6, pady=6
-        )
+        button_frame = ttk.Frame(parent)
+        button_frame.grid(row=len(PRODUCT_FIELDS)+4, column=0, columnspan=2, sticky="ew", padx=6, pady=6)
+        button_frame.columnconfigure(0, weight=1)
+        button_frame.columnconfigure(1, weight=1)
+        ttk.Button(button_frame, text="Produkt speichern", command=self.save_product).grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        ttk.Button(button_frame, text="Leeren", command=self.clear_product_form).grid(row=0, column=1, sticky="ew", padx=(4, 0))
 
     def _build_system_form(self, parent: ttk.LabelFrame):
         ttk.Label(parent, text="Systemname").grid(row=0, column=0, sticky="w", padx=6, pady=2)
@@ -1693,9 +1754,12 @@ class PSAApp(ttk.Frame):
         self.system_part2 = self._build_part_form(part_frame, "Teil 2", 0)
         self.system_part3 = self._build_part_form(part_frame, "Teil 3", 1)
 
-        ttk.Button(parent, text="System speichern", command=self.save_system).grid(
-            row=6, column=0, columnspan=2, sticky="ew", padx=6, pady=6
-        )
+        button_frame = ttk.Frame(parent)
+        button_frame.grid(row=6, column=0, columnspan=2, sticky="ew", padx=6, pady=6)
+        button_frame.columnconfigure(0, weight=1)
+        button_frame.columnconfigure(1, weight=1)
+        ttk.Button(button_frame, text="System speichern", command=self.save_system).grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        ttk.Button(button_frame, text="Leeren", command=self.clear_system_form).grid(row=0, column=1, sticky="ew", padx=(4, 0))
 
     def _build_part_form(self, parent: ttk.Frame, title: str, column: int) -> dict:
         frame = ttk.LabelFrame(parent, text=title)
@@ -1716,11 +1780,11 @@ class PSAApp(ttk.Frame):
         ttk.Label(parent, text="Produkte").grid(row=0, column=0, sticky="w", padx=6, pady=2)
         ttk.Label(parent, text="Systeme").grid(row=0, column=1, sticky="w", padx=6, pady=2)
 
-        self.product_list = tk.Listbox(parent, height=6)
+        self.product_list = tk.Listbox(parent, height=6, selectmode=tk.EXTENDED)
         self.product_list.grid(row=1, column=0, sticky="nsew", padx=6, pady=2)
         self.product_list.bind("<Double-1>", self._on_product_double_click)
 
-        self.system_list = tk.Listbox(parent, height=6)
+        self.system_list = tk.Listbox(parent, height=6, selectmode=tk.EXTENDED)
         self.system_list.grid(row=1, column=1, sticky="nsew", padx=6, pady=2)
         self.system_list.bind("<Double-1>", self._on_system_double_click)
 
@@ -1756,13 +1820,37 @@ class PSAApp(ttk.Frame):
             row=0, column=1, sticky="ew", padx=4
         )
 
+        gal_actions = ttk.Frame(parent)
+        gal_actions.grid(row=4, column=0, columnspan=2, sticky="ew", padx=6, pady=(0, 6))
+        gal_actions.columnconfigure(0, weight=1)
+        ttk.Button(gal_actions, text="GAL auf Auswahl anwenden", command=self.apply_gal_to_selection).grid(
+            row=0, column=0, sticky="ew"
+        )
+
         self.status_var = tk.StringVar(value="Bereit")
         ttk.Label(parent, textvariable=self.status_var).grid(
-            row=4, column=0, columnspan=2, sticky="w", padx=6, pady=4
+            row=5, column=0, columnspan=2, sticky="w", padx=6, pady=4
         )
 
     def _collect_entries(self, entries: dict) -> dict:
         return {key: entry.get().strip() for key, entry in entries.items()}
+
+    def clear_product_form(self):
+        for entry in self.product_entries.values():
+            entry.delete(0, tk.END)
+        self.product_next_check_entry.delete(0, tk.END)
+        self.product_gal_file_var.set("")
+        self.product_gal_link_entry.delete(0, tk.END)
+
+    def clear_system_form(self):
+        self.system_name_entry.delete(0, tk.END)
+        self.system_next_check_entry.delete(0, tk.END)
+        self.system_gal_file_var.set("")
+        self.system_gal_link_entry.delete(0, tk.END)
+        self.clear_product_form()
+        for entries in (self.system_part2, self.system_part3):
+            for entry in entries.values():
+                entry.delete(0, tk.END)
 
     def _fill_date_offset(self, entry: ttk.Entry, months: int):
         entry.delete(0, tk.END)
@@ -1838,13 +1926,6 @@ class PSAApp(ttk.Frame):
             product_id = insert_product(self.db_path, data)
             self.status_var.set(f"Produkt gespeichert (ID {product_id})")
             
-            # Felder löschen
-            for entry in self.product_entries.values():
-                entry.delete(0, tk.END)
-            self.product_next_check_entry.delete(0, tk.END)
-            self.product_gal_file_var.set("")
-            self.product_gal_link_entry.delete(0, tk.END)
-            
             self.refresh_lists()
         except Exception as e:
             messagebox.showerror("Fehler", f"Produkt konnte nicht gespeichert werden: {e}")
@@ -1896,15 +1977,6 @@ class PSAApp(ttk.Frame):
 
         self.status_var.set(f"System gespeichert (ID {system_id})")
         
-        # Felder löschen
-        self.system_name_entry.delete(0, tk.END)
-        self.system_next_check_entry.delete(0, tk.END)
-        self.system_gal_file_var.set("")
-        self.system_gal_link_entry.delete(0, tk.END)
-        for entries in [self.system_part2, self.system_part3]:
-            for entry in entries.values():
-                entry.delete(0, tk.END)
-        
         self.refresh_lists()
 
     def refresh_lists(self):
@@ -1922,19 +1994,35 @@ class PSAApp(ttk.Frame):
         if hasattr(self, "due_tree"):
             self.refresh_due_list()
 
+    def _selected_product_ids(self) -> list[int]:
+        if not hasattr(self, "product_list"):
+            return []
+        ids: list[int] = []
+        for index in self.product_list.curselection():
+            if 0 <= index < len(self.products):
+                ids.append(int(self.products[index][0]))
+        return ids
+
+    def _selected_system_ids(self) -> list[int]:
+        if not hasattr(self, "system_list"):
+            return []
+        ids: list[int] = []
+        for index in self.system_list.curselection():
+            if 0 <= index < len(self.systems):
+                ids.append(int(self.systems[index][0]))
+        return ids
+
     def _selected_product_id(self) -> int | None:
-        selection = self.product_list.curselection()
+        selection = self._selected_product_ids()
         if not selection:
             return None
-        index = selection[0]
-        return self.products[index][0]
+        return selection[0]
 
     def _selected_system_id(self) -> int | None:
-        selection = self.system_list.curselection()
+        selection = self._selected_system_ids()
         if not selection:
             return None
-        index = selection[0]
-        return self.systems[index][0]
+        return selection[0]
 
     def _on_product_double_click(self, _event=None):
         product_id = self._selected_product_id()
@@ -2007,6 +2095,52 @@ class PSAApp(ttk.Frame):
         refresh_verleih_item_label(self.db_path, item_type="system", item_id=system_id)
         self.refresh_lists()
         self.status_var.set(f"System #{system_id} aktualisiert")
+
+    def apply_gal_to_selection(self):
+        product_ids = self._selected_product_ids()
+        system_ids = self._selected_system_ids()
+        if not product_ids and not system_ids:
+            messagebox.showerror("Fehler", "Bitte mindestens ein Produkt oder System in der Liste auswählen.")
+            return
+
+        dialog = BulkGalDialog(self)
+        self.wait_window(dialog)
+        if not dialog.result:
+            return
+
+        gal_file = dialog.result.get("gal_datei", "")
+        gal_link = dialog.result.get("gal_link", "")
+
+        updated_products = 0
+        updated_systems = 0
+
+        for product_id in product_ids:
+            details = fetch_product_details(self.db_path, product_id)
+            if not details:
+                continue
+            if gal_file:
+                details["gal_datei"] = self._copy_gal_file(gal_file, details.get("produktname", "produkt"))
+            if gal_link:
+                details["gal_link"] = gal_link
+            update_product(self.db_path, product_id, details)
+            refresh_verleih_item_label(self.db_path, item_type="product", item_id=product_id)
+            updated_products += 1
+
+        for system_id in system_ids:
+            details = fetch_system_details(self.db_path, system_id)
+            if not details:
+                continue
+            system_data = details["system"]
+            if gal_file:
+                system_data["gal_datei"] = self._copy_gal_file(gal_file, system_data.get("name", "system"))
+            if gal_link:
+                system_data["gal_link"] = gal_link
+            update_system(self.db_path, system_id, system_data, details["parts"])
+            refresh_verleih_item_label(self.db_path, item_type="system", item_id=system_id)
+            updated_systems += 1
+
+        self.refresh_lists()
+        self.status_var.set(f"GAL aktualisiert: {updated_products} Produkt(e), {updated_systems} System(e)")
 
     def refresh_due_list(self):
         if not hasattr(self, "due_tree"):

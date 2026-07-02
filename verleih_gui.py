@@ -1248,8 +1248,10 @@ class VerleihApp(ttk.Frame):
         action_frame.grid(row=15, column=0, columnspan=2, sticky="ew", padx=6, pady=(0, 8))
         action_frame.columnconfigure(0, weight=1)
         action_frame.columnconfigure(1, weight=1)
+        action_frame.columnconfigure(2, weight=1)
         ttk.Button(action_frame, text="Speichern", command=self.save_verleih).grid(row=0, column=0, sticky="ew", padx=(0, 4))
-        ttk.Button(action_frame, text="Aktualisieren", command=self.refresh_data).grid(row=0, column=1, sticky="ew", padx=(4, 0))
+        ttk.Button(action_frame, text="Leeren", command=self.clear_verleih_form).grid(row=0, column=1, sticky="ew", padx=4)
+        ttk.Button(action_frame, text="Aktualisieren", command=self.refresh_data).grid(row=0, column=2, sticky="ew", padx=(4, 0))
 
         list_frame = ttk.LabelFrame(parent, text="Anstehende Verleihungen / Rückgaben")
         list_frame.grid(row=2, column=0, sticky="nsew", padx=6, pady=6)
@@ -1322,6 +1324,27 @@ class VerleihApp(ttk.Frame):
             self.gal_provided_out_var.set(False)
             self.signature_data = ""
             self.sig_status_var.set("Keine Unterschrift erfasst")
+
+    def clear_verleih_form(self):
+        self.von_entry.delete(0, tk.END)
+        self.von_entry.insert(0, date.today().isoformat())
+        self.rueck_entry.delete(0, tk.END)
+        self.rueck_entry.insert(0, date.today().isoformat())
+        self.ausgebende_person_entry.delete(0, tk.END)
+        self.entleiher_entry.delete(0, tk.END)
+        self.email_entry.delete(0, tk.END)
+        self.phone_entry.delete(0, tk.END)
+        self.address_entry.delete(0, tk.END)
+        self.item_filter_combo.set("")
+        self.selection_map.clear()
+        self.item_listbox.delete(0, tk.END)
+        self.signature_data = ""
+        self.quick_check_out_var.set(False)
+        self.gal_provided_out_var.set(False)
+        self.sig_status_var.set("Keine Unterschrift erfasst")
+        self.current_gal_target = ""
+        self.gal_display_var.set("GAL: -")
+        self.open_gal_btn.configure(state=tk.DISABLED)
 
     def _build_calendar_tab(self, parent: ttk.Frame):
         parent.columnconfigure(0, weight=1)
@@ -1658,13 +1681,8 @@ class VerleihApp(ttk.Frame):
             messagebox.showerror("Fehler", "Bitte mindestens ein Produkt oder System auswählen.")
             return
 
-        mode = self.create_mode_var.get()
-        if mode == "lend":
-            von = date.today().isoformat()
-            self.von_entry.delete(0, tk.END)
-            self.von_entry.insert(0, von)
-        else:
-            von = self.von_entry.get().strip()
+        is_lend_mode = self.create_mode_var.get() == "lend"
+        von = self.von_entry.get().strip()
         rueck = self.rueck_entry.get().strip()
         entleiher = self.entleiher_entry.get().strip()
         ausgebende_person = self.ausgebende_person_entry.get().strip()
@@ -1724,7 +1742,7 @@ class VerleihApp(ttk.Frame):
                     messagebox.showerror("Nicht verfügbar", f"{selection_label}\nist im Zeitraum bereits vergeben.")
                 return
 
-        if mode == "lend":
+        if is_lend_mode:
             if not self._validate_contact_for_lending(entleiher, adresse, email, telefon):
                 return
             if not ausgebende_person:
@@ -1765,33 +1783,14 @@ class VerleihApp(ttk.Frame):
                 entleiher_telefon=telefon,
                 entleiher_adresse=adresse,
                 signature_data=signature_data,
-                quick_check_out=self.quick_check_out_var.get() if mode == "lend" else False,
-                gal_provided_out=self.gal_provided_out_var.get() if mode == "lend" else False,
+                quick_check_out=self.quick_check_out_var.get() if is_lend_mode else False,
+                gal_provided_out=self.gal_provided_out_var.get() if is_lend_mode else False,
                 status=status,
                 checkout_at=checkout_at,
             )
             created_ids.append(new_id)
 
         self.status_var.set(f"{len(created_ids)} Eintrag/Einträge gespeichert")
-        self.von_entry.delete(0, tk.END)
-        self.rueck_entry.delete(0, tk.END)
-        self.von_entry.insert(0, date.today().isoformat())
-        self.rueck_entry.insert(0, date.today().isoformat())
-        self.ausgebende_person_entry.delete(0, tk.END)
-        self.entleiher_entry.delete(0, tk.END)
-        self.email_entry.delete(0, tk.END)
-        self.phone_entry.delete(0, tk.END)
-        self.address_entry.delete(0, tk.END)
-        self.item_filter_combo.set("")
-        self.selection_map.clear()
-        self.item_listbox.delete(0, tk.END)
-        self.signature_data = ""
-        self.quick_check_out_var.set(False)
-        self.gal_provided_out_var.set(False)
-        self.sig_status_var.set("Keine Unterschrift erfasst")
-        self.current_gal_target = ""
-        self.gal_display_var.set("GAL: -")
-        self.open_gal_btn.configure(state=tk.DISABLED)
         self._refresh_plan_list()
         self._refresh_calendar()
 
