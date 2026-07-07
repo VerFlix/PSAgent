@@ -1,14 +1,18 @@
 import json
+import csv
 import sqlite3
+import subprocess
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import shutil
 import calendar
+import tempfile
 from datetime import date, datetime
 from pathlib import Path
 
 from generate_PDF import (
     DEFAULT_DB_PATH,
+    find_typst_executable,
     init_db,
     generate_einsatzdokumentation_pdf_from_db,
     generate_pd_pdf_from_db,
@@ -986,6 +990,343 @@ def fetch_report_details(db_path: Path, report_id: int) -> dict | None:
     return {"header": dict(header), "items": [dict(i) for i in items]}
 
 
+def _fetch_rows(db_path: Path, sql: str, params: tuple = ()) -> list[dict]:
+    with _db_connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _is_selected_export_item(item_type: str, item_id: int, selected_products: set[int], selected_systems: set[int]) -> bool:
+    if not selected_products and not selected_systems:
+        return True
+    if item_type == "product":
+        return item_id in selected_products
+    if item_type == "system":
+        return item_id in selected_systems
+    return False
+
+
+def build_export_snapshot(
+    db_path: Path,
+    *,
+    selected_products: set[int] | None = None,
+    selected_systems: set[int] | None = None,
+    include_archive: bool = True,
+) -> dict:
+    selected_products = selected_products or set()
+    selected_systems = selected_systems or set()
+    selected_only = bool(selected_products or selected_systems)
+
+    with _db_connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+
+        products = [dict(row) for row in conn.execute("SELECT * FROM products ORDER BY id ASC").fetchall()]
+        if selected_only:
+            products = [row for row in products if int(row.get("id") or 0) in selected_products]
+
+        systems_raw = [dict(row) for row in conn.execute("SELECT * FROM systems ORDER BY id ASC").fetchall()]
+        if selected_only:
+            systems_raw = [row for row in systems_raw if int(row.get("id") or 0) in selected_systems]
+
+        system_ids = [int(row.get("id") or 0) for row in systems_raw]
+        parts_map: dict[int, list[dict]] = {system_id: [] for system_id in system_ids}
+        if system_ids:
+            placeholders = ", ".join(["?"] * len(system_ids))
+            part_rows = conn.execute(
+                f"SELECT * FROM system_parts WHERE system_id IN ({placeholders}) ORDER BY system_id ASC, part_index ASC",
+                tuple(system_ids),
+            ).fetchall()
+            for row in part_rows:
+                part = dict(row)
+                parts_map.setdefault(int(part.get("system_id") or 0), []).append(part)
+
+        systems: list[dict] = []
+        for row in systems_raw:
+            system_id = int(row.get("id") or 0)
+            system_row = dict(row)
+            system_row["parts"] = parts_map.get(system_id, [])
+            systems.append(system_row)
+
+        item_locks = [dict(row) for row in conn.execute("SELECT * FROM item_locks ORDER BY item_type ASC, item_id ASC").fetchall()]
+        if selected_only:
+            item_locks = [
+                row
+                for row in item_locks
+                if _is_selected_export_item(str(row.get("item_type") or ""), int(row.get("item_id") or 0), selected_products, selected_systems)
+            ]
+
+        verleih_planung = [dict(row) for row in conn.execute("SELECT * FROM verleih_planung ORDER BY created_at ASC, id ASC").fetchall()]
+        if selected_only:
+            verleih_planung = [
+                row
+                for row in verleih_planung
+                if _is_selected_export_item(str(row.get("item_type") or ""), int(row.get("item_id") or 0), selected_products, selected_systems)
+            ]
+
+        report_headers = [dict(row) for row in conn.execute("SELECT * FROM psa_pruefungsberichte ORDER BY id ASC").fetchall()]
+        report_items = [dict(row) for row in conn.execute("SELECT * FROM psa_pruefungsbericht_items ORDER BY report_id ASC, id ASC").fetchall()]
+        if selected_only:
+            report_items = [
+                row
+                for row in report_items
+                if _is_selected_export_item(str(row.get("item_type") or ""), int(row.get("item_id") or 0), selected_products, selected_systems)
+            ]
+            report_ids = {int(row.get("report_id") or 0) for row in report_items}
+            report_headers = [row for row in report_headers if int(row.get("id") or 0) in report_ids]
+
+    report_items_by_report_id: dict[int, list[dict]] = {}
+    for item in report_items:
+        report_items_by_report_id.setdefault(int(item.get("report_id") or 0), []).append(item)
+
+    reports: list[dict] = []
+    for header in report_headers:
+        report_id = int(header.get("id") or 0)
+        reports.append({"header": header, "items": report_items_by_report_id.get(report_id, [])})
+
+    archived_items: list[dict] = []
+    if include_archive:
+        archived_items = fetch_archived_items(ARCHIVE_DB_PATH)
+        if selected_only:
+            archived_items = [
+                row
+                for row in archived_items
+                if _is_selected_export_item(str(row.get("item_type") or ""), int(row.get("source_item_id") or 0), selected_products, selected_systems)
+            ]
+
+    return {
+        "meta": {
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "scope": "selected" if selected_only else "all",
+            "selected_products": sorted(selected_products),
+            "selected_systems": sorted(selected_systems),
+            "include_archive": include_archive,
+        },
+        "products": products,
+        "systems": systems,
+        "item_locks": item_locks,
+        "verleih_planung": verleih_planung,
+        "reports": reports,
+        "archived_items": archived_items,
+    }
+
+
+def export_snapshot_to_csv(snapshot: dict, output_path: Path) -> Path:
+    rows: list[dict[str, str]] = []
+
+    for key, value in snapshot.get("meta", {}).items():
+        rows.append(
+            {
+                "section": "meta",
+                "item_type": "meta",
+                "item_id": "",
+                "parent_id": "",
+                "label": key,
+                "data": json.dumps(value, ensure_ascii=False),
+            }
+        )
+
+    for product in snapshot.get("products", []):
+        rows.append(
+            {
+                "section": "products",
+                "item_type": "product",
+                "item_id": str(product.get("id", "")),
+                "parent_id": "",
+                "label": str(product.get("produktname") or product.get("produktbezeichnung") or f"Produkt #{product.get('id', '')}"),
+                "data": json.dumps(product, ensure_ascii=False),
+            }
+        )
+
+    for system in snapshot.get("systems", []):
+        system_payload = dict(system)
+        system_payload["parts"] = system.get("parts", [])
+        rows.append(
+            {
+                "section": "systems",
+                "item_type": "system",
+                "item_id": str(system.get("id", "")),
+                "parent_id": "",
+                "label": str(system.get("name") or f"System #{system.get('id', '')}"),
+                "data": json.dumps(system_payload, ensure_ascii=False),
+            }
+        )
+
+        for part in system.get("parts", []):
+            rows.append(
+                {
+                    "section": "system_parts",
+                    "item_type": "system_part",
+                    "item_id": str(part.get("id", "")),
+                    "parent_id": str(system.get("id", "")),
+                    "label": str(part.get("produktname") or part.get("produktbezeichnung") or f"Teil {part.get('part_index', '')}"),
+                    "data": json.dumps(part, ensure_ascii=False),
+                }
+            )
+
+    for lock in snapshot.get("item_locks", []):
+        rows.append(
+            {
+                "section": "item_locks",
+                "item_type": str(lock.get("item_type", "")),
+                "item_id": str(lock.get("item_id", "")),
+                "parent_id": "",
+                "label": f"{lock.get('item_type', '')} #{lock.get('item_id', '')}",
+                "data": json.dumps(lock, ensure_ascii=False),
+            }
+        )
+
+    for plan in snapshot.get("verleih_planung", []):
+        rows.append(
+            {
+                "section": "verleih_planung",
+                "item_type": str(plan.get("item_type", "")),
+                "item_id": str(plan.get("item_id", "")),
+                "parent_id": "",
+                "label": str(plan.get("item_label", "")),
+                "data": json.dumps(plan, ensure_ascii=False),
+            }
+        )
+
+    for report in snapshot.get("reports", []):
+        header = report.get("header", {})
+        rows.append(
+            {
+                "section": "psa_pruefungsberichte",
+                "item_type": "report",
+                "item_id": str(header.get("id", "")),
+                "parent_id": "",
+                "label": f"Bericht #{header.get('id', '')}",
+                "data": json.dumps({"header": header, "items": report.get("items", [])}, ensure_ascii=False),
+            }
+        )
+
+    for archived in snapshot.get("archived_items", []):
+        rows.append(
+            {
+                "section": "archived_items",
+                "item_type": str(archived.get("item_type", "")),
+                "item_id": str(archived.get("source_item_id", "")),
+                "parent_id": "",
+                "label": str(archived.get("item_label", "")),
+                "data": json.dumps(archived, ensure_ascii=False),
+            }
+        )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", newline="", encoding="utf-8-sig") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["section", "item_type", "item_id", "parent_id", "label", "data"])
+        writer.writeheader()
+        writer.writerows(rows)
+    return output_path
+
+
+def _typst_escape(value) -> str:
+    text = str(value if value is not None else "")
+    replacements = [
+        ("\\", r"\\"),
+        ("#", r"\#"),
+        ("[", r"\["),
+        ("]", r"\]"),
+        ("*", r"\*"),
+        ("_", r"\_"),
+        ("<", r"\<"),
+        (">", r"\>"),
+    ]
+    for old, new in replacements:
+        text = text.replace(old, new)
+    return text
+
+
+def _typst_lines_for_row(prefix: str, row: dict, skip_keys: set[str] | None = None) -> list[str]:
+    skip_keys = skip_keys or set()
+    lines: list[str] = []
+    for key, value in row.items():
+        if key in skip_keys:
+            continue
+        lines.append(f"- {_typst_escape(prefix + key)}: {_typst_escape(value)}")
+    return lines
+
+
+def export_snapshot_to_pdf(snapshot: dict, output_path: Path) -> Path:
+    typst_exe = find_typst_executable()
+    if not typst_exe:
+        raise RuntimeError("Typst wurde nicht gefunden.")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    lines: list[str] = [
+        "#set page(margin: 1.5cm)",
+        "#set text(font: \"Liberation Sans\", size: 10pt)",
+        "= PSAgent Export",
+        "",
+        "== Metadaten",
+    ]
+
+    for key, value in snapshot.get("meta", {}).items():
+        if isinstance(value, list):
+            lines.append(f"- {_typst_escape(key)}: {', '.join(_typst_escape(v) for v in value) if value else '-'}")
+        else:
+            lines.append(f"- {_typst_escape(key)}: {_typst_escape(value)}")
+
+    lines.extend(["", f"== Produkte ({len(snapshot.get('products', []))})"])
+    for product in snapshot.get("products", []):
+        title = product.get("produktname") or product.get("produktbezeichnung") or f"Produkt #{product.get('id', '')}"
+        lines.extend(["", f"=== {_typst_escape(title)}"])
+        lines.extend(_typst_lines_for_row("", product))
+
+    lines.extend(["", f"== Systeme ({len(snapshot.get('systems', []))})"])
+    for system in snapshot.get("systems", []):
+        title = system.get("name") or f"System #{system.get('id', '')}"
+        lines.extend(["", f"=== {_typst_escape(title)}"])
+        lines.extend(_typst_lines_for_row("", system, skip_keys={"parts"}))
+        parts = system.get("parts", [])
+        if parts:
+            lines.append("==== Systemteile")
+            for part in parts:
+                part_title = part.get("produktname") or part.get("produktbezeichnung") or f"Teil {part.get('part_index', '')}"
+                lines.extend([f"===== {_typst_escape(part_title)}"])
+                lines.extend(_typst_lines_for_row("", part))
+
+    lines.extend(["", f"== Sperren ({len(snapshot.get('item_locks', []))})"])
+    for lock in snapshot.get("item_locks", []):
+        lines.extend(["", "=== Sperreintrag"])
+        lines.extend(_typst_lines_for_row("", lock))
+
+    lines.extend(["", f"== Verleihplanung ({len(snapshot.get('verleih_planung', []))})"])
+    for plan in snapshot.get("verleih_planung", []):
+        lines.extend(["", "=== Verleiheintrag"])
+        lines.extend(_typst_lines_for_row("", plan))
+
+    lines.extend(["", f"== PSA-Prüfungsberichte ({len(snapshot.get('reports', []))})"])
+    for report in snapshot.get("reports", []):
+        header = report.get("header", {})
+        lines.extend(["", f"=== Bericht #{_typst_escape(header.get('id', ''))}"])
+        lines.extend(_typst_lines_for_row("", header))
+        items = report.get("items", [])
+        if items:
+            lines.append("==== Berichtspunkte")
+            for item in items:
+                lines.extend(["", f"===== {_typst_escape(item.get('item_label', 'Eintrag'))}"])
+                lines.extend(_typst_lines_for_row("", item))
+
+    lines.extend(["", f"== Archivierte Einträge ({len(snapshot.get('archived_items', []))})"])
+    for archived in snapshot.get("archived_items", []):
+        lines.extend(["", f"=== {_typst_escape(archived.get('item_label', 'Archiv'))}"])
+        lines.extend(_typst_lines_for_row("", archived))
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        typst_path = Path(tmpdir) / "psa_export.typ"
+        typst_path.write_text("\n".join(lines), encoding="utf-8")
+        result = subprocess.run(
+            [typst_exe, "compile", str(typst_path), str(output_path)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or "Fehler beim Generieren des PDF-Exports.")
+    return output_path
+
+
 class ProductEditDialog(tk.Toplevel):
     def __init__(self, master: tk.Misc, product: dict):
         super().__init__(master)
@@ -1594,10 +1935,12 @@ class PSAApp(ttk.Frame):
         due_tab = ttk.Frame(notebook)
         report_tab = ttk.Frame(notebook)
         archive_tab = ttk.Frame(notebook)
+        export_tab = ttk.Frame(notebook)
         notebook.add(main_tab, text="Stammdaten & PDF")
         notebook.add(due_tab, text="Nächste Prüfungen")
         notebook.add(report_tab, text="PSA-Prüfungsberichte")
         notebook.add(archive_tab, text="Archiv (Aussortiert)")
+        notebook.add(export_tab, text="Export")
 
         main_tab.columnconfigure(0, weight=1)
         main_tab.columnconfigure(1, weight=1)
@@ -1617,6 +1960,7 @@ class PSAApp(ttk.Frame):
         self._build_due_tab(due_tab)
         self._build_report_tab(report_tab)
         self._build_archive_tab(archive_tab)
+        self._build_export_tab(export_tab)
 
     def _build_due_tab(self, parent: ttk.Frame):
         parent.columnconfigure(0, weight=1)
@@ -1696,6 +2040,62 @@ class PSAApp(ttk.Frame):
         actions.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 8))
         ttk.Button(actions, text="Archiv aktualisieren", command=self.refresh_archive_list).pack(side=tk.LEFT)
         ttk.Button(actions, text="Haftungsausschluss erzeugen", command=self.generate_archive_haftung).pack(side=tk.RIGHT)
+
+    def _build_export_tab(self, parent: ttk.Frame):
+        parent.columnconfigure(0, weight=1)
+        parent.rowconfigure(1, weight=1)
+
+        frame = ttk.LabelFrame(parent, text="Datenexport")
+        frame.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
+        frame.columnconfigure(1, weight=1)
+
+        self.export_scope_var = tk.StringVar(value="all")
+        self.export_include_archive_var = tk.BooleanVar(value=True)
+
+        ttk.Label(frame, text="Umfang").grid(row=0, column=0, sticky="w", padx=6, pady=4)
+        scope_row = ttk.Frame(frame)
+        scope_row.grid(row=0, column=1, sticky="w", padx=6, pady=4)
+        ttk.Radiobutton(scope_row, text="Alle Daten", variable=self.export_scope_var, value="all").pack(side=tk.LEFT)
+        ttk.Radiobutton(
+            scope_row,
+            text="Nur markierte Produkte/Systeme",
+            variable=self.export_scope_var,
+            value="selected",
+        ).pack(side=tk.LEFT, padx=(12, 0))
+
+        ttk.Checkbutton(frame, text="Archiv mit exportieren", variable=self.export_include_archive_var).grid(
+            row=1, column=0, columnspan=2, sticky="w", padx=6, pady=(0, 4)
+        )
+
+        ttk.Label(
+            frame,
+            text="Die Auswahl bezieht sich auf die markierten Produkte und Systeme im Reiter 'Stammdaten & PDF'.",
+            wraplength=760,
+            justify="left",
+        ).grid(row=2, column=0, columnspan=2, sticky="w", padx=6, pady=(0, 8))
+
+        button_row = ttk.Frame(frame)
+        button_row.grid(row=3, column=0, columnspan=2, sticky="ew", padx=6, pady=(0, 8))
+        button_row.columnconfigure(0, weight=1)
+        button_row.columnconfigure(1, weight=1)
+        ttk.Button(button_row, text="Als CSV exportieren", command=lambda: self.start_export("csv")).grid(
+            row=0, column=0, sticky="ew", padx=(0, 4)
+        )
+        ttk.Button(button_row, text="Als PDF exportieren", command=lambda: self.start_export("pdf")).grid(
+            row=0, column=1, sticky="ew", padx=(4, 0)
+        )
+
+        info = ttk.LabelFrame(parent, text="Hinweis")
+        info.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 8))
+        info.columnconfigure(0, weight=1)
+        note = tk.Text(info, height=12, wrap="word")
+        note.grid(row=0, column=0, sticky="nsew", padx=6, pady=6)
+        note.insert(
+            "1.0",
+            "Exportiert werden Produkte, Systeme, Systemteile, Sperren, Verleihvorgänge, PSA-Berichte und optional das Archiv.\n\n"
+            "Tipp: Für einen Teil-Export zuerst im Reiter 'Stammdaten & PDF' Produkte oder Systeme markieren.",
+        )
+        note.configure(state=tk.DISABLED)
 
     def _build_product_form(self, parent: ttk.LabelFrame):
         self.product_entries = {}
@@ -2183,6 +2583,54 @@ class PSAApp(ttk.Frame):
 
         self.refresh_lists()
         self.status_var.set(f"GAL aktualisiert: {updated_products} Produkt(e), {updated_systems} System(e)")
+
+    def _selected_export_scope(self) -> tuple[set[int], set[int]]:
+        return set(self._selected_product_ids()), set(self._selected_system_ids())
+
+    def _prompt_export_path(self, export_type: str) -> Path | None:
+        scope = "auswahl" if self.export_scope_var.get() == "selected" else "alle"
+        default_name = f"psa_export_{scope}_{date.today().isoformat()}.{export_type}"
+        filetypes = [(export_type.upper(), f"*.{export_type}")]
+        path = filedialog.asksaveasfilename(
+            title=f"{export_type.upper()}-Export speichern",
+            defaultextension=f".{export_type}",
+            initialfile=default_name,
+            filetypes=filetypes,
+        )
+        return Path(path) if path else None
+
+    def start_export(self, export_type: str):
+        selected_products, selected_systems = self._selected_export_scope()
+        selected_only = self.export_scope_var.get() == "selected"
+
+        if selected_only and not selected_products and not selected_systems:
+            messagebox.showerror(
+                "Fehler",
+                "Bitte im Reiter 'Stammdaten & PDF' mindestens ein Produkt oder System markieren.",
+            )
+            return
+
+        output_path = self._prompt_export_path(export_type)
+        if not output_path:
+            return
+
+        try:
+            snapshot = build_export_snapshot(
+                self.db_path,
+                selected_products=selected_products if selected_only else None,
+                selected_systems=selected_systems if selected_only else None,
+                include_archive=bool(self.export_include_archive_var.get()),
+            )
+            if export_type == "csv":
+                export_snapshot_to_csv(snapshot, output_path)
+            else:
+                export_snapshot_to_pdf(snapshot, output_path)
+        except Exception as exc:
+            messagebox.showerror("Fehler", f"Export fehlgeschlagen: {exc}")
+            return
+
+        self.status_var.set(f"Export erstellt: {output_path}")
+        messagebox.showinfo("OK", f"Export erfolgreich erstellt:\n{output_path}")
 
     def refresh_due_list(self):
         if not hasattr(self, "due_tree"):

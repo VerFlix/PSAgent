@@ -20,6 +20,7 @@ Beide Skripte verwenden dieselbe SQLite-Datenbank (`psa.db`).
 - GAL-Dateien und Links verwalten
 - Mehrfachauswahl in den Produkt-/Systemlisten: eine GAL-Datei und/oder ein GAL-Link auf mehrere markierte Einträge gleichzeitig anwenden
 - PDF-Dokumente erzeugen (Einsatzdokumentation, PD, Haftungsausschluss)
+- Neuer Reiter **Export**: CSV- oder PDF-Export für alle Daten oder nur markierte Produkte/Systeme
 - PSA-Prüfungsprozess mit Prüfungsrunde, Signatur des Sachkundigen und Berichtserstellung
 - Entsperren gesperrter Produkte/Systeme **innerhalb der PSA-Prüfung** (mit Pflicht-Kommentar)
 
