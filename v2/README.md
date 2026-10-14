@@ -7,6 +7,7 @@ weiterläuft.
 - Konzept: „PSAgent 2.0 – Konzept“ (claude.ai-Dokument, Link im Claude-Projekt „PSAgent“)
 - Regeln für die Arbeit am Code: [`../CLAUDE.md`](../CLAUDE.md)
 - Abnahmekatalog: [`docs/paritaet.md`](docs/paritaet.md)
+- Altsystem-Schema und Testdaten: [`docs/altsystem-testdaten.md`](docs/altsystem-testdaten.md)
 
 ## Lokal starten
 
@@ -36,6 +37,20 @@ Formatierung, Linter und der Schutz gegen eingecheckte Schlüssel vor jedem Comm
 
 Dieselben Prüfungen laufen in GitHub Actions für jeden Pull Request nach `v2`, dazu ein
 Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
+
+## Testdaten im Format des Altsystems
+
+Echte Altdaten bleiben außen vor (CLAUDE.md, Regel 1). Künstliche Datenbanken in allen
+Schema-Varianten des Altsystems erzeugt der Testdaten-Generator:
+
+```bash
+uv run python manage.py legacy_testdb --liste
+uv run python manage.py legacy_testdb --variant s7 --seed 42 --out /tmp/altdaten
+```
+
+Details zu Varianten, Inhalt und Randfällen: [`docs/altsystem-testdaten.md`](docs/altsystem-testdaten.md).
+Die Tests in `tests/legacy/` vergleichen jede Variante mit dem echten Altsystem-Code aus der
+Git-Historie und brauchen deshalb einen Checkout mit voller Historie.
 
 ## Cloud-Sitzungen (Claude Code im Web)
 
