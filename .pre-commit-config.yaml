@@ -1,0 +1,34 @@
+# Prüfungen vor jedem Commit. Einrichten im Repo-Wurzelverzeichnis:
+#   uv run --project v2 pre-commit install
+# Das Altsystem bleibt unberührt.
+exclude: ^(psa_gui\.py|verleih_gui\.py|generate_PDF\.py|Typst_Vorlagen/|\.idea/|__pycache__/)
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.0
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: forbid-secret-files
+        name: Keine Schlüssel- oder Datenbankdateien
+        entry: Schlüssel-, Geheimnis- und Datenbankdateien gehören nicht ins Repo (CLAUDE.md, Regeln 1 und 2).
+        language: fail
+        files: (^|/)(\.env(\..+)?|.+\.(pem|key|p12|pfx|gpg|asc|kdbx|db|sqlite3?)|id_(rsa|ed25519|ecdsa)[^/]*)$
+        exclude: (^|/)\.env\.example$

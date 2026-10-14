@@ -1,0 +1,69 @@
+[project]
+name = "psagent"
+version = "0.1.0"
+description = "PSAgent 2.0 – Materialverleih und PSA-Prüfungen im Verein"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "django[argon2]>=6.1,<6.2",
+    "psycopg[binary]>=3.2",
+    "gunicorn>=23",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-django>=4.9",
+    "ruff>=0.17",
+    "mypy>=2.3",
+    "django-stubs[compatible-mypy]>=6.1,<6.2",
+    "pre-commit>=4",
+]
+
+[tool.uv]
+# Django-Projekt, kein installierbares Paket.
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["*/migrations/*"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle
+    "W",   # pycodestyle Warnungen
+    "F",   # pyflakes
+    "I",   # Import-Sortierung
+    "B",   # bugbear
+    "UP",  # pyupgrade
+    "S",   # bandit (Sicherheit)
+    "DJ",  # Django
+    "N",   # Namenskonventionen
+    "SIM", # Vereinfachungen
+    "RUF", # ruff-eigene Regeln
+]
+
+# Deutscher Gedankenstrich ist in Texten gewollt.
+allowed-confusables = ["–"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]                                   # assert ist in Tests gewollt
+"psagent/settings/*.py" = ["F403", "F405"]              # Einstellungen erben per Stern-Import
+"psagent/settings/dev.py" = ["S105"]                    # fester Schlüssel nur für die Entwicklung
+"psagent/settings/test.py" = ["S105"]                   # fester Schlüssel nur für Tests
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["mypy_django_plugin.main"]
+exclude = ["migrations/"]
+
+[tool.django-stubs]
+django_settings_module = "psagent.settings.test"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "psagent.settings.test"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra --strict-markers"

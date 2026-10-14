@@ -1,0 +1,141 @@
+# Prüfungen für PSAgent 2.0 (Ordner v2/). Läuft für jeden Push und Pull Request nach v2.
+# Actions sind auf Commit-SHAs festgelegt; Dependabot hält sie aktuell.
+name: v2-ci
+
+on:
+  push:
+    branches: [v2]
+  pull_request:
+    branches: [v2]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v2-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: v2
+
+jobs:
+  lint:
+    name: ruff und mypy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.1"
+      - name: Abhängigkeiten installieren
+        # Solange uv.lock fehlt, wird frisch aufgelöst (siehe Job "test").
+        run: if [ -f uv.lock ]; then uv sync --locked; else uv sync; fi
+      - name: ruff check
+        run: uv run ruff check --output-format=github .
+      - name: ruff format
+        run: uv run ruff format --check .
+      - name: mypy
+        run: uv run mypy .
+
+  test:
+    name: pytest (PostgreSQL 17)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: psagent
+          POSTGRES_USER: psagent
+          POSTGRES_PASSWORD: psagent-ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U psagent -d psagent"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PASSWORD: psagent-ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.1"
+      - name: Abhängigkeiten installieren
+        id: install
+        run: |
+          if [ -f uv.lock ]; then
+            uv sync --locked
+          else
+            uv sync
+            echo "lock_generated=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Django-Systemprüfung
+        run: uv run python manage.py check --fail-level WARNING
+        env:
+          DJANGO_SETTINGS_MODULE: psagent.settings.test
+      - name: Fehlende Migrationen
+        run: uv run python manage.py makemigrations --check --dry-run
+        env:
+          DJANGO_SETTINGS_MODULE: psagent.settings.test
+      - name: pytest
+        run: uv run pytest
+      - name: Frisch erzeugtes uv.lock bereitstellen
+        # Nur solange uv.lock noch nicht eingecheckt ist: Lockdatei als Artefakt, damit sie
+        # per Pull Request übernommen werden kann.
+        if: steps.install.outputs.lock_generated == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: uv-lock
+          path: v2/uv.lock
+          retention-days: 7
+
+  secrets:
+    name: Secret-Scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: .
+    env:
+      GITLEAKS_VERSION: "8.30.1"
+      GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: gitleaks installieren (Prüfsumme festgelegt)
+        run: |
+          curl -sSfL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum --check --strict
+          tar -xzf gitleaks.tar.gz gitleaks
+          rm gitleaks.tar.gz
+      - name: Gesamte Historie scannen
+        run: ./gitleaks git --redact --verbose --exit-code 1 .
+
+  docker:
+    name: Docker-Build (amd64, arm64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: v2
+          platforms: linux/amd64,linux/arm64
+          push: false

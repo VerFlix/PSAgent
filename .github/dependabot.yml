@@ -1,0 +1,36 @@
+# Wöchentliche Updates für PSAgent 2.0. Pull Requests gehen nach v2, nicht nach master.
+# Hinweis: Dependabot liest diese Datei nur auf dem Standard-Branch des Repos.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /v2
+    target-branch: v2
+    schedule:
+      interval: weekly
+      timezone: Europe/Berlin
+    groups:
+      dev-tools:
+        dependency-type: development
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: docker
+    directory: /v2
+    target-branch: v2
+    schedule:
+      interval: weekly
+      timezone: Europe/Berlin
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: v2
+    schedule:
+      interval: weekly
+      timezone: Europe/Berlin
+    commit-message:
+      prefix: chore
+      include: scope

@@ -2,3 +2,37 @@
 *.db
 /.idea/
 TODO.md
+
+# --- PSAgent 2.0 (v2/) ---
+# Testdaten-PDFs sind erlaubt, alle anderen PDFs bleiben ausgeschlossen.
+!v2/**/fixtures/**/*.pdf
+
+# Geheimnisse und Schlüssel gehören nie ins Repo.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.gpg
+*.asc
+*.kdbx
+secrets/
+
+# Datenbanken können echte Personendaten enthalten.
+*.sqlite3
+
+# Python- und Werkzeug-Artefakte
+.venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Django
+v2/staticfiles/
+v2/media/

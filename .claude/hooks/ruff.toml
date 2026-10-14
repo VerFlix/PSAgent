@@ -1,0 +1,2 @@
+# Hooks nutzen dieselben Regeln wie v2/.
+extend = "../../v2/pyproject.toml"
