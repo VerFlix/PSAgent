@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Image für den Betrieb (arm64 auf dem Pi, amd64 für Tests).
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
