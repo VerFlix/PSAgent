@@ -37,6 +37,24 @@ Formatierung, Linter und der Schutz gegen eingecheckte Schlüssel vor jedem Comm
 Dieselben Prüfungen laufen in GitHub Actions für jeden Pull Request nach `v2`, dazu ein
 Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
 
+## Cloud-Sitzungen (Claude Code im Web)
+
+In Cloud-Sitzungen richtet ein SessionStart-Hook die Umgebung beim Start und beim Fortsetzen
+ein (`.claude/hooks/session_start.sh`, eingetragen in `.claude/settings.json`):
+
+1. `uv sync --locked` in `v2/`
+2. Docker-Daemon starten, falls er nicht läuft
+3. `docker compose up -d --wait db` und warten, bis PostgreSQL 17 auf `127.0.0.1:5432` antwortet
+
+Danach laufen `uv run pytest`, `ruff` und `mypy` ohne weitere Schritte. Der Hook greift nur
+bei `CLAUDE_CODE_REMOTE=true`; lokal tut er nichts. Er braucht Netzzugriff auf PyPI und
+Docker Hub. Protokolle liegen unter `/tmp/psagent-session-start/`. Von Hand starten, im
+Repo-Wurzelverzeichnis:
+
+```bash
+CLAUDE_CODE_REMOTE=true bash .claude/hooks/session_start.sh
+```
+
 ## Arbeitsweise
 
 - Branch `v2` sammelt den Neubau. Gearbeitet wird in `feature/<Issue-Nr>-<Kurzname>`,
