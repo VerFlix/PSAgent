@@ -12,7 +12,9 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.signals import user_login_failed
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -21,15 +23,12 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts import webauthn
 from accounts.devices import register_device, revoke_device
-from accounts.enrollment import find_token, use_token
+from accounts.enrollment import find_token, mark_used
 from accounts.models import ClubDevice, Passkey, Role, User
 
 # Backend, unter dem die Sitzung läuft (auch nach Passkey-Anmeldung).
 SESSION_BACKEND = "django.contrib.auth.backends.ModelBackend"
-PASSKEY_ONLY = (
-    "Für Admin und PSA-Sachkundige ist die Anmeldung nur mit Passkey (Sicherheitsschlüssel) "
-    "möglich."
-)
+WRONG_CREDENTIALS = "Benutzername oder Passwort ist falsch."
 
 
 class LoginForm(forms.Form):
@@ -82,10 +81,17 @@ def login_view(request: HttpRequest) -> HttpResponse:
             username=form.cleaned_data["username"],
             password=form.cleaned_data["password"],
         )
-        if user is None:
-            form.add_error(None, "Benutzername oder Passwort ist falsch.")
-        elif not isinstance(user, User) or user.requires_passkey:
-            form.add_error(None, PASSKEY_ONLY)
+        if isinstance(user, User) and user.requires_passkey:
+            # Wie ein Fehlversuch behandeln: gleiche Meldung, zählt für die Sperre. Sonst
+            # verriete die Antwort, dass das Passwort eines Admins richtig ist.
+            user_login_failed.send(
+                sender=__name__,
+                credentials={"username": form.cleaned_data["username"]},
+                request=request,
+            )
+            user = None
+        if not isinstance(user, User):
+            form.add_error(None, WRONG_CREDENTIALS)
         else:
             login(request, user, backend=SESSION_BACKEND)
             return redirect(_next_url(request))
@@ -195,18 +201,23 @@ def enroll_options(request: HttpRequest, token: str) -> HttpResponse:
 
 @require_POST
 def enroll_finish(request: HttpRequest, token: str) -> JsonResponse:
-    entry = find_token(token)
-    if entry is None:
-        return _error("Der Einrichtungslink ist ungültig oder abgelaufen.", status=404)
+    """Richtet den Passkey ein und verbraucht den Link, beides in einer Transaktion.
+
+    Der Link wird zuerst gesperrt; scheitert die Einrichtung, bleibt er unbenutzt. Eine
+    gleichzeitige zweite Anfrage findet ihn danach als benutzt.
+    """
     data = _json_body(request)
     try:
-        webauthn.register(
-            entry.user, data.get("credential", {}), str(data.get("name", "")), request.session
-        )
+        with transaction.atomic():
+            entry = find_token(token, lock=True)
+            if entry is None:
+                return _error("Der Einrichtungslink ist ungültig oder abgelaufen.", status=404)
+            webauthn.register(
+                entry.user, data.get("credential", {}), str(data.get("name", "")), request.session
+            )
+            mark_used(entry)
     except webauthn.PasskeyError as error:
         return _error(str(error))
-    if not use_token(entry):
-        return _error("Der Einrichtungslink wurde bereits benutzt.", status=409)
     login(request, entry.user, backend=SESSION_BACKEND)
     messages.success(request, "Passkey eingerichtet. Sie sind angemeldet.")
     return JsonResponse({"redirect": reverse("accounts:account")})

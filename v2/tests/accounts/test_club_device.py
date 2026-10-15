@@ -165,6 +165,44 @@ def test_enrollment_link_works_only_once(client: Client, admin: User) -> None:
     assert Passkey.objects.count() == 1
 
 
+def test_failed_enrollment_keeps_link_unused(client: Client, admin: User) -> None:
+    """Scheitert die Einrichtung, bleibt der Link gültig und es entsteht kein Passkey."""
+    token = create_token(admin)
+    lazy = SoftKey(user_verified=False)
+    options = client.post(reverse("accounts:enroll_options", args=[token])).json()
+
+    response = client.post(
+        reverse("accounts:enroll_finish", args=[token]),
+        data=json.dumps({"credential": lazy.register(options), "name": "YubiKey"}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert not Passkey.objects.exists()
+    assert EnrollmentToken.objects.get().used_at is None
+    assert enroll(client, token, SoftKey()).status_code == 200
+
+
+def test_second_enrollment_with_same_link_is_rejected(client: Client, admin: User) -> None:
+    """Zwei Einrichtungen mit demselben Link: die zweite scheitert, es bleibt ein Passkey."""
+    token = create_token(admin)
+    first = Client()
+    second = Client()
+    options_first = first.post(reverse("accounts:enroll_options", args=[token])).json()
+    options_second = second.post(reverse("accounts:enroll_options", args=[token])).json()
+
+    def finish(c: Client, options: dict[str, Any]) -> Any:
+        return c.post(
+            reverse("accounts:enroll_finish", args=[token]),
+            data=json.dumps({"credential": SoftKey().register(options), "name": "YubiKey"}),
+            content_type="application/json",
+        )
+
+    assert finish(first, options_first).status_code == 200
+    assert finish(second, options_second).status_code == 404
+    assert Passkey.objects.count() == 1
+
+
 def test_expired_enrollment_link_is_rejected(client: Client, admin: User) -> None:
     token = create_token(admin)
     EnrollmentToken.objects.update(expires_at=timezone.now() - timedelta(minutes=1))

@@ -58,16 +58,31 @@ def test_inactive_account_is_rejected(client: Client, lender: User) -> None:
 def test_admin_and_expert_cannot_use_password(
     role: Role, client: Client, make_user: MakeUser
 ) -> None:
-    """Konzept, Abschnitt 5: Admin und PSA-Sachkundige nur mit Passkey."""
+    """Konzept, Abschnitt 5: Admin und PSA-Sachkundige nur mit Passkey.
+
+    Die Antwort gleicht der bei falschem Passwort; sie verrät nicht, dass das Passwort stimmt.
+    """
     user = make_user(role)
     user.set_password(PASSWORD)
     user.save()
 
-    response = login(client, user.username)
+    right = login(client, user.username)
+    wrong = login(client, user.username, "falsch")
 
-    assert response.status_code == 200
-    assert "nur mit Passkey" in response.content.decode()
+    assert right.status_code == wrong.status_code == 200
+    assert "Benutzername oder Passwort ist falsch." in right.content.decode()
+    assert right.context["form"].errors == wrong.context["form"].errors
     assert "_auth_user_id" not in client.session
+
+
+def test_correct_password_of_admin_counts_as_failure(client: Client, make_user: MakeUser) -> None:
+    admin = make_user(Role.ADMIN)
+    admin.set_password(PASSWORD)
+    admin.save()
+    for _ in range(5):
+        login(client, admin.username)
+
+    assert login(client, admin.username).status_code == 429
 
 
 @pytest.mark.parametrize("role", [Role.TRAINER, Role.LENDER, Role.VIEWER])

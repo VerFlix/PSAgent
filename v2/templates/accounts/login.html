@@ -14,6 +14,7 @@
 </section>
 <section class="card">
   <h2>Mit Passwort</h2>
+  <p>Nicht für Admin und PSA-Sachkundige; sie melden sich nur mit Passkey an.</p>
   <form method="post" action="{% url 'accounts:login' %}">
     {% csrf_token %}
     <input type="hidden" name="next" value="{{ next }}">
