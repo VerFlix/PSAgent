@@ -40,6 +40,33 @@ Formatierung, Linter und der Schutz gegen eingecheckte Schlüssel vor jedem Comm
 Dieselben Prüfungen laufen in GitHub Actions für jeden Pull Request nach `v2`, dazu ein
 Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
 
+## Anmeldung
+
+- Passkey (FIDO2/WebAuthn, z. B. YubiKey) für alle Rollen; Admin und PSA-Sachkundige melden
+  sich **nur** mit Passkey an. Trainer/Materialwart, Verleiher und Viewer dürfen zusätzlich
+  ein Passwort nutzen. Nach 5 Fehlversuchen ist die Kombination aus Benutzername und
+  Adresse 15 Minuten gesperrt.
+- Den ersten Passkey eines Kontos richtet ein Einmal-Link ein (24 Stunden gültig):
+
+  ```bash
+  uv run python manage.py passkey_einrichtung <benutzername>
+  ```
+
+- Weitere Passkeys verwaltet jede Person unter „Konto“. Der letzte Passkey eines Admins oder
+  Sachkundigen lässt sich nicht widerrufen.
+- Vereinsgerät (z. B. Tablet an der Ausgabe): Ein Admin legt es unter „Konto“ fest. Dort endet
+  die Sitzung nach 3 Minuten ohne Eingabe und nach jedem abgeschlossenen Vorgang; sonst gilt
+  sie 8 Stunden.
+- Einstellungen: `PSAGENT_WEBAUTHN_RP_ID`, `PSAGENT_WEBAUTHN_ORIGINS`, im Betrieb hinter Caddy
+  `PSAGENT_TRUSTED_PROXIES` (siehe `.env.example`).
+
+Browser-Tests (Playwright, eigener CI-Job):
+
+```bash
+uv run playwright install chromium   # einmalig lokal; in Cloud-Sitzungen vorinstalliert
+uv run pytest -m e2e
+```
+
 ## Testdaten im Format des Altsystems
 
 Echte Altdaten bleiben außen vor (CLAUDE.md, Regel 1). Künstliche Datenbanken in allen

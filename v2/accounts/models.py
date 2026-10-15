@@ -10,6 +10,7 @@ ein Widerruf ein eigener Eintrag mit Begründung. So bleibt nachweisbar, ob die 
 bestimmten Zeitpunkt gültig war, etwa beim Signieren einer Prüfungsrunde.
 """
 
+import uuid
 from datetime import datetime
 from typing import Any, ClassVar
 
@@ -67,6 +68,14 @@ class User(AbstractUser):
         help_text="Erscheint auf PDFs des Sachkundigen. Leer: der vollständige Name.",
     )
 
+    webauthn_id = models.UUIDField(
+        "Kennung für Passkeys",
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+        help_text="Zufällige Kennung, die Passkeys statt des Benutzernamens speichern.",
+    )
+
     objects: ClassVar[UserManager] = UserManager()
 
     class Meta:
@@ -93,6 +102,11 @@ class User(AbstractUser):
         PSA-relevante Felder ändern (Rechtetabelle, Konzept Abschnitt 5).
         """
         return self.has_role(Role.PPE_EXPERT) and self.has_valid_qualification(at)
+
+    @property
+    def requires_passkey(self) -> bool:
+        """Admin und PSA-Sachkundige melden sich nur mit Passkey an (Konzept, Abschnitt 5)."""
+        return self.role in (Role.ADMIN, Role.PPE_EXPERT)
 
     @property
     def stamp(self) -> str:
@@ -179,3 +193,81 @@ class QualificationRevocation(AppendOnlyModel):
 
     def __str__(self) -> str:
         return f"Widerruf {self.qualification} ab {self.revoked_at}"
+
+
+class Passkey(models.Model):
+    """Passkey (FIDO2/WebAuthn) eines Kontos. Mehrere je Konto; Widerruf statt Löschen."""
+
+    user = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name="passkeys", verbose_name="Konto"
+    )
+    name = models.CharField("Bezeichnung", max_length=100)
+    credential_id = models.BinaryField("Credential-ID", unique=True)
+    public_key = models.BinaryField("öffentlicher Schlüssel (COSE)")
+    sign_count = models.PositiveBigIntegerField("Signaturzähler", default=0)
+    transports = models.JSONField("Übertragungswege", default=list, blank=True)
+    aaguid = models.CharField("AAGUID (Modell)", max_length=36, blank=True)
+    created_at = models.DateTimeField("angelegt am", default=timezone.now)
+    last_used_at = models.DateTimeField("zuletzt benutzt", null=True, blank=True)
+    revoked_at = models.DateTimeField("widerrufen am", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Passkey"
+        verbose_name_plural = "Passkeys"
+        ordering = ("created_at", "id")
+        constraints = (
+            models.CheckConstraint(
+                condition=Q(name__regex=r"\S"), name="accounts_passkey_name_required"
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.user})"
+
+    @property
+    def is_active(self) -> bool:
+        return self.revoked_at is None
+
+
+class EnrollmentToken(models.Model):
+    """Einmal-Link zum Einrichten des ersten Passkeys. Gespeichert wird nur der Hash."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="+", verbose_name="Konto")
+    token_hash = models.CharField("SHA-256 des Tokens", max_length=64, unique=True)
+    created_at = models.DateTimeField("angelegt am", default=timezone.now)
+    expires_at = models.DateTimeField("gültig bis")
+    used_at = models.DateTimeField("benutzt am", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Einrichtungslink"
+        verbose_name_plural = "Einrichtungslinks"
+
+    def __str__(self) -> str:
+        return f"Einrichtungslink für {self.user}"
+
+
+class ClubDevice(models.Model):
+    """Vereinsgerät (z. B. Tablet an der Ausgabe): kurze Sitzungen, Abmelden nach jedem Vorgang.
+
+    Das Gerät trägt ein signiertes Cookie mit ID und Zufallswert; gespeichert ist nur der Hash.
+    """
+
+    name = models.CharField("Bezeichnung", max_length=100)
+    token_hash = models.CharField("SHA-256 des Tokens", max_length=64, unique=True)
+    created_at = models.DateTimeField("angelegt am", default=timezone.now)
+    created_by = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name="+", null=True, blank=True
+    )
+    revoked_at = models.DateTimeField("widerrufen am", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Vereinsgerät"
+        verbose_name_plural = "Vereinsgeräte"
+        constraints = (
+            models.CheckConstraint(
+                condition=Q(name__regex=r"\S"), name="accounts_clubdevice_name_required"
+            ),
+        )
+
+    def __str__(self) -> str:
+        return self.name

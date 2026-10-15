@@ -1,0 +1,85 @@
+/* Schlankes Grundlayout; gut lesbar auf Handy, Tablet und PC. */
+:root {
+  --fg: #1f2933;
+  --muted: #52606d;
+  --bg: #f5f7fa;
+  --card: #ffffff;
+  --accent: #0b6e4f;
+  --danger: #b42318;
+  --border: #d9e2ec;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--accent);
+  color: #fff;
+}
+
+.topbar a { color: #fff; }
+.brand { font-weight: 700; text-decoration: none; }
+.usernav { margin-left: auto; display: flex; gap: 0.75rem; align-items: center; }
+.usernav form { margin: 0; }
+.badge { background: #fff; color: var(--accent); border-radius: 1rem; padding: 0.1rem 0.6rem; font-size: 0.85rem; }
+
+main { max-width: 52rem; margin: 0 auto; padding: 1rem; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+label { display: block; margin-top: 0.75rem; font-weight: 600; }
+
+input {
+  display: block;
+  width: 100%;
+  max-width: 24rem;
+  padding: 0.6rem;
+  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.35rem;
+}
+
+button {
+  margin-top: 0.75rem;
+  padding: 0.6rem 1rem;
+  font-size: 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.35rem;
+  background: #fff;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+button.primary { background: var(--accent); color: #fff; }
+button.link { border: none; background: none; padding: 0; margin: 0; color: inherit; text-decoration: underline; }
+button.danger, .danger { color: var(--danger); }
+button:disabled { opacity: 0.6; cursor: wait; }
+
+.error { color: var(--danger); }
+.status { min-height: 1.5rem; color: var(--muted); }
+.messages { list-style: none; padding: 0; }
+.message { padding: 0.5rem 0.75rem; border-radius: 0.35rem; background: #e3f9e5; margin-bottom: 0.5rem; }
+.message.error { background: #ffe3e3; }
+.list { width: 100%; border-collapse: collapse; }
+.list th, .list td { text-align: left; padding: 0.4rem; border-bottom: 1px solid var(--border); }
+.plain { list-style: none; padding: 0; }
+form.inline { display: inline; }

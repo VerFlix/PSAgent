@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Start{% endblock %}
+{% block content %}
+<h1>Willkommen, {{ user.get_full_name|default:user.username }}</h1>
+<p>Verleih, Stammdaten und Prüfung folgen in den nächsten Ausbaustufen.</p>
+<p><a href="{% url 'accounts:account' %}">Konto und Passkeys</a></p>
+{% endblock %}

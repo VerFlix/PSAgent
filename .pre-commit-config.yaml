@@ -1,7 +1,7 @@
 # Prüfungen vor jedem Commit. Einrichten im Repo-Wurzelverzeichnis:
 #   uv run --project v2 pre-commit install
-# Das Altsystem bleibt unberührt.
-exclude: ^(psa_gui\.py|verleih_gui\.py|generate_PDF\.py|Typst_Vorlagen/|\.idea/|__pycache__/)
+# Das Altsystem und unveränderte Fremdbibliotheken (v2/static/vendor/) bleiben unberührt.
+exclude: ^(psa_gui\.py|verleih_gui\.py|generate_PDF\.py|Typst_Vorlagen/|\.idea/|__pycache__/|v2/static/vendor/)
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks

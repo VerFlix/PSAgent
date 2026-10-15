@@ -5,6 +5,7 @@ Umgebungsvariablen. Geheimnisse stehen nie im Code (siehe CLAUDE.md).
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +52,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.postgres",
+    "axes",
     "core",
     "accounts",
     "inventory",
@@ -69,9 +71,42 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "accounts.middleware.ClubDeviceMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Muss zuletzt stehen: beantwortet Anmeldeversuche gesperrter Konten.
+    "axes.middleware.AxesMiddleware",
 ]
+
+# Anmeldung (#11): Passwort über Django, gegen Durchprobieren geschützt durch django-axes;
+# Passkeys prüft accounts.webauthn mit py_webauthn.
+AUTHENTICATION_BACKENDS = [
+    "axes.backends.AxesStandaloneBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+LOGIN_URL = "accounts:login"
+LOGIN_REDIRECT_URL = "home"
+LOGOUT_REDIRECT_URL = "accounts:login"
+
+# Nach 5 Fehlversuchen für dieselbe Kombination aus Benutzername und IP 15 Minuten Sperre.
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = timedelta(minutes=15)
+AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
+AXES_RESET_ON_SUCCESS = True
+AXES_LOCKOUT_TEMPLATE = "accounts/locked.html"
+AXES_CLIENT_IP_CALLABLE = "accounts.net.client_ip"
+# Nur hinter diesen Proxys (z. B. Caddy) gilt X-Forwarded-For; sonst die Verbindungsadresse.
+PSAGENT_TRUSTED_PROXIES = env_list("PSAGENT_TRUSTED_PROXIES")
+
+# Passkeys: Relying Party = Hostname, unter dem die App läuft; Origins mit Schema und Port.
+PSAGENT_WEBAUTHN_RP_ID = env("PSAGENT_WEBAUTHN_RP_ID", "localhost")
+PSAGENT_WEBAUTHN_RP_NAME = "PSAgent"
+PSAGENT_WEBAUTHN_ORIGINS = env_list("PSAGENT_WEBAUTHN_ORIGINS", "http://localhost:8000")
+
+# Vereinsgerät: kurze Sitzung und Abmelden nach jedem Vorgang (Konzept, Abschnitt 5).
+PSAGENT_CLUB_DEVICE_COOKIE = "psagent_vereinsgeraet"
+PSAGENT_CLUB_DEVICE_IDLE_SECONDS = 3 * 60
+PSAGENT_ENROLLMENT_HOURS = 24
 
 ROOT_URLCONF = "psagent.urls"
 
@@ -120,6 +155,7 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR / "static"]
 
 # Hochgeladene Dateien (GAL); liegen nie im Repo (.gitignore: v2/media/).
 MEDIA_URL = "media/"
