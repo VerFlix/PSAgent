@@ -202,14 +202,14 @@ def test_overdue_part_is_not_available_again(
 
 @pytest.mark.parametrize("state", ["new", "locked", "retired"])
 def test_unavailable_parts_cannot_be_reserved_or_lent(
-    state: str, make_part: MakePart, borrower: Borrower, lender: User
+    state: str, make_part: MakePart, borrower: Borrower, lender: User, inspector: User
 ) -> None:
     """Parität 13: nur nicht gesperrte, freigegebene, nicht ausgesonderte Teile."""
     part = make_part(released=state != "new")
     if state == "locked":
         record_event(part, EventKind.LOCKED, actor=lender, comment="Sichtprüfung auffällig")
     if state == "retired":
-        record_event(part, EventKind.RETIRED, actor=lender, comment="Ablegereife")
+        record_event(part, EventKind.RETIRED, actor=inspector, comment="Ablegereife")
 
     with pytest.raises(LendingError):
         reserve(borrower, [part], TODAY, TODAY + DAY, actor=lender)

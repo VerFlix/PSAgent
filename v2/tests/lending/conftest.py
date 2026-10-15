@@ -8,13 +8,15 @@ from typing import Any
 import pytest
 
 from accounts.models import Role, User
-from inventory.models import EventKind, Part
-from inventory.services import create_product, link_document, record_event
+from inventory.models import Part
+from inventory.services import create_product, link_document
 from lending.models import Borrower
 from lending.services import create_borrower
+from tests.helpers import adopt_inspection, make_inspector
 
 TODAY = date(2026, 10, 15)
 DAY = timedelta(days=1)
+NEXT_DUE = TODAY + 365 * DAY
 STROKES = [[[10, 10], [20, 15], [30, 12]], [[12, 30], [28, 32]]]
 
 _numbers = itertools.count(1)
@@ -36,6 +38,11 @@ def lender(db: None) -> User:
 
 
 @pytest.fixture
+def inspector(db: None) -> User:
+    return make_inspector()
+
+
+@pytest.fixture
 def borrower(db: None) -> Borrower:
     return create_borrower(
         "Kim Beispiel",
@@ -46,9 +53,11 @@ def borrower(db: None) -> Borrower:
 
 @pytest.fixture
 def make_part(db: None) -> MakePart:
-    """Freigegebenes Teil mit GAL-Link; Status über Parameter änderbar."""
+    """Freigegebenes, geprüftes Teil mit GAL-Link; Status über Parameter änderbar."""
 
-    def make(*, released: bool = True, gal: bool = True, **fields: Any) -> Part:
+    def make(
+        *, released: bool = True, gal: bool = True, next_due: date = NEXT_DUE, **fields: Any
+    ) -> Part:
         number = next(_numbers)
         part = create_product({"designation": "Klettergurt", "ei": f"TST-L{number:04d}", **fields})
         if gal:
@@ -56,7 +65,7 @@ def make_part(db: None) -> MakePart:
                 link_document(f"https://example.org/gal/{number}.pdf", title="GAL Testmodell")
             )
         if released:
-            record_event(part, EventKind.RELEASED, actor=None)
+            adopt_inspection([part], next_due=next_due)
         return part
 
     return make

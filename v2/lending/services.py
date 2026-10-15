@@ -1,8 +1,8 @@
 """Reservieren, ausgeben, zurücknehmen, stornieren; Entleiher anlegen und pflegen.
 
 `unavailability_reasons()` ist die eine Stelle für die Verfügbarkeitsregel (Parität 13): nicht
-ausgesondert, nicht gesperrt, freigegeben, keine Überschneidung, nicht noch überfällig draußen.
-Die PSA-Bedingungen („Prüfung aktuell“, „Rückgabe vor der nächsten Prüfung“) ergänzt #8 hier.
+ausgesondert, nicht gesperrt, freigegeben, PSA-Prüfung aktuell (oder „keine PSA“), Rückgabe
+spätestens am Tag der nächsten Prüfung, keine Überschneidung, nicht noch überfällig draußen.
 Die Überschneidung prüft zusätzlich die Datenbank. Rechte prüft #12.
 """
 
@@ -15,6 +15,7 @@ from django.db.backends.postgresql.psycopg_any import DateRange
 from django.utils import timezone
 
 from accounts.models import User
+from inspections.services import next_inspection_due
 from inventory.models import EventKind, Part
 from inventory.services import record_event
 from lending.models import (
@@ -100,6 +101,15 @@ def unavailability_reasons(
         reasons.append("ist gesperrt")
     if not part.is_released():
         reasons.append("ist neu und noch nicht freigegeben")
+    elif not part.has_no_ppe():
+        # Wie im Altsystem: Prüfung gilt noch heute, Rückgabe bis einschließlich Prüfungstag.
+        due = next_inspection_due(part)
+        if due is None:
+            reasons.append("hat keine gültige PSA-Prüfung")
+        elif due < today():
+            reasons.append(f"ist seit {due:%d.%m.%Y} zur PSA-Prüfung fällig")
+        elif end > due:
+            reasons.append(f"muss vor der nächsten PSA-Prüfung am {due:%d.%m.%Y} zurück sein")
 
     loans = Loan.objects.filter(part=part)
     if ignore is not None:

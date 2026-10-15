@@ -2,12 +2,17 @@
 
 Die Fachregeln, die die Datenbank nicht allein prüfen kann, stehen hier: Ein Produkt hat genau
 ein Bauteil, ein System mindestens eines; nach dem Aussondern gibt es keine Vorgänge mehr;
-eine Sperre setzt ein nicht gesperrtes Teil voraus. Rechte prüft #12.
+eine Sperre setzt ein nicht gesperrtes Teil voraus.
+
+Was die PSA betrifft, braucht eine gültige Sachkunde (CLAUDE.md, Fachregeln): Entsperren,
+Aussondern, „keine PSA“ setzen oder aufheben und die PSA-relevanten Felder EI, Herstellungsjahr
+und Datum 1. Einsatz ändern. Freigeben geht nur über eine PSA-Prüfung. Sperren darf jede Rolle;
+die übrigen Rollenregeln prüft #12.
 """
 
 import hashlib
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
@@ -16,6 +21,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from accounts.models import User
+from accounts.permissions import require_inspection_right
 from inventory.models import (
     EVENTS_WITH_COMMENT,
     Component,
@@ -26,7 +32,33 @@ from inventory.models import (
     PartKind,
 )
 
+if TYPE_CHECKING:
+    from inspections.models import InspectionResult
+
 PDF_MAGIC = b"%PDF-"
+
+# Vorgänge, die eine gültige Sachkunde brauchen. Sperren gehört nicht dazu.
+EVENTS_NEEDING_QUALIFICATION = (
+    EventKind.RELEASED,
+    EventKind.UNLOCKED,
+    EventKind.RETIRED,
+    EventKind.NO_PPE_SET,
+    EventKind.NO_PPE_CLEARED,
+)
+
+# Bauteilfelder, die geändert werden dürfen, und die davon PSA-relevanten.
+COMPONENT_FIELDS = (
+    "designation",
+    "standard",
+    "model_name",
+    "manufacturer",
+    "year_of_manufacture",
+    "purchase_date",
+    "first_use_date",
+    "ei",
+    "serial_number",
+)
+PPE_COMPONENT_FIELDS = ("ei", "year_of_manufacture", "first_use_date")
 _validate_url = URLValidator(schemes=["http", "https"])
 
 
@@ -123,6 +155,30 @@ def link_document(url: str, *, title: str, actor: User | None = None) -> Documen
 
 
 @transaction.atomic
+def update_component(component: Component, *, actor: User | None, **fields: Any) -> Component:
+    """Ändert Felder eines Bauteils (Parität 3).
+
+    EI, Herstellungsjahr und Datum 1. Einsatz nur mit gültiger Sachkunde. „Nächste Prüfung“
+    ist kein Feld des Bauteils; sie ändert sich nur über eine Prüfung.
+    """
+    unknown = set(fields) - set(COMPONENT_FIELDS)
+    if unknown:
+        raise InventoryError(f"Nicht änderbare Felder: {', '.join(sorted(unknown))}")
+    changed = [name for name, value in fields.items() if getattr(component, name) != value]
+    if not changed:
+        return component
+    if set(changed) & set(PPE_COMPONENT_FIELDS):
+        require_inspection_right(actor, "Das Ändern von EI, Herstellungsjahr oder Datum 1. Einsatz")
+    if component.part.is_retired():
+        raise InventoryError(f"{component.part} ist ausgesondert; Änderungen sind nicht möglich.")
+    for name in changed:
+        setattr(component, name, fields[name])
+    component.save(update_fields=changed)
+    component.refresh_from_db(fields=["ei_key"])
+    return component
+
+
+@transaction.atomic
 def record_event(
     part: Part,
     kind: EventKind,
@@ -130,15 +186,21 @@ def record_event(
     actor: User | None,
     comment: str = "",
     at: datetime | None = None,
+    inspection_result: "InspectionResult | None" = None,
 ) -> PartEvent:
     """Erfasst einen Vorgang am Teil und prüft die Fachregeln dafür.
 
     Die Zeile des Teils wird gesperrt, damit gleichzeitige Vorgänge nacheinander geprüft werden.
+    Vorgänge aus einer signierten Prüfung tragen den Verweis auf das Prüfergebnis.
     """
     Part.objects.select_for_update().get(pk=part.pk)
     moment = at or timezone.now()
+    if kind in EVENTS_NEEDING_QUALIFICATION:
+        require_inspection_right(actor, f"„{kind.label}“")
     if part.is_retired():
         raise InventoryError(f"{part} ist ausgesondert; weitere Vorgänge sind nicht möglich.")
+    if kind == EventKind.RELEASED and actor is not None and inspection_result is None:
+        raise InventoryError("Freigeben geht nur über eine PSA-Prüfung.")
     if kind in EVENTS_WITH_COMMENT and not comment.strip():
         raise InventoryError(f"„{kind.label}“ braucht einen Kommentar.")
     if kind == EventKind.LOCKED and part.is_locked():
@@ -147,4 +209,11 @@ def record_event(
         raise InventoryError(f"{part} ist nicht gesperrt.")
     if kind == EventKind.RELEASED and part.events.filter(kind=EventKind.RELEASED).exists():
         raise InventoryError(f"{part} ist bereits freigegeben.")
-    return PartEvent.objects.create(part=part, kind=kind, actor=actor, comment=comment, at=moment)
+    return PartEvent.objects.create(
+        part=part,
+        kind=kind,
+        actor=actor,
+        comment=comment,
+        at=moment,
+        inspection_result=inspection_result,
+    )

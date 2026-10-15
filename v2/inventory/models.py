@@ -6,7 +6,8 @@ Leerzeichen; das erzwingt ein Unique-Index auf einer berechneten Spalte.
 
 Der Zustand eines Teils wird nicht überschrieben, sondern aus Vorgängen abgeleitet, die nur
 angehängt werden: freigegeben, „keine PSA“ gesetzt/aufgehoben, gesperrt, entsperrt,
-ausgesondert. „Nächste Prüfung“ ergibt sich aus der letzten signierten Prüfung (#8).
+ausgesondert. Vorgänge aus einer PSA-Prüfung verweisen auf das Prüfergebnis. „Nächste
+Prüfung“ ergibt sich aus der letzten signierten Prüfung (`inspections.services`).
 """
 
 import re
@@ -249,6 +250,14 @@ class PartEvent(AppendOnlyModel):
         verbose_name="durch",
     )
     comment = models.TextField("Kommentar", blank=True)
+    inspection_result = models.ForeignKey(
+        "inspections.InspectionResult",
+        on_delete=models.PROTECT,
+        related_name="part_events",
+        null=True,
+        blank=True,
+        verbose_name="aus Prüfergebnis",
+    )
 
     class Meta:
         verbose_name = "Vorgang am Teil"
