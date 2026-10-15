@@ -22,6 +22,10 @@ Varianten:
 - `sN`: frisch mit Stand SN angelegt (PSA- und Verleih-Programm einmal gestartet)
 - `sN_aktualisiert`: Stand SN, danach mit dem aktuellen PSA-Programm geöffnet
 - `sN_nur_verleih`: Stand SN, danach nur mit dem aktuellen Verleih-Programm geöffnet
+- `echt_2026_10_15`: Schema der echten Altdatenbanken, gemessen per `.schema` (#54). Die
+  Hauptdatenbank entspricht z. B. „mit S3 angelegt, mit S6 und dem aktuellen Stand geöffnet“.
+  Die Archivdatenbank hat dieselben nachgerüsteten Spalten wie die Hauptdatenbank, dazu
+  `archived_items`; sie ist vermutlich als Kopie der Hauptdatenbank entstanden.
 
 Die Archivdatenbank entsteht erst beim ersten Archivieren und wird nur dabei nachgerüstet. In
 den nachgerüsteten Varianten bleibt sie deshalb auf dem alten Stand. Nicht aufgeführte
@@ -58,6 +62,9 @@ class SchemaVariant:
     upgrade: Upgrade | None
     main: tuple[str, ...]
     archive: tuple[str, ...] = ()
+    # Gemessen an einer echten Altdatenbank (nur `.schema`, keine Daten); kein einzelner
+    # Commit erzeugt dieses Schema. Die Tests vergleichen mit der gelieferten DDL.
+    measured: bool = False
 
     @property
     def has_archive(self) -> bool:
@@ -605,6 +612,80 @@ CREATE TABLE systems (
 )
 """
 
+# Echte Altdatenbanken, gemessen am 15.10.2026 (#54): Grundtabellen mit nachgerüsteten Spalten.
+_PRODUCTS_ECHT = """
+CREATE TABLE products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    produktbezeichnung TEXT,
+    gem_en TEXT,
+    produktname TEXT,
+    hersteller TEXT,
+    herstellungsjahr TEXT,
+    kaufdatum TEXT,
+    datum_einsatz TEXT,
+    einzelidentifikation TEXT,
+    seriennummer TEXT,
+    gal_datei TEXT,
+    gal_link TEXT,
+    naechste_pruefung_am TEXT,
+    last_psa_pruefung_am TEXT,
+    last_psa_pruefung_kommentar TEXT,
+    last_psa_durchgefallen_am TEXT,
+    keine_psa INTEGER NOT NULL DEFAULT 0
+)
+"""
+
+_SYSTEMS_ECHT = """
+CREATE TABLE systems (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    gal_datei TEXT,
+    gal_link TEXT,
+    naechste_pruefung_am TEXT,
+    last_psa_pruefung_am TEXT,
+    last_psa_pruefung_kommentar TEXT,
+    last_psa_durchgefallen_am TEXT,
+    keine_psa INTEGER NOT NULL DEFAULT 0
+)
+"""
+
+_VERLEIH_PLANUNG_ECHT = """
+CREATE TABLE verleih_planung (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_type TEXT NOT NULL,
+    item_id INTEGER NOT NULL,
+    item_label TEXT,
+    von_datum TEXT NOT NULL,
+    rueckgabe_datum TEXT NOT NULL,
+    entleiher TEXT,
+    entleiher_email TEXT,
+    entleiher_telefon TEXT,
+    entleiher_adresse TEXT,
+    signature_data TEXT,
+    quick_check_out INTEGER NOT NULL DEFAULT 0,
+    gal_provided_out INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'lent',
+    checkout_at TEXT,
+    return_comment TEXT,
+    return_signature_data TEXT,
+    quick_check_return INTEGER NOT NULL DEFAULT 0,
+    returned_at TEXT,
+    created_at TEXT NOT NULL,
+    ausgebende_person TEXT,
+    ruecknehmende_person TEXT
+)
+"""
+
+_MAIN_ECHT = (
+    _PRODUCTS_ECHT,
+    _SYSTEMS_ECHT,
+    _SYSTEM_PARTS_S1,
+    _ITEM_LOCKS_S2,
+    _VERLEIH_PLANUNG_ECHT,
+    _PSA_PRUEFUNGSBERICHTE_S3,
+    _PSA_PRUEFUNGSBERICHT_ITEMS_S3,
+)
+
 # --- Varianten ---
 
 VARIANTS: dict[str, SchemaVariant] = {
@@ -884,6 +965,15 @@ VARIANTS: dict[str, SchemaVariant] = {
                 _PSA_PRUEFUNGSBERICHT_ITEMS_S3,
                 _ARCHIVED_ITEMS_S5,
             ),
+        ),
+        SchemaVariant(
+            name="echt_2026_10_15",
+            description="Echte Altdatenbanken, gemessen per .schema (nur DDL, keine Daten)",
+            base_commit="59d5b3c",
+            upgrade=None,
+            main=_MAIN_ECHT,
+            archive=(*_MAIN_ECHT, _ARCHIVED_ITEMS_S5),
+            measured=True,
         ),
     )
 }
