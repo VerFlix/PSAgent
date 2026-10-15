@@ -27,12 +27,15 @@ def test_new_part_is_not_released(make_product: MakeProduct) -> None:
     assert part.is_released() is False
 
 
-@pytest.mark.parametrize("kind", [EventKind.RELEASED, EventKind.NO_PPE_SET])
-def test_release_by_inspection_or_no_ppe(
-    kind: EventKind, make_product: MakeProduct, actor: User
+@pytest.mark.parametrize(
+    ("kind", "by_actor"), [(EventKind.RELEASED, False), (EventKind.NO_PPE_SET, True)]
+)
+def test_release_by_import_or_no_ppe(
+    kind: EventKind, by_actor: bool, make_product: MakeProduct, actor: User
 ) -> None:
+    """Freigabe durch Prüfung testet `tests/inspections`; hier Import und „keine PSA“."""
     part = make_product()
-    record_event(part, kind, actor=actor)
+    record_event(part, kind, actor=actor if by_actor else None)
 
     assert part.is_released() is True
     assert part.status() == PartStatus.RELEASED
@@ -40,7 +43,7 @@ def test_release_by_inspection_or_no_ppe(
 
 def test_lock_and_unlock(make_product: MakeProduct, actor: User) -> None:
     part = make_product()
-    record_event(part, EventKind.RELEASED, actor=actor, at=T0)
+    record_event(part, EventKind.RELEASED, actor=None, at=T0)
     record_event(part, EventKind.LOCKED, actor=actor, comment="Naht aufgerissen", at=T0 + HOUR)
     record_event(
         part, EventKind.UNLOCKED, actor=actor, comment="Nachprüfung o. B.", at=T0 + 2 * HOUR
@@ -62,7 +65,7 @@ def test_new_part_can_be_locked(make_product: MakeProduct, actor: User) -> None:
 
 def test_retired_part_stays_retired(make_product: MakeProduct, actor: User) -> None:
     part = make_product()
-    record_event(part, EventKind.RELEASED, actor=actor)
+    record_event(part, EventKind.RELEASED, actor=None)
     record_event(part, EventKind.RETIRED, actor=actor, comment="Ablegereife erreicht")
 
     assert part.status() == PartStatus.RETIRED
@@ -104,10 +107,10 @@ def test_lock_twice_or_unlock_unlocked_is_rejected(make_product: MakeProduct, ac
 
 def test_release_only_once(make_product: MakeProduct, actor: User) -> None:
     part = make_product()
-    record_event(part, EventKind.RELEASED, actor=actor)
+    record_event(part, EventKind.RELEASED, actor=None)
 
     with pytest.raises(InventoryError, match="bereits freigegeben"):
-        record_event(part, EventKind.RELEASED, actor=actor)
+        record_event(part, EventKind.RELEASED, actor=None)
     with pytest.raises(IntegrityError), transaction.atomic():
         PartEvent.objects.create(part=part, kind=EventKind.RELEASED, actor=actor)
 

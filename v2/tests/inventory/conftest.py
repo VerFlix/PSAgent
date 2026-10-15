@@ -9,9 +9,10 @@ from typing import Any
 import pytest
 from django.test import override_settings
 
-from accounts.models import Role, User
+from accounts.models import User
 from inventory.models import Part
 from inventory.services import create_product, create_system
+from tests.helpers import make_inspector
 
 _numbers = itertools.count(1)
 
@@ -37,9 +38,8 @@ def component(ei: str, **fields: Any) -> dict[str, Any]:
 
 @pytest.fixture
 def actor(db: None) -> User:
-    return User.objects.create_user(
-        username="pruefer", first_name="Testperson", last_name="Probe", role=Role.PPE_EXPERT
-    )
+    """Sachkundige Person mit heute gültiger Sachkunde."""
+    return make_inspector()
 
 
 @pytest.fixture
