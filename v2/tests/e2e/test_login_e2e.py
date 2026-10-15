@@ -9,7 +9,7 @@ from accounts.enrollment import create_token
 from accounts.models import Passkey, Role, User
 
 pytestmark = [pytest.mark.e2e, pytest.mark.django_db(transaction=True)]
-PASSWORD = "ein-langes-Test-Passwort-42"
+PASSWORD = "ein-langes-Test-Passwort-42"  # gitleaks:allow – künstliches Testpasswort
 
 
 def logout(page: Page) -> None:

@@ -12,7 +12,7 @@ from django.utils import timezone
 from accounts.models import Role, User
 from tests.accounts.conftest import MakeUser
 
-PASSWORD = "ein-langes-Test-Passwort-42"
+PASSWORD = "ein-langes-Test-Passwort-42"  # gitleaks:allow – künstliches Testpasswort
 
 
 def login(client: Client, username: str, password: str = PASSWORD) -> Any:
