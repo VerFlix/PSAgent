@@ -18,6 +18,7 @@ cd v2
 docker compose up -d db              # PostgreSQL auf 127.0.0.1:5432
 uv sync                              # Python 3.13 und Abhängigkeiten
 uv run python manage.py migrate
+uv run python manage.py createsuperuser   # erstes Konto, bekommt die Rolle Admin
 uv run python manage.py runserver    # http://127.0.0.1:8000/healthz
 ```
 
