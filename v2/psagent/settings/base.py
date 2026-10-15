@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "core",
     "accounts",
+    "inventory",
     "legacy",
 ]
 
@@ -116,6 +117,10 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Hochgeladene Dateien (GAL); liegen nie im Repo (.gitignore: v2/media/).
+MEDIA_URL = "media/"
+MEDIA_ROOT = Path(env("PSAGENT_MEDIA_ROOT", str(BASE_DIR / "media")))
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
