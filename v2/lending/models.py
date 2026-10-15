@@ -96,6 +96,9 @@ class Booking(AppendOnlyModel):
     created_by = models.ForeignKey(
         User, on_delete=models.PROTECT, related_name="+", null=True, blank=True
     )
+    legacy_id = models.PositiveIntegerField(
+        "Ausleihe im Altsystem", null=True, blank=True, unique=True
+    )
 
     class Meta:
         verbose_name = "Ausleihvorgang"
@@ -240,6 +243,13 @@ class LoanEvent(AppendOnlyModel):
         null=True,
         blank=True,
         verbose_name="angemeldete Person",
+    )
+    actor_name = models.CharField(
+        "Person laut Altsystem",
+        max_length=200,
+        blank=True,
+        help_text="Nur bei Übernahme aus dem Altsystem, das ausgebende und rücknehmende Person "
+        "als Text speichert.",
     )
     quick_check = models.BooleanField("Kurzkontrolle", default=False)
     gal_provided = models.BooleanField("GAL bereitgestellt", default=False)

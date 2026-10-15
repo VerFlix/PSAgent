@@ -58,7 +58,10 @@ braucht der Checkout die volle Git-Historie.
   `EI: … | PB: … | Name: … | SN: …`, GAL-Pfade unter Windows-Schreibweise `GAL\…`.
 - Archivieren wie in `psa_gui.py`: Teil, Ausleihen, Sperre und betroffene Prüfberichte gehen in
   die Archivdatenbank. Aus der Hauptdatenbank verschwinden Teil, Bauteile und Sperre, die
-  Ausleihen und Prüfberichte bleiben dort stehen.
+  Ausleihen und Prüfberichte bleiben dort stehen. Archiviert werden nur Teile ohne aktive
+  Reservierung oder Ausleihe, wie im Altsystem.
+- Aktive Ausleihen desselben Teils überschneiden sich nicht (das Altsystem prüft vor dem
+  Speichern); Überschneidungen gibt es nur als Randfall.
 - Erkennbar künstlich: Nachnamen wie „Beispiel“ oder „Muster“, E-Mail unter `example.org`,
   Telefonnummern mit Vorwahl `0000`, Anschrift in „00000 Beispielstadt“, erfundene Hersteller.
 - Gleicher Startwert und gleicher Stichtag ergeben dieselben Daten.
