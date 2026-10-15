@@ -6,10 +6,10 @@ bleibt die Ausleihhistorie vollständig erhalten, nur ohne Personendaten.
 
 import pytest
 from django.db import IntegrityError, transaction
-from lending.models import Borrower, BorrowerContact, Loan
-from lending.services import create_borrower, erase_contact, lend, update_contact
 
 from accounts.models import User
+from lending.models import Borrower, BorrowerContact, Loan
+from lending.services import create_borrower, erase_contact, lend, update_contact
 from tests.lending.conftest import DAY, TODAY, MakePart, checkout_kwargs
 
 

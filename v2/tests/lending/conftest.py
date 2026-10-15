@@ -6,12 +6,12 @@ from datetime import date, timedelta
 from typing import Any
 
 import pytest
-from lending.models import Borrower
-from lending.services import create_borrower
 
 from accounts.models import Role, User
 from inventory.models import EventKind, Part
 from inventory.services import create_product, link_document, record_event
+from lending.models import Borrower
+from lending.services import create_borrower
 
 TODAY = date(2026, 10, 15)
 DAY = timedelta(days=1)
