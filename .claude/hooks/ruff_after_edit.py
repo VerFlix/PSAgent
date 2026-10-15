@@ -46,12 +46,17 @@ def main() -> None:
         return
 
     # Erst behebbare Befunde korrigieren, dann formatieren, dann den Rest melden.
+    # --force-exclude: Ausschlüsse aus pyproject.toml (z. B. Migrationen) gelten auch, wenn
+    # der Pfad direkt übergeben wird.
     for args in (["check", "--fix", "--quiet"], ["format", "--quiet"]):
         subprocess.run(  # noqa: S603
-            [ruff, *args, str(path)], cwd=v2_dir, capture_output=True, check=False
+            [ruff, *args, "--force-exclude", str(path)],
+            cwd=v2_dir,
+            capture_output=True,
+            check=False,
         )
     result = subprocess.run(  # noqa: S603
-        [ruff, "check", "--quiet", str(path)],
+        [ruff, "check", "--quiet", "--force-exclude", str(path)],
         cwd=v2_dir,
         capture_output=True,
         text=True,
