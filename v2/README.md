@@ -8,6 +8,7 @@ weiterläuft.
 - Regeln für die Arbeit am Code: [`../CLAUDE.md`](../CLAUDE.md)
 - Abnahmekatalog: [`docs/paritaet.md`](docs/paritaet.md)
 - Altsystem-Schema und Testdaten: [`docs/altsystem-testdaten.md`](docs/altsystem-testdaten.md)
+- Import der Altdaten: [`docs/altsystem-import.md`](docs/altsystem-import.md)
 
 ## Lokal starten
 
@@ -52,6 +53,13 @@ uv run python manage.py legacy_testdb --variant s7 --seed 42 --out /tmp/altdaten
 Details zu Varianten, Inhalt und Randfällen: [`docs/altsystem-testdaten.md`](docs/altsystem-testdaten.md).
 Die Tests in `tests/legacy/` vergleichen jede Variante mit dem echten Altsystem-Code aus der
 Git-Historie und brauchen deshalb einen Checkout mit voller Historie.
+
+Import (nur in eine leere Datenbank; erst Probelauf, dann echt):
+
+```bash
+uv run python manage.py legacy_import /tmp/altdaten --probelauf --bericht /tmp/bericht.md
+uv run python manage.py legacy_import /tmp/altdaten --bericht /tmp/bericht-import.md
+```
 
 ## Cloud-Sitzungen (Claude Code im Web)
 

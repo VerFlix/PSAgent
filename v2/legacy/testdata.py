@@ -351,6 +351,26 @@ class _Builder:
         self.world.loans.append(row)
         return row
 
+    def is_booked(self, item_type: str, item: Row, start: int, days: int) -> bool:
+        """True, wenn eine aktive Ausleihe des Teils den Zeitraum berührt (beide Tage inklusive)."""
+        von, rueck = self.day(start).isoformat(), self.day(start + days).isoformat()
+        return any(
+            loan["item_type"] == item_type
+            and loan["item_id"] == item["id"]
+            and loan["status"] in ("reserved", "lent")
+            and str(loan["von_datum"]) <= rueck
+            and str(loan["rueckgabe_datum"]) >= von
+            for loan in self.world.loans
+        )
+
+    def has_active_loans(self, item_type: str, item: Row) -> bool:
+        return any(
+            loan["item_type"] == item_type
+            and loan["item_id"] == item["id"]
+            and loan["status"] in ("reserved", "lent")
+            for loan in self.world.loans
+        )
+
     def add_report(self, entries: Iterable[tuple[str, Row, str]], days_ago: int) -> Row:
         report: Row = {
             "id": self._next_report_id,
@@ -394,7 +414,6 @@ class _Builder:
             self.add_lock(item_type, item, still_locked=self.rng.random() < 0.5)
 
         for _ in range(N_LOANS):
-            item_type, item = self.random_item()
             status = self.rng.choice(("returned", "returned", "lent", "reserved"))
             if status == "returned":
                 start = -self.rng.randint(20, 300)
@@ -402,7 +421,15 @@ class _Builder:
                 start = -self.rng.randint(0, 5)
             else:
                 start = self.rng.randint(3, 60)
-            self.add_loan(item_type, item, start=start, days=self.rng.randint(1, 10), status=status)
+            days = self.rng.randint(1, 10)
+            # Wie im Altsystem: Vor dem Speichern prüft es, ob das Teil im Zeitraum frei ist.
+            for _ in range(20):
+                item_type, item = self.random_item()
+                if status == "returned" or not self.is_booked(item_type, item, start, days):
+                    break
+            else:
+                continue
+            self.add_loan(item_type, item, start=start, days=days, status=status)
         if self.edge_cases:
             self.add_loan_edge_cases()
 
@@ -482,7 +509,7 @@ class _Builder:
         self.add_loan("system", system, start=7, days=2, status="reserved")
 
     def archive_items(self) -> None:
-        """Sondert zwei Produkte und ein System aus, wie archive_item_with_history().
+        """Sondert zwei Produkte und ein System ohne aktive Ausleihen aus, wie im Altsystem.
 
         Die Teile bekommen vorher eine Geschichte (Ausleihe, Sperre, Prüfbericht). Beim
         Archivieren kopiert das Altsystem Teil, Ausleihen, Sperre und betroffene Prüfberichte
@@ -490,11 +517,11 @@ class _Builder:
         Teil, Bauteile und Sperre aus der Hauptdatenbank. Ausleihen und Prüfberichte bleiben in
         der Hauptdatenbank stehen und verweisen dann auf ein Teil, das es dort nicht mehr gibt.
         """
-        chosen = [
-            ("product", self.world.products[5]),
-            ("product", self.world.products[6]),
-            ("system", self.world.systems[1]),
-        ]
+        # Wie im Altsystem: Archivieren nur ohne aktive Reservierung oder Ausleihe. Die ersten
+        # Teile sind für Randfälle der Ausleihen reserviert.
+        products = [p for p in self.world.products[5:] if not self.has_active_loans("product", p)]
+        systems = [s for s in self.world.systems[1:] if not self.has_active_loans("system", s)]
+        chosen = [("product", products[0]), ("product", products[1]), ("system", systems[0])]
         for item_type, item in chosen:
             self.add_loan(item_type, item, start=-400, days=5, status="returned")
             self.add_lock(item_type, item, still_locked=True)
