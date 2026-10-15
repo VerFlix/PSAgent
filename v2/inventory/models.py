@@ -89,6 +89,14 @@ class Document(models.Model):
                 condition=~Q(sha256=""),
                 name="inventory_document_sha256_unique",
             ),
+            models.CheckConstraint(
+                condition=Q(url="") | Q(url__regex=r"^https?://"),
+                name="inventory_document_url_http",
+            ),
+            models.CheckConstraint(
+                condition=Q(file="") | Q(file__endswith=".pdf"),
+                name="inventory_document_file_pdf",
+            ),
         )
 
     def __str__(self) -> str:

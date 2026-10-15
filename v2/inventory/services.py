@@ -7,10 +7,11 @@ eine Sperre setzt ein nicht gesperrtes Teil voraus. Rechte prüft #12.
 
 import hashlib
 from datetime import datetime
-from pathlib import PurePath
 from typing import Any
 
+from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
+from django.core.validators import URLValidator
 from django.db import transaction
 from django.utils import timezone
 
@@ -24,6 +25,9 @@ from inventory.models import (
     PartEvent,
     PartKind,
 )
+
+PDF_MAGIC = b"%PDF-"
+_validate_url = URLValidator(schemes=["http", "https"])
 
 
 class InventoryError(ValueError):
@@ -85,20 +89,33 @@ def create_system(
 def store_document_file(
     content: bytes, filename: str, *, title: str, actor: User | None = None
 ) -> Document:
-    """Speichert eine GAL-Datei. Gleicher Inhalt wird nur einmal gespeichert."""
+    """Speichert eine GAL-Datei. Gleicher Inhalt wird nur einmal gespeichert.
+
+    Angenommen werden nur PDFs (erkannt am Dateianfang, nicht an der Endung); gespeichert wird
+    immer als `.pdf`, damit keine hochgeladene Datei als HTML oder Skript ausgeliefert wird.
+    `filename` dient nur der Fehlermeldung.
+    """
+    if not content.startswith(PDF_MAGIC):
+        raise InventoryError(f"{filename} ist kein PDF; GAL-Dateien müssen PDFs sein.")
     digest = hashlib.sha256(content).hexdigest()
     existing = Document.objects.filter(sha256=digest).first()
     if existing is not None:
         return existing
-    suffix = PurePath(filename).suffix.lower()
     document = Document(title=title, sha256=digest, created_by=actor)
-    document.file.save(f"{digest}{suffix}", ContentFile(content), save=False)
+    document.file.save(f"{digest}.pdf", ContentFile(content), save=False)
     document.save()
     return document
 
 
 def link_document(url: str, *, title: str, actor: User | None = None) -> Document:
-    """Legt einen GAL-Link an oder gibt den vorhandenen mit derselben Adresse zurück."""
+    """Legt einen GAL-Link an oder gibt den vorhandenen mit derselben Adresse zurück.
+
+    Nur http- und https-Adressen; `javascript:` und Ähnliches wird abgewiesen.
+    """
+    try:
+        _validate_url(url)
+    except ValidationError as error:
+        raise InventoryError(f"Ungültiger Link: {url!r} (nur http und https).") from error
     existing = Document.objects.filter(url=url, file="").first()
     if existing is not None:
         return existing
