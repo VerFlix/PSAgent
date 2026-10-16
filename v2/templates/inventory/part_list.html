@@ -16,13 +16,13 @@
   <button type="submit">Suchen</button>
 </form>
 {% if rows %}
-{% if may_create %}<form method="get" action="{% url 'inventory:gal_assign' %}">{% endif %}
+<form method="get" action="{% url 'inventory:part_export' %}">
 <div class="table-scroll"><table class="list">
-  <thead><tr>{% if may_create %}<th><span class="visually-hidden">markieren</span></th>{% endif %}<th>Teil</th><th>EI</th><th>Status</th><th>nächste Prüfung</th></tr></thead>
+  <thead><tr><th><span class="visually-hidden">markieren</span></th><th>Teil</th><th>EI</th><th>Status</th><th>nächste Prüfung</th></tr></thead>
   <tbody>
   {% for row in rows %}
     <tr>
-      {% if may_create %}<td><input type="checkbox" name="teil" value="{{ row.part.pk }}" id="teil-{{ row.part.pk }}" aria-label="{{ row.part.name }} markieren" class="check"></td>{% endif %}
+      <td><input type="checkbox" name="teil" value="{{ row.part.pk }}" id="teil-{{ row.part.pk }}" aria-label="{{ row.part.name }} markieren" class="check"></td>
       <td><a href="{% url 'inventory:part_detail' row.part.pk %}">{{ row.part.name }}</a> <span class="hint">{{ row.part.get_kind_display }}</span></td>
       <td>{% for component in row.part.components.all %}{{ component.ei }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
       <td><span class="status status-{{ row.status }}">{{ row.status.label }}</span></td>
@@ -31,8 +31,20 @@
   {% endfor %}
   </tbody>
 </table></div>
-{% if may_create %}<button type="submit">GAL an markierte Teile</button></form>{% endif %}
+<p class="actions">
+  <button type="submit" name="format" value="csv">Markierte als CSV</button>
+  <button type="submit" name="format" value="pdf">Markierte als PDF</button>
+  {% if may_create %}<button type="submit" formaction="{% url 'inventory:gal_assign' %}">GAL an markierte Teile</button>{% endif %}
+</p>
+</form>
 {% else %}
 <p>Keine Teile gefunden.</p>
 {% endif %}
+<form method="get" action="{% url 'inventory:part_export' %}" class="card">
+  <h2>Alle Teile exportieren</h2>
+  <label class="check"><input type="checkbox" name="ausgesondert" value="1" class="check"> mit ausgesonderten Teilen</label>
+  <button type="submit" name="format" value="csv">CSV</button>
+  <button type="submit" name="format" value="pdf">PDF</button>
+  <p class="hint">Ohne Personendaten. CSV mit Semikolon für Excel und LibreOffice.</p>
+</form>
 {% endblock %}

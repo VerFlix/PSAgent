@@ -55,6 +55,9 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   seit TT.MM.JJJJ unverändert (nachgefragt)“ oder neue Angaben. Wer die Werte sehen und frei
   bearbeiten darf, richtet sich weiter nach „Kontaktdaten der Entleiher sehen“.
 - Entleihersuche: nur der Name, ab 3 Zeichen, höchstens 10 Treffer.
+- Export der Teileliste (CSV/PDF) enthält keine Personendaten und ist für jede Rolle erlaubt.
+  Die vollständige Sicherung (ZIP mit allen Daten) nur für Admin (Felix, 16.10.2026), ohne
+  Zugangsdaten; jeder Abruf wird protokolliert.
 - Kontaktdaten nach Ablauf der Löschfrist löschen: nur Admin (oder ein Verwaltungsbefehl).
 - Eine Reservierung ausgeben, die jemand anderes angelegt hat, ist Verleihen, kein Ändern.
 - Teile übernommener Altdaten (ohne `angelegt von`) gelten für Verleiher nicht als eigene.
