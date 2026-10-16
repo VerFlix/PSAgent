@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Ausleihvorgang{% endblock %}
+{% block content %}
+<h1>Ausleihvorgang #{{ booking.pk }}</h1>
+<p>Entleiher: <strong>{{ booking.borrower.display_name }}</strong> · angelegt {{ booking.created_at|date:"d.m.Y H:i" }}</p>
+<div class="table-scroll"><table class="list">
+  <thead><tr><th>Teil</th><th>Zeitraum</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for loan in loans %}
+    <tr><td>{{ loan.part.name }}</td><td>{{ loan.start|date:"d.m.Y" }} – {{ loan.end|date:"d.m.Y" }}</td><td>{{ loan.get_status_display }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+<p><a href="{% url 'lending:new_booking' %}">Neuer Vorgang</a></p>
+{% endblock %}

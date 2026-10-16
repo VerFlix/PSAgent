@@ -84,6 +84,52 @@ def update_contact(borrower: Borrower, *, actor: User | None, **fields: str) -> 
     return contact
 
 
+def overwrite_contact(borrower: Borrower, *, actor: User | None, **fields: str) -> BorrowerContact:
+    """Kontaktdaten bei Reservierung und Ausgabe eingeben oder überschreiben (Parität 14, 16).
+
+    Für Verleiher, die die bisherigen Werte nicht sehen dürfen: Nur ausgefüllte Felder ersetzen
+    die gespeicherten, leere bleiben unverändert. Die Daten gelten danach als bestätigt.
+    """
+    require(actor, Right.LEND)
+    unknown = set(fields) - set(CONTACT_FIELDS)
+    if unknown:
+        raise LendingError(f"Unbekannte Kontaktfelder: {', '.join(sorted(unknown))}")
+    given = {key: value.strip() for key, value in fields.items() if value and value.strip()}
+    contact = BorrowerContact.objects.select_for_update().get(borrower=borrower)
+    if given:
+        for key, value in given.items():
+            setattr(contact, key, value)
+        contact.updated_at = timezone.now()
+    contact.confirmed_at = timezone.now()
+    contact.save()
+    return contact
+
+
+def confirm_contact(borrower: Borrower, *, actor: User | None) -> BorrowerContact:
+    """Nachgefragt: Kontaktdaten unverändert seit `checked_at` (Häkchen bei der Ausgabe)."""
+    return overwrite_contact(borrower, actor=actor)
+
+
+SEARCH_MIN_LENGTH = 3
+SEARCH_LIMIT = 10
+
+
+def search_borrowers(query: str, *, actor: User | None) -> list[Borrower]:
+    """Entleiher nach Namen, ab 3 Zeichen, höchstens 10 Treffer (für die Ausgabe).
+
+    Liefert nur Entleiher mit Kontaktdaten; die Oberfläche zeigt Verleihern nur den Namen.
+    """
+    require(actor, Right.LEND)
+    query = query.strip()
+    if len(query) < SEARCH_MIN_LENGTH:
+        return []
+    return list(
+        Borrower.objects.filter(contact__name__icontains=query)
+        .select_related("contact")
+        .order_by("contact__name", "pk")[:SEARCH_LIMIT]
+    )
+
+
 def erase_contact(borrower: Borrower, *, actor: User | None) -> None:
     """Löscht die Kontaktdaten nach Ablauf der Löschfrist; die Ausleihhistorie bleibt."""
     require(actor, Right.MANAGE_USERS)
@@ -148,23 +194,34 @@ def _lock_parts(parts: Sequence[Part]) -> None:
 # --- Ausgabe und Rückgabe: Pflichtangaben ---
 
 
+# Grenzen der Unterschrift (Striche aus dem Unterschriftsfeld); schützt vor riesigen Anfragen.
+SIGNATURE_MAX_STROKES = 100
+SIGNATURE_MAX_POINTS = 5000
+SIGNATURE_MAX_COORDINATE = 10000
+
+
+def _point_ok(point: Any) -> bool:
+    return (
+        isinstance(point, list | tuple)
+        and len(point) == 2
+        and all(
+            isinstance(v, int | float)
+            and not isinstance(v, bool)
+            and 0 <= v <= SIGNATURE_MAX_COORDINATE
+            for v in point
+        )
+    )
+
+
 def _signature(strokes: Any, signer_name: str) -> Signature:
     if not signer_name.strip():
         raise LendingError("Name der unterschreibenden Person fehlt.")
     valid = (
         isinstance(strokes, list)
-        and bool(strokes)
-        and all(
-            isinstance(stroke, list)
-            and stroke
-            and all(
-                isinstance(point, list | tuple)
-                and len(point) == 2
-                and all(isinstance(v, int | float) for v in point)
-                for point in stroke
-            )
-            for stroke in strokes
-        )
+        and 0 < len(strokes) <= SIGNATURE_MAX_STROKES
+        and all(isinstance(stroke, list) and stroke for stroke in strokes)
+        and sum(len(stroke) for stroke in strokes) <= SIGNATURE_MAX_POINTS
+        and all(_point_ok(point) for stroke in strokes for point in stroke)
     )
     if not valid:
         raise LendingError("Unterschrift fehlt oder ist ungültig.")

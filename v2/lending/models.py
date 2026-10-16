@@ -15,7 +15,7 @@ eingeschlossen. Mehrere Teile eines Entleihers gehören zu einem Ausleihvorgang 
   können, ohne die Historie zu zerstören (Konzept, Abschnitte 4 und 7).
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from django.contrib.postgres.constraints import ExclusionConstraint
 from django.contrib.postgres.fields import DateRangeField, RangeOperators
@@ -72,6 +72,12 @@ class BorrowerContact(models.Model):
     email = models.EmailField("E-Mail", blank=True)
     phone = models.CharField("Telefon", max_length=50, blank=True)
     updated_at = models.DateTimeField("geändert am", default=timezone.now)
+    confirmed_at = models.DateTimeField(
+        "zuletzt als unverändert bestätigt",
+        null=True,
+        blank=True,
+        help_text="Bei der Ausgabe nachgefragt: Kontaktdaten unverändert.",
+    )
 
     class Meta:
         verbose_name = "Kontaktdaten"
@@ -84,6 +90,20 @@ class BorrowerContact(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def checked_at(self) -> datetime:
+        """Wann die Kontaktdaten zuletzt geändert oder als unverändert bestätigt wurden."""
+        return max(self.updated_at, self.confirmed_at or self.updated_at)
+
+    def gaps(self) -> list[str]:
+        """Was für die Ausgabe fehlt; zeigt nur, *dass* etwas fehlt, nicht die Werte."""
+        missing = []
+        if not self.address.strip():
+            missing.append("Adresse")
+        if not (self.email.strip() or self.phone.strip()):
+            missing.append("E-Mail oder Telefon")
+        return missing
 
 
 class Booking(AppendOnlyModel):

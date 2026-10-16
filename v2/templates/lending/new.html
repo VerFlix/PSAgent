@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Reservieren oder ausgeben{% endblock %}
+{% block content %}
+<h1>Reservieren oder ausgeben</h1>
+<form method="get" class="card search">
+  {% for error in period.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  {% for field in period %}{% include "inventory/_field.html" %}{% endfor %}
+  <button type="submit">Verfügbarkeit anzeigen</button>
+</form>
+
+{% if period.is_valid %}
+<form method="post" action="{% url 'lending:new_booking' %}">
+  {% csrf_token %}
+  <input type="hidden" name="start" value="{{ period.cleaned_data.start|date:'Y-m-d' }}">
+  <input type="hidden" name="end" value="{{ period.cleaned_data.end|date:'Y-m-d' }}">
+  <input type="hidden" name="q" value="{{ period.cleaned_data.q }}">
+  <section class="card">
+    <h2>Teile {{ period.cleaned_data.start|date:"d.m.Y" }} bis {{ period.cleaned_data.end|date:"d.m.Y" }}</h2>
+    {% if rows %}
+    <div class="table-scroll"><table class="list">
+      <thead><tr><th><span class="visually-hidden">wählen</span></th><th>Teil</th><th>EI</th><th>verfügbar</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td>{% if not row.reasons %}<input type="checkbox" name="teil" value="{{ row.part.pk }}" class="check" aria-label="{{ row.part.name }} wählen"{% if row.chosen %} checked{% endif %}>{% endif %}</td>
+          <td>{{ row.part.name }}</td>
+          <td>{% for component in row.part.components.all %}{{ component.ei }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+          <td>{% if row.reasons %}<span class="status status-locked">nein</span> <span class="hint">{{ row.reasons|join:", " }}</span>{% else %}<span class="status status-released">ja</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}
+      <p>Keine Teile gefunden.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Entleiher</h2>
+    {% for error in borrower_form.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+    <label for="borrower-search">Bekannten Entleiher suchen (Name, ab 3 Zeichen)</label>
+    <input id="borrower-search" name="suche" type="search" autocomplete="off"
+           hx-get="{% url 'lending:borrower_search' %}" hx-trigger="input changed delay:300ms, search"
+           hx-target="#borrower-results" hx-include="this">
+    <div id="borrower-results">{% if selected %}<input type="hidden" name="borrower" value="{{ selected.pk }}">{% endif %}</div>
+    <div id="borrower-status">{% if selected %}{% include "lending/_borrower_status.html" %}{% else %}<p class="hint" id="borrower-status-empty">Kein bekannter Entleiher gewählt: unten einen neuen anlegen.</p>{% endif %}</div>
+    <fieldset>
+      <legend>Neuer Entleiher oder neue Angaben</legend>
+      {% for field in borrower_form %}{% if field.name != "borrower" and field.name != "contact_confirmed" %}{% include "inventory/_field.html" %}{% endif %}{% endfor %}
+      <p class="hint">Für die Ausgabe nötig: Name, Adresse und E-Mail oder Telefon.</p>
+    </fieldset>
+  </section>
+
+  <button type="submit" name="action" value="reserve">Reservieren</button>
+  <button type="submit" name="action" value="lend" class="primary">Weiter zur Ausgabe (ab heute)</button>
+</form>
+{% endif %}
+{% endblock %}

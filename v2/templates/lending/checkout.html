@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Ausgabe{% endblock %}
+{% block content %}
+<h1>Ausgabe</h1>
+<section class="card">
+  <p>{{ period.cleaned_data.start|date:"d.m.Y" }} bis {{ period.cleaned_data.end|date:"d.m.Y" }} · Entleiher: <strong>{% if existing %}{{ existing.display_name }}{% else %}{{ borrower_form.cleaned_data.name }}{% endif %}</strong></p>
+  <ul class="plain">
+  {% for part in parts %}
+    <li>{{ part.name }} ({% for component in part.components.all %}{{ component.ei }}{% if not forloop.last %}, {% endif %}{% endfor %}) – GAL:
+      {% for document in part.documents.all %}<a href="{% if document.url %}{{ document.url }}{% else %}{% url 'inventory:document_open' document.pk %}{% endif %}" target="_blank" rel="noopener noreferrer">{{ document.title }}</a>{% if not forloop.last %}, {% endif %}{% empty %}<span class="error">keine</span>{% endfor %}
+    </li>
+  {% endfor %}
+  </ul>
+</section>
+<form method="post" action="{% url 'lending:checkout_new' %}" class="card">
+  {% csrf_token %}
+  <input type="hidden" name="start" value="{{ period.cleaned_data.start|date:'Y-m-d' }}">
+  <input type="hidden" name="end" value="{{ period.cleaned_data.end|date:'Y-m-d' }}">
+  {% for part in parts %}<input type="hidden" name="teil" value="{{ part.pk }}">{% endfor %}
+  {% for field in borrower_form %}{{ field.as_hidden }}{% endfor %}
+  {% for error in checkout.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  <label class="check">{{ checkout.quick_check }} {{ checkout.quick_check.label }}</label>
+  <label class="check">{{ checkout.gal_provided }} {{ checkout.gal_provided.label }}</label>
+  {% with field=checkout.signer_name %}{% include "inventory/_field.html" %}{% endwith %}
+  <p id="signature-label">Unterschrift</p>
+  <canvas class="signature" width="600" height="200" aria-labelledby="signature-label" data-signature-for="id_signature"></canvas>
+  {{ checkout.signature }}
+  {% for error in checkout.signature.errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  <button type="button" data-signature-clear="id_signature">Unterschrift löschen</button>
+  <button type="submit" class="primary">Ausgeben</button>
+</form>
+<script src="{% static 'js/signature.js' %}" defer></script>
+{% endblock %}

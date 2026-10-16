@@ -1,0 +1,13 @@
+<div class="card status-box">
+  <p><strong>{{ selected.contact.name }}</strong></p>
+  {% if gaps %}
+    <p class="error" role="alert">Für die Ausgabe fehlt: {{ gaps|join:", " }}. Bitte unten eintragen.</p>
+  {% else %}
+    <p>Kontaktdaten vollständig.</p>
+  {% endif %}
+  {% if may_view %}
+    <p class="hint">{{ contact.address|linebreaksbr }}<br>{{ contact.email }} {{ contact.phone }}</p>
+  {% endif %}
+  <label class="check"><input type="checkbox" name="contact_confirmed" class="check"> Kontaktdaten seit {{ contact.checked_at|date:"d.m.Y" }} unverändert (nachgefragt)</label>
+  <p class="hint">Hat sich etwas geändert, die neuen Angaben unten eintragen. Leere Felder bleiben, wie sie sind.</p>
+</div>

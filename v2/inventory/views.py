@@ -10,7 +10,7 @@ from typing import Any
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
-from django.db.models import Prefetch, Q, QuerySet
+from django.db.models import Prefetch, QuerySet
 from django.http import FileResponse, HttpRequest, HttpResponse
 from django.http.response import HttpResponseBase
 from django.shortcuts import get_object_or_404, redirect, render
@@ -33,7 +33,7 @@ from inventory.forms import (
     SystemForm,
     lock_ppe_fields,
 )
-from inventory.models import Component, Document, EventKind, Part, PartStatus, normalize_ei
+from inventory.models import Component, Document, EventKind, Part, PartStatus
 from inventory.services import (
     InventoryError,
     attach_document,
@@ -42,6 +42,7 @@ from inventory.services import (
     link_document,
     record_event,
     rename_part,
+    search_parts,
     store_document_file,
     update_component,
 )
@@ -60,30 +61,13 @@ def _parts() -> QuerySet[Part]:
     ).order_by("name", "id")
 
 
-def _search(parts: QuerySet[Part], query: str) -> QuerySet[Part]:
-    """Suche über Bezeichnung, EI (ohne Leerzeichen/Großschreibung), Hersteller, Seriennummer."""
-    if not query:
-        return parts
-    match = (
-        Q(name__icontains=query)
-        | Q(components__designation__icontains=query)
-        | Q(components__model_name__icontains=query)
-        | Q(components__manufacturer__icontains=query)
-        | Q(components__serial_number__icontains=query)
-    )
-    key = normalize_ei(query)
-    if key:
-        match |= Q(components__ei_key__contains=key)
-    return parts.filter(match).distinct()
-
-
 @requires(Right.VIEW_AVAILABILITY)
 @require_GET
 def part_list(request: HttpRequest) -> HttpResponse:
     query = request.GET.get("q", "").strip()
     wanted = request.GET.get("status", "")
     rows = []
-    for part in _search(_parts(), query):
+    for part in search_parts(_parts(), query):
         status = part.status()
         if (wanted and status != wanted) or (not wanted and status == PartStatus.RETIRED):
             continue

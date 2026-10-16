@@ -1,0 +1,14 @@
+{% if too_short %}
+  <p class="hint">Mindestens 3 Zeichen eingeben.</p>
+{% elif found %}
+  <fieldset>
+    <legend>Treffer{% if found|length == limit %} (die ersten {{ limit }}){% endif %}</legend>
+    {% for borrower in found %}
+      <label class="check"><input type="radio" name="borrower" value="{{ borrower.pk }}"
+        hx-get="{% url 'lending:borrower_status' borrower.pk %}" hx-trigger="change" hx-target="#borrower-status"> {{ borrower.contact.name }}</label>
+    {% endfor %}
+    <label class="check"><input type="radio" name="borrower" value=""> Keiner davon, neu anlegen</label>
+  </fieldset>
+{% else %}
+  <p class="hint">Kein Entleiher gefunden. Unten neu anlegen.</p>
+{% endif %}

@@ -13,6 +13,7 @@
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from django.contrib.auth.models import AnonymousUser
@@ -22,7 +23,7 @@ from django.utils import timezone
 from accounts.models import ROLE_ORDER, Qualification, Role, User
 from accounts.rights import RIGHTS, Right, denial, has_right, may_use, require, table_markdown
 from inventory.services import create_product, link_document
-from lending.services import cancel, create_borrower, lend, reserve
+from lending.services import create_borrower, lend, reserve, return_loans
 from tests.helpers import adopt_inspection, make_inspector
 
 pytestmark = pytest.mark.django_db
@@ -45,6 +46,13 @@ EXPECTED: dict[Right, str] = {
     Right.MODIFY_SIGNED: "- - - - -",
 }
 QUALIFICATIONS = ("gültig", "abgelaufen", "keine")
+LENT_BY_COMMAND: dict[str, Any] = {
+    "actor": None,
+    "quick_check": True,
+    "gal_provided": True,
+    "signature": [[[1, 1], [2, 2]]],
+    "signer_name": "Kim Beispiel",
+}
 DOCS = Path(__file__).resolve().parents[2] / "docs" / "rechte.md"
 
 
@@ -69,9 +77,10 @@ def objects(right: Right, user: User) -> tuple[object, object]:
     """Ein Objekt, das unter die Einschränkung fällt, und eines, das nicht darunter fällt."""
     if right == Right.VIEW_CONTACTS:
         part = create_product({"designation": "Klettergurt", "ei": f"TST-R{user.pk}"})
+        part.documents.add(link_document("https://example.org/gal.pdf", title="GAL"))
         adopt_inspection([part], next_due=timezone.localdate() + timedelta(days=365))
-        active = create_borrower("Kim Beispiel")
-        reserve(active, [part], timezone.localdate(), timezone.localdate(), actor=None)
+        active = create_borrower("Kim Beispiel", address="Teststraße 1", email="kim@example.org")
+        lend(active, [part], timezone.localdate(), timezone.localdate(), **LENT_BY_COMMAND)
         return active, create_borrower("Noa Probe")
     return SimpleNamespace(created_by_id=user.pk), SimpleNamespace(created_by_id=-1)
 
@@ -133,19 +142,38 @@ def test_actor_none_is_import_or_command() -> None:
     require(None, Right.INSPECT)
 
 
-def test_cancelled_reservation_no_longer_reveals_contacts() -> None:
-    """„nur laufende Ausleihen“: Nach dem Storno sind die Kontaktdaten für Verleiher weg."""
+def test_reservation_does_not_reveal_contacts() -> None:
+    """Befund der Sicherheitsprüfung: Eine eigene Reservierung schaltet keine Adresse frei."""
     lender = make_inspector(role=Role.LENDER, qualified=False)
-    part = create_product({"designation": "Klettergurt", "ei": "TST-STORNO"})
+    part = create_product({"designation": "Klettergurt", "ei": "TST-RES"})
     adopt_inspection([part], next_due=timezone.localdate() + timedelta(days=365))
     borrower = create_borrower("Kim Beispiel")
-    booking = reserve(borrower, [part], timezone.localdate(), timezone.localdate(), actor=lender)
-    assert has_right(lender, Right.VIEW_CONTACTS, borrower)
 
-    cancel(list(booking.loans.all()), actor=lender)
+    booking = reserve(borrower, [part], timezone.localdate(), timezone.localdate(), actor=lender)
 
     assert not has_right(lender, Right.VIEW_CONTACTS, borrower)
     assert not has_right(lender, Right.VIEW_CONTACTS, booking)
+    assert not has_right(lender, Right.VIEW_CONTACTS, booking.loans.get())
+
+
+def test_returned_loan_no_longer_reveals_contacts() -> None:
+    lender = make_inspector(role=Role.LENDER, qualified=False)
+    part = create_product({"designation": "Klettergurt", "ei": "TST-RET"})
+    part.documents.add(link_document("https://example.org/gal/ret.pdf", title="GAL"))
+    adopt_inspection([part], next_due=timezone.localdate() + timedelta(days=365))
+    borrower = create_borrower("Kim Beispiel", address="Teststraße 1", email="kim@example.org")
+    booking = lend(borrower, [part], timezone.localdate(), timezone.localdate(), **LENT_BY_COMMAND)
+    assert has_right(lender, Right.VIEW_CONTACTS, borrower)
+
+    return_loans(
+        list(booking.loans.all()),
+        actor=None,
+        quick_check=True,
+        signature=[[[1, 1], [2, 2]]],
+        signer_name="Kim Beispiel",
+    )
+
+    assert not has_right(lender, Right.VIEW_CONTACTS, borrower)
 
 
 def test_lent_loan_reveals_contacts_to_lender() -> None:
