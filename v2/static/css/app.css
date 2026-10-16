@@ -108,3 +108,13 @@ svg.signature-view path { fill: none; stroke: #111; stroke-width: 2; stroke-line
 .status-reserved { background: #e7eefb; }
 .status-lent { background: #fff3cd; }
 .status-returned, .status-cancelled { background: #eee; }
+
+/* Kalender */
+table.calendar { width: 100%; border-collapse: collapse; table-layout: fixed; }
+table.calendar th, table.calendar td { border: 1px solid var(--border); vertical-align: top; padding: 0.25rem; font-size: 0.9rem; }
+table.calendar.monat td { height: 3.5rem; }
+table.calendar td.outside { color: #999; background: #fafafa; }
+table.calendar td.today { outline: 2px solid #2b6cb0; outline-offset: -2px; }
+table.calendar .count { display: inline-block; min-width: 1.4rem; text-align: center; border-radius: 0.7rem; background: #e7eefb; font-size: 0.8rem; }
+table.calendar .count.overdue { background: #fde4e4; }
+table.calendar .day-list { font-size: 0.8rem; margin: 0.25rem 0 0; overflow-wrap: anywhere; }

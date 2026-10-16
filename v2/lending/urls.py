@@ -2,11 +2,13 @@
 
 from django.urls import path
 
-from lending import views
+from lending import overview, views
 
 app_name = "lending"
 
 urlpatterns = [
+    path("", overview.overview, name="overview"),
+    path("kalender/", overview.calendar_view, name="calendar"),
     path("neu/", views.new_booking, name="new_booking"),
     path("neu/ausgabe/", views.checkout_new, name="checkout_new"),
     path("entleiher/suche/", views.borrower_search, name="borrower_search"),
