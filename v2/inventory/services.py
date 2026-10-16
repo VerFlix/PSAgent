@@ -18,6 +18,7 @@ from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.core.validators import URLValidator
 from django.db import transaction
+from django.db.models import Q, QuerySet
 from django.utils import timezone
 
 from accounts.models import User
@@ -30,6 +31,7 @@ from inventory.models import (
     Part,
     PartEvent,
     PartKind,
+    normalize_ei,
 )
 
 if TYPE_CHECKING:
@@ -261,3 +263,20 @@ def record_event(
         at=moment,
         inspection_result=inspection_result,
     )
+
+
+def search_parts(parts: QuerySet[Part], query: str) -> QuerySet[Part]:
+    """Suche über Bezeichnung, EI (ohne Leerzeichen/Großschreibung), Hersteller, Seriennummer."""
+    if not query:
+        return parts
+    match = (
+        Q(name__icontains=query)
+        | Q(components__designation__icontains=query)
+        | Q(components__model_name__icontains=query)
+        | Q(components__manufacturer__icontains=query)
+        | Q(components__serial_number__icontains=query)
+    )
+    key = normalize_ei(query)
+    if key:
+        match |= Q(components__ei_key__contains=key)
+    return parts.filter(match).distinct()

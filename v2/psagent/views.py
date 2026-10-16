@@ -13,7 +13,12 @@ from accounts.rights import Right, has_right, public, requires
 def home(request: HttpRequest) -> HttpResponse:
     """Startseite nach der Anmeldung. Die Fachbereiche kommen mit den Paritäts-Issues dazu."""
     return render(
-        request, "home.html", {"may_manage_users": has_right(request.user, Right.MANAGE_USERS)}
+        request,
+        "home.html",
+        {
+            "may_manage_users": has_right(request.user, Right.MANAGE_USERS),
+            "may_lend": has_right(request.user, Right.LEND),
+        },
     )
 
 

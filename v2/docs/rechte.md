@@ -46,7 +46,13 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 
 ## Festlegungen, die das Konzept offenlässt
 
-- Kontaktdaten ändern: wer verleihen darf und die Kontaktdaten dieses Entleihers sehen darf.
+- Kontaktdaten ändern (Felix, 16.10.2026): Bei Reservierung und Ausgabe dürfen Verleiher
+  Kontaktdaten eingeben oder überschreiben, ohne die bisherigen Werte zu sehen. Leere Felder
+  bleiben unverändert. Angezeigt wird nur, was für die Ausgabe fehlt, und seit wann die Daten
+  unverändert sind. Bei bekannten Entleihern verlangt die Ausgabe das Häkchen „Kontaktdaten
+  seit TT.MM.JJJJ unverändert (nachgefragt)“ oder neue Angaben. Wer die Werte sehen und frei
+  bearbeiten darf, richtet sich weiter nach „Kontaktdaten der Entleiher sehen“.
+- Entleihersuche: nur der Name, ab 3 Zeichen, höchstens 10 Treffer.
 - Kontaktdaten nach Ablauf der Löschfrist löschen: nur Admin (oder ein Verwaltungsbefehl).
 - Eine Reservierung ausgeben, die jemand anderes angelegt hat, ist Verleihen, kein Ändern.
 - Teile übernommener Altdaten (ohne `angelegt von`) gelten für Verleiher nicht als eigene.
