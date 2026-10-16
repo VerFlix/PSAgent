@@ -100,6 +100,18 @@
   </form>
 </section>
 
+<section class="card">
+  <h2>Briefkopf/Stempel</h2>
+  <p>Steht auf Produktdatenblatt (PD) und Haftungsausschluss, die diese Person mit gültiger Sachkunde erzeugt.
+    Leer: der vollständige Name. Höchstens 5 Zeilen.</p>
+  <form method="post" action="{% url 'accounts:user_stamp' account.pk %}">
+    {% csrf_token %}
+    <label for="stamp-text">Briefkopf/Stempel</label>
+    <textarea id="stamp-text" name="stamp_text" rows="5" maxlength="300" placeholder="{{ account.get_full_name }}">{{ account.stamp_text }}</textarea>
+    <button type="submit">Speichern</button>
+  </form>
+</section>
+
 {% if not is_self %}
 <section class="card">
   <h2>Konto {% if account.is_active %}deaktivieren{% else %}wieder aktivieren{% endif %}</h2>
@@ -117,14 +129,14 @@
   <h2>Protokoll</h2>
   {% if events %}
     <div class="table-scroll"><table class="list">
-      <thead><tr><th>Zeitpunkt</th><th>Vorgang</th><th>Rolle</th><th>Begründung</th><th>durch</th></tr></thead>
+      <thead><tr><th>Zeitpunkt</th><th>Vorgang</th><th>Rolle</th><th>Begründung / Angabe</th><th>durch</th></tr></thead>
       <tbody>
       {% for event in events %}
         <tr>
           <td>{{ event.at|date:"d.m.Y H:i" }}</td>
           <td>{{ event.get_kind_display }}</td>
           <td>{% if event.old_role %}{{ event.get_old_role_display }} → {% endif %}{% if event.new_role %}{{ event.get_new_role_display }}{% endif %}</td>
-          <td>{{ event.reason }}</td>
+          <td>{{ event.reason }}{% if event.detail %}<span class="pre-line">{{ event.detail }}</span>{% endif %}</td>
           <td>{{ event.actor|default:"Verwaltungsbefehl" }}</td>
         </tr>
       {% endfor %}
