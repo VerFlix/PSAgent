@@ -3,7 +3,11 @@
 `unavailability_reasons()` ist die eine Stelle für die Verfügbarkeitsregel (Parität 13): nicht
 ausgesondert, nicht gesperrt, freigegeben, PSA-Prüfung aktuell (oder „keine PSA“), Rückgabe
 spätestens am Tag der nächsten Prüfung, keine Überschneidung, nicht noch überfällig draußen.
-Die Überschneidung prüft zusätzlich die Datenbank. Rechte prüft #12.
+Die Überschneidung prüft zusätzlich die Datenbank.
+
+Rechte (Rechtetabelle, `accounts.rights`): Verleihvorgänge ab Verleiher; Reservierungen anderer
+stornieren erst ab Trainer/Materialwart. Kontaktdaten ändern darf, wer verleihen darf und die
+Kontaktdaten dieses Entleihers sehen darf; löschen nur ein Admin oder ein Verwaltungsbefehl.
 """
 
 from collections.abc import Sequence
@@ -15,6 +19,7 @@ from django.db.backends.postgresql.psycopg_any import DateRange
 from django.utils import timezone
 
 from accounts.models import User
+from accounts.rights import Right, require
 from inspections.services import next_inspection_due
 from inventory.models import EventKind, Part
 from inventory.services import record_event
@@ -56,6 +61,7 @@ def create_borrower(
     actor: User | None = None,
 ) -> Borrower:
     """Legt einen Entleiher mit Kontaktdaten an. Kontaktdaten dürfen unvollständig sein."""
+    require(actor, Right.LEND)
     borrower = Borrower.objects.create(user=user, created_by=actor)
     BorrowerContact.objects.create(
         borrower=borrower, name=name, address=address, email=email, phone=phone
@@ -63,8 +69,10 @@ def create_borrower(
     return borrower
 
 
-def update_contact(borrower: Borrower, **fields: str) -> BorrowerContact:
+def update_contact(borrower: Borrower, *, actor: User | None, **fields: str) -> BorrowerContact:
     """Ändert oder ergänzt Kontaktdaten (Parität 16)."""
+    require(actor, Right.LEND)
+    require(actor, Right.VIEW_CONTACTS, borrower)
     unknown = set(fields) - set(CONTACT_FIELDS)
     if unknown:
         raise LendingError(f"Unbekannte Kontaktfelder: {', '.join(sorted(unknown))}")
@@ -76,8 +84,9 @@ def update_contact(borrower: Borrower, **fields: str) -> BorrowerContact:
     return contact
 
 
-def erase_contact(borrower: Borrower) -> None:
+def erase_contact(borrower: Borrower, *, actor: User | None) -> None:
     """Löscht die Kontaktdaten nach Ablauf der Löschfrist; die Ausleihhistorie bleibt."""
+    require(actor, Right.MANAGE_USERS)
     BorrowerContact.objects.filter(borrower=borrower).delete()
 
 
@@ -231,6 +240,7 @@ def reserve(
     borrower: Borrower, parts: Sequence[Part], start: date, end: date, *, actor: User | None
 ) -> Booking:
     """Reserviert Teile für [start, end] (Parität 12)."""
+    require(actor, Right.LEND)
     return _book(borrower, parts, start, end, actor=actor, status=LoanStatus.RESERVED)
 
 
@@ -272,6 +282,7 @@ def lend(
     signer_name: str,
 ) -> Booking:
     """Gibt Teile direkt aus, ohne vorherige Reservierung (Parität 12, 14)."""
+    require(actor, Right.LEND)
     _check_checkout(borrower, parts, quick_check=quick_check, gal_provided=gal_provided)
     booking = _book(borrower, parts, start, end, actor=actor, status=LoanStatus.LENT)
     _checked_out_events(
@@ -297,6 +308,7 @@ def check_out(
     signer_name: str,
 ) -> None:
     """Wandelt Reservierungen in Ausleihen um, mit denselben Prüfungen (Parität 15)."""
+    require(actor, Right.LEND)
     _require_status(loans, LoanStatus.RESERVED)
     borrowers = {loan.booking.borrower_id for loan in loans}
     if len(borrowers) != 1:
@@ -332,6 +344,9 @@ def return_loans(
     lock_comment: str | None = None,
 ) -> None:
     """Nimmt Teile zurück; mit `lock_comment` wird das Teil zugleich gesperrt (Parität 17)."""
+    require(actor, Right.LEND)
+    if lock_comment is not None:
+        require(actor, Right.LOCK)
     _require_status(loans, LoanStatus.LENT)
     signed = _signature(signature, signer_name)
     for loan in loans:
@@ -350,7 +365,13 @@ def return_loans(
 
 @transaction.atomic
 def cancel(loans: Sequence[Loan], *, actor: User | None, comment: str = "") -> None:
-    """Storniert Reservierungen; der Zeitraum wird wieder frei."""
+    """Storniert Reservierungen; der Zeitraum wird wieder frei.
+
+    Verleiher stornieren nur selbst angelegte Reservierungen, ab Trainer/Materialwart alle.
+    """
+    require(actor, Right.LEND)
+    for loan in loans:
+        require(actor, Right.CHANGE_OTHERS_RESERVATIONS, loan.booking)
     _require_status(loans, LoanStatus.RESERVED)
     for loan in loans:
         _transition(loan, LoanStatus.RESERVED, LoanStatus.CANCELLED)

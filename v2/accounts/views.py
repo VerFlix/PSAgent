@@ -1,7 +1,8 @@
 """Anmeldung, Abmeldung, Konto mit Passkeys und Vereinsgeräte (#11).
 
-Rechte im Server: Alles außer Anmeldung und Einrichtungslink verlangt ein angemeldetes Konto;
-Vereinsgeräte verwaltet nur ein Admin. Die vollständige Rechtetabelle folgt mit #12.
+Rechte im Server (`accounts.rights`): Jede Ansicht trägt `requires(...)` oder `public`.
+Öffentlich sind nur Anmeldung, Abmeldung und der Einrichtungslink; Vereinsgeräte verwaltet nur
+ein Admin.
 """
 
 import json
@@ -11,7 +12,6 @@ from django import forms
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.decorators import login_required
 from django.contrib.auth.signals import user_login_failed
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
@@ -24,7 +24,8 @@ from django.views.decorators.http import require_http_methods, require_POST
 from accounts import webauthn
 from accounts.devices import register_device, revoke_device
 from accounts.enrollment import find_token, mark_used
-from accounts.models import ClubDevice, Passkey, Role, User
+from accounts.models import ClubDevice, Passkey, User
+from accounts.rights import Right, has_right, public, requires
 
 # Backend, unter dem die Sitzung läuft (auch nach Passkey-Anmeldung).
 SESSION_BACKEND = "django.contrib.auth.backends.ModelBackend"
@@ -71,6 +72,7 @@ def _error(message: str, status: int = 400) -> JsonResponse:
 # --- Anmeldung ---
 
 
+@public
 @require_http_methods(["GET", "POST"])
 def login_view(request: HttpRequest) -> HttpResponse:
     """Anmeldung mit Passwort; die Passkey-Anmeldung läuft über die JSON-Endpunkte unten."""
@@ -100,6 +102,7 @@ def login_view(request: HttpRequest) -> HttpResponse:
     )
 
 
+@public
 @require_POST
 def passkey_login_options(request: HttpRequest) -> HttpResponse:
     return HttpResponse(
@@ -107,6 +110,7 @@ def passkey_login_options(request: HttpRequest) -> HttpResponse:
     )
 
 
+@public
 @require_POST
 def passkey_login(request: HttpRequest) -> JsonResponse:
     data = _json_body(request)
@@ -118,6 +122,7 @@ def passkey_login(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"redirect": _next_url(request)})
 
 
+@public
 @require_POST
 def logout_view(request: HttpRequest) -> HttpResponse:
     logout(request)
@@ -127,7 +132,7 @@ def logout_view(request: HttpRequest) -> HttpResponse:
 # --- Konto und Passkeys ---
 
 
-@login_required
+@requires(Right.ACCOUNT)
 @require_http_methods(["GET"])
 def account(request: HttpRequest) -> HttpResponse:
     user = _current_user(request)
@@ -135,12 +140,12 @@ def account(request: HttpRequest) -> HttpResponse:
         "passkeys": user.passkeys.filter(revoked_at__isnull=True),
         "device_form": DeviceForm(),
     }
-    if user.has_role(Role.ADMIN):
+    if has_right(user, Right.MANAGE_USERS):
         context["devices"] = ClubDevice.objects.filter(revoked_at__isnull=True).order_by("name")
     return render(request, "accounts/account.html", context)
 
 
-@login_required
+@requires(Right.ACCOUNT)
 @require_POST
 def passkey_register_options(request: HttpRequest) -> HttpResponse:
     user = _current_user(request)
@@ -149,7 +154,7 @@ def passkey_register_options(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@requires(Right.ACCOUNT)
 @require_POST
 def passkey_register(request: HttpRequest) -> JsonResponse:
     user = _current_user(request)
@@ -164,7 +169,7 @@ def passkey_register(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"redirect": reverse("accounts:account")})
 
 
-@login_required
+@requires(Right.ACCOUNT)
 @require_POST
 def passkey_revoke(request: HttpRequest, pk: int) -> HttpResponse:
     passkey = get_object_or_404(Passkey, pk=pk, user=request.user, revoked_at__isnull=True)
@@ -180,6 +185,7 @@ def passkey_revoke(request: HttpRequest, pk: int) -> HttpResponse:
 # --- Einrichtungslink für den ersten Passkey ---
 
 
+@public
 @require_http_methods(["GET"])
 def enroll(request: HttpRequest, token: str) -> HttpResponse:
     entry = find_token(token)
@@ -188,6 +194,7 @@ def enroll(request: HttpRequest, token: str) -> HttpResponse:
     return render(request, "accounts/enroll.html", {"token": token, "account": entry.user})
 
 
+@public
 @require_POST
 def enroll_options(request: HttpRequest, token: str) -> HttpResponse:
     entry = find_token(token)
@@ -199,6 +206,7 @@ def enroll_options(request: HttpRequest, token: str) -> HttpResponse:
     )
 
 
+@public
 @require_POST
 def enroll_finish(request: HttpRequest, token: str) -> JsonResponse:
     """Richtet den Passkey ein und verbraucht den Link, beides in einer Transaktion.
@@ -226,17 +234,10 @@ def enroll_finish(request: HttpRequest, token: str) -> JsonResponse:
 # --- Vereinsgeräte (nur Admin) ---
 
 
-def _require_admin(request: HttpRequest) -> User:
-    user = request.user
-    if not isinstance(user, User) or not user.has_role(Role.ADMIN):
-        raise PermissionDenied("Vereinsgeräte verwaltet nur ein Admin.")
-    return user
-
-
-@login_required
+@requires(Right.MANAGE_USERS)
 @require_POST
 def club_device_register(request: HttpRequest) -> HttpResponse:
-    admin = _require_admin(request)
+    admin = _current_user(request)
     form = DeviceForm(request.POST)
     response = redirect("accounts:account")
     if not form.is_valid() or not form.cleaned_data["name"].strip():
@@ -247,10 +248,9 @@ def club_device_register(request: HttpRequest) -> HttpResponse:
     return response
 
 
-@login_required
+@requires(Right.MANAGE_USERS)
 @require_POST
 def club_device_revoke(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_admin(request)
     device = get_object_or_404(ClubDevice, pk=pk, revoked_at__isnull=True)
     revoke_device(device)
     messages.success(request, f"Vereinsgerät „{device.name}“ widerrufen.")

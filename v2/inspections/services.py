@@ -25,7 +25,7 @@ from django.db.models import OuterRef, Subquery
 from django.utils import timezone
 
 from accounts.models import User
-from accounts.permissions import require_inspection_right
+from accounts.rights import Right, require
 from inspections.models import (
     EFFECTIVE_KINDS,
     OUTCOMES_WITH_COMMENT,
@@ -72,7 +72,7 @@ def _require_inspector(round_: InspectionRound, actor: User | None) -> None:
         return
     if actor is None or actor.pk != round_.inspector_id:
         raise InspectionError(f"In {round_} handelt nur {round_.inspector_display}.")
-    require_inspection_right(actor, "Prüfen")
+    require(actor, Right.INSPECT)
 
 
 def _require_state(round_: InspectionRound, *allowed: RoundState) -> None:
@@ -121,7 +121,7 @@ def start_round(
             legacy_report_id=legacy_report_id,
             started_at=at or timezone.now(),
         )
-    require_inspection_right(actor, "Eine Prüfungsrunde")
+    require(actor, Right.INSPECT)
     if legacy_report_id is not None:
         raise InspectionError("Ein Prüfbericht des Altsystems wird nur übernommen.")
     return InspectionRound.objects.create(inspector=actor, started_at=at or timezone.now())

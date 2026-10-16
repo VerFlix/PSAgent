@@ -1,0 +1,53 @@
+# Rechtetabelle
+
+Stand der Umsetzung von Konzept, Abschnitt 5 (#12). Die Tabelle steht im Code an einer Stelle,
+`accounts/rights.py` (`RIGHTS`). Diese Datei gibt sie wieder; ein Test (`tests/accounts/test_rights.py`)
+schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
+`accounts.rights.table_markdown()`.
+
+| Recht | Admin | PSA-Sachkundig | Trainer/Materialwart | Verleiher | Viewer |
+| --- | --- | --- | --- | --- | --- |
+| Eigenes Konto und Startseite | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Verfügbarkeit und Kalender sehen (ohne Personendaten) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Kontaktdaten der Entleiher sehen | ✓ | ✓ | nur laufende Ausleihen | nur laufende Ausleihen | – |
+| Reservieren, ausgeben, zurücknehmen | ✓ | ✓ | ✓ | ✓ | – |
+| Reservierungen anderer ändern oder stornieren | ✓ | ✓ | ✓ | nur eigene | – |
+| Sperren, jederzeit (mit Pflichtkommentar) | ✓ | ✓ | ✓ | ✓ | – |
+| Ausleihen nacherfassen (Notbetrieb) | ✓ | ✓ | eigene | eigene | – |
+| Prüfprotokolle nacherfassen (Notbetrieb) | ✓, nur mit Sachkunde | eigene, nur mit Sachkunde | – | – | – |
+| Teile anlegen, Beschreibung und GAL pflegen, PDFs erzeugen | ✓ | ✓ | ✓ | – | – |
+| PSA-relevante Felder ändern, „keine PSA“ setzen, neues Teil freigeben | ✓, nur mit Sachkunde | ✓, nur mit Sachkunde | – | – | – |
+| Export mit Personendaten | ✓ | ✓ | – | – | – |
+| Prüfungsrunde, entsperren, aussondern, nächste Prüfung setzen | ✓, nur mit Sachkunde | ✓, nur mit Sachkunde | – | – | – |
+| Nutzer, Rollen, Sachkunde-Zertifikate verwalten | ✓ | – | – | – | – |
+| Signierte Einträge ändern oder löschen | niemand | niemand | niemand | niemand | niemand |
+
+## Lesart
+
+- Rollen bauen aufeinander auf: Admin > PSA-Sachkundig > Trainer/Materialwart > Verleiher > Viewer.
+- „nur mit Sachkunde“: zusätzlich eine zum Zeitpunkt gültige Sachkunde (Qualifikation mit
+  Ablaufdatum, nicht die Rolle).
+- „nur laufende Ausleihen“: Kontaktdaten nur von Entleihern mit einer Reservierung oder Ausleihe,
+  die noch nicht zurückgegeben oder storniert ist.
+- „nur eigene“ / „eigene“: nur Vorgänge, die die Person selbst angelegt oder erfasst hat.
+- „Eigenes Konto und Startseite“ steht nicht im Konzept; es beschreibt, was jede angemeldete
+  Person darf (Startseite, eigene Passkeys).
+
+## Wo geprüft wird
+
+- **Dienste** (`inventory`, `inspections`, `lending`): `require(actor, Right…, obj)` vor jeder
+  Änderung. Eine abgewiesene Anfrage ändert nichts. `actor=None` steht für die Übernahme aus dem
+  Altsystem und Verwaltungsbefehle.
+- **Ansichten**: jede trägt `requires(Right…)` oder `public`. Ein Test schlägt fehl, wenn eine URL
+  keines von beiden hat. htmx-Teilanfragen werden genauso geprüft; ohne Anmeldung antworten sie
+  mit `401` und `HX-Redirect` zur Anmeldung.
+- **Öffentlich** sind nur Anmeldung (Passwort und Passkey), Abmeldung, der Einrichtungslink für
+  den ersten Passkey und `/healthz`.
+
+## Festlegungen, die das Konzept offenlässt
+
+- Kontaktdaten ändern: wer verleihen darf und die Kontaktdaten dieses Entleihers sehen darf.
+- Kontaktdaten nach Ablauf der Löschfrist löschen: nur Admin (oder ein Verwaltungsbefehl).
+- Eine Reservierung ausgeben, die jemand anderes angelegt hat, ist Verleihen, kein Ändern.
+- Teile übernommener Altdaten (ohne `angelegt von`) gelten für Verleiher nicht als eigene.
+- Vereinsgeräte festlegen und widerrufen gehört zu „Nutzer verwalten“ (nur Admin).

@@ -169,20 +169,20 @@ def test_ppe_fields_need_qualification(
 
 
 def test_other_fields_need_no_qualification(make_part: MakePart) -> None:
-    lender = User.objects.create_user(username="verleih", role=Role.LENDER)
+    trainer = User.objects.create_user(username="trainer", role=Role.TRAINER)
     component = make_part().components.get()
 
-    update_component(component, actor=lender, manufacturer="Beispiel Alpin", serial_number="SN-9")
+    update_component(component, actor=trainer, manufacturer="Beispiel Alpin", serial_number="SN-9")
 
     component.refresh_from_db()
     assert (component.manufacturer, component.serial_number) == ("Beispiel Alpin", "SN-9")
 
 
 def test_unchanged_ppe_field_needs_no_qualification(make_part: MakePart) -> None:
-    lender = User.objects.create_user(username="verleih", role=Role.LENDER)
+    trainer = User.objects.create_user(username="trainer", role=Role.TRAINER)
     component = make_part().components.get()
 
-    update_component(component, actor=lender, ei=component.ei, manufacturer="Beispiel Alpin")
+    update_component(component, actor=trainer, ei=component.ei, manufacturer="Beispiel Alpin")
 
 
 def test_next_due_is_not_a_component_field(make_part: MakePart, inspector: User) -> None:
