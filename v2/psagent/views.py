@@ -1,11 +1,16 @@
 """Projektweite Views, die zu keiner Fach-App gehören."""
 
+import logging
+
 from django.db import DatabaseError, connection
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
-from django.views.decorators.http import require_GET
+from django.utils import timezone
+from django.utils.cache import add_never_cache_headers
+from django.views.decorators.http import require_GET, require_http_methods
 
 from accounts.rights import Right, has_right, public, requires
+from psagent import backup
 
 
 @requires(Right.ACCOUNT)
@@ -35,3 +40,23 @@ def healthz(request: HttpRequest) -> JsonResponse:
     except DatabaseError:
         return JsonResponse({"status": "error", "database": "unreachable"}, status=503)
     return JsonResponse({"status": "ok", "database": "ok"})
+
+
+audit = logging.getLogger("psagent.audit")
+
+
+@requires(Right.MANAGE_USERS)
+@require_http_methods(["GET", "POST"])
+def backup_view(request: HttpRequest) -> HttpResponse:
+    """Parität 11: vollständige Sicherung als ZIP; nur Admin, jeder Abruf wird protokolliert."""
+    if request.method == "GET":
+        return render(request, "backup.html")
+    content = backup.build()
+    audit.warning("Vollständige Sicherung heruntergeladen von %s", request.user.get_username())
+    stamp = timezone.localtime()
+    response = HttpResponse(content, content_type="application/zip")
+    response["Content-Disposition"] = (
+        f'attachment; filename="psagent-sicherung-{stamp:%Y-%m-%d-%H%M}.zip"'
+    )
+    add_never_cache_headers(response)
+    return response

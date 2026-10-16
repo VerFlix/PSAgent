@@ -11,4 +11,5 @@ urlpatterns = [
     path("verleih/", include("lending.urls")),
     path("pruefung/", include("inspections.urls")),
     path("healthz", views.healthz, name="healthz"),
+    path("verwaltung/sicherung/", views.backup_view, name="backup"),
 ]

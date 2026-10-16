@@ -334,15 +334,17 @@ def test_parity_4_lower_roles_cannot_assign(role: Role, make_product: MakeProduc
     assert not part.documents.exists()
 
 
-def test_list_offers_marking_only_from_trainer_up(
+def test_list_offers_gal_for_marked_only_from_trainer_up(
     client: Client, make_product: MakeProduct
 ) -> None:
+    """Markieren können alle (Export), GAL zuweisen erst ab Trainer/Materialwart."""
     make_product("TST-G14")
     login(client, Role.LENDER)
-    assert 'name="teil"' not in client.get(reverse("inventory:part_list")).content.decode()
+    html = client.get(reverse("inventory:part_list")).content.decode()
+    assert 'name="teil"' in html and "GAL an markierte Teile" not in html
 
     login(client, Role.TRAINER)
-    assert 'name="teil"' in client.get(reverse("inventory:part_list")).content.decode()
+    assert "GAL an markierte Teile" in client.get(reverse("inventory:part_list")).content.decode()
 
 
 # --- Parität 21: GAL im Browser ---

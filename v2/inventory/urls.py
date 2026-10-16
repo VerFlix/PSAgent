@@ -12,6 +12,7 @@ urlpatterns = [
     path("neu/system/", views.system_create, name="system_create"),
     path("neu/system/bauteilzeile/", views.system_component_row, name="system_component_row"),
     path("gal-zuweisen/", views.gal_assign, name="gal_assign"),
+    path("export/", views.part_export, name="part_export"),
     path("gal/<int:pk>/", views.document_open, name="document_open"),
     path("<int:pk>/", views.part_detail, name="part_detail"),
     path("<int:pk>/bearbeiten/", views.part_edit, name="part_edit"),
