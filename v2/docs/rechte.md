@@ -41,8 +41,8 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 - **Ansichten**: jede trägt `requires(Right…)` oder `public`. Ein Test schlägt fehl, wenn eine URL
   keines von beiden hat. htmx-Teilanfragen werden genauso geprüft; ohne Anmeldung antworten sie
   mit `401` und `HX-Redirect` zur Anmeldung.
-- **Öffentlich** sind nur Anmeldung (Passwort und Passkey), Abmeldung, der Einrichtungslink für
-  den ersten Passkey und `/healthz`.
+- **Öffentlich** sind nur Anmeldung (Passwort und Passkey), Abmeldung, der Einrichtungslink
+  (Passkey oder, außer für Admin und PSA-Sachkundige, eigenes Passwort) und `/healthz`.
 
 ## Festlegungen, die das Konzept offenlässt
 
@@ -51,3 +51,7 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 - Eine Reservierung ausgeben, die jemand anderes angelegt hat, ist Verleihen, kein Ändern.
 - Teile übernommener Altdaten (ohne `angelegt von`) gelten für Verleiher nicht als eigene.
 - Vereinsgeräte festlegen und widerrufen gehört zu „Nutzer verwalten“ (nur Admin).
+- Nutzer verwalten (#67): Ein Admin nimmt sich nicht selbst die Admin-Rolle und deaktiviert
+  sich nicht selbst; das letzte aktive Admin-Konto bleibt erhalten. Rollenwechsel, Deaktivieren,
+  Reaktivieren, Einrichtungslinks und vom Admin widerrufene Passkeys stehen im nur anhängbaren
+  Protokoll `AccountEvent`.

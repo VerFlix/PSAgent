@@ -2,7 +2,8 @@
 
 Rechte im Server (`accounts.rights`): Jede Ansicht trägt `requires(...)` oder `public`.
 Öffentlich sind nur Anmeldung, Abmeldung und der Einrichtungslink; Vereinsgeräte verwaltet nur
-ein Admin.
+ein Admin. Über den Einrichtungslink richten Admin und PSA-Sachkundige einen Passkey ein, die
+übrigen Rollen wahlweise einen Passkey oder ein eigenes Passwort (#67).
 """
 
 import json
@@ -12,6 +13,7 @@ from django import forms
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.forms import SetPasswordForm
 from django.contrib.auth.signals import user_login_failed
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
@@ -185,13 +187,22 @@ def passkey_revoke(request: HttpRequest, pk: int) -> HttpResponse:
 # --- Einrichtungslink für den ersten Passkey ---
 
 
+def _enroll_page(
+    token: str, account: User, form: SetPasswordForm[User] | None = None
+) -> dict[str, Any]:
+    """Passkey immer; ein eigenes Passwort nur für Rollen ohne Passkey-Pflicht."""
+    if form is None and not account.requires_passkey:
+        form = SetPasswordForm(account)
+    return {"token": token, "account": account, "password_form": form}
+
+
 @public
 @require_http_methods(["GET"])
 def enroll(request: HttpRequest, token: str) -> HttpResponse:
     entry = find_token(token)
     if entry is None:
         return render(request, "accounts/enroll_invalid.html", status=404)
-    return render(request, "accounts/enroll.html", {"token": token, "account": entry.user})
+    return render(request, "accounts/enroll.html", _enroll_page(token, entry.user))
 
 
 @public
@@ -229,6 +240,31 @@ def enroll_finish(request: HttpRequest, token: str) -> JsonResponse:
     login(request, entry.user, backend=SESSION_BACKEND)
     messages.success(request, "Passkey eingerichtet. Sie sind angemeldet.")
     return JsonResponse({"redirect": reverse("accounts:account")})
+
+
+@public
+@require_POST
+def enroll_password(request: HttpRequest, token: str) -> HttpResponse:
+    """Eigenes Passwort statt Passkey festlegen; nur für Rollen ohne Passkey-Pflicht.
+
+    Wie beim Passkey: Link sperren, Passwort setzen und Link verbrauchen in einer Transaktion.
+    """
+    with transaction.atomic():
+        entry = find_token(token, lock=True)
+        if entry is None:
+            return render(request, "accounts/enroll_invalid.html", status=404)
+        account = entry.user
+        if account.requires_passkey:
+            raise PermissionDenied("Admin und PSA-Sachkundige melden sich nur mit Passkey an.")
+        form = SetPasswordForm(account, request.POST)
+        if not form.is_valid():
+            context = _enroll_page(token, account, form)
+            return render(request, "accounts/enroll.html", context, status=400)
+        form.save()
+        mark_used(entry)
+    login(request, account, backend=SESSION_BACKEND)
+    messages.success(request, "Passwort festgelegt. Sie sind angemeldet.")
+    return redirect(settings.LOGIN_REDIRECT_URL)
 
 
 # --- Vereinsgeräte (nur Admin) ---

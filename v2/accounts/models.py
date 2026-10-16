@@ -271,3 +271,68 @@ class ClubDevice(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class AccountEventKind(models.TextChoices):
+    CREATED = "created", "angelegt"
+    ROLE_CHANGED = "role_changed", "Rolle geändert"
+    DEACTIVATED = "deactivated", "deaktiviert"
+    REACTIVATED = "reactivated", "wieder aktiviert"
+    ENROLLMENT_ISSUED = "enrollment_issued", "Einrichtungslink ausgestellt"
+    PASSKEY_REVOKED = "passkey_revoked", "Passkey widerrufen"
+
+
+# Vorgänge, die eine Begründung brauchen.
+EVENTS_WITH_REASON = (
+    AccountEventKind.ROLE_CHANGED,
+    AccountEventKind.DEACTIVATED,
+    AccountEventKind.REACTIVATED,
+    AccountEventKind.PASSKEY_REVOKED,
+)
+
+
+class AccountEvent(AppendOnlyModel):
+    """Protokoll der Kontoverwaltung (#67). Wird nur angehängt, nie geändert.
+
+    So bleibt nachweisbar, welche Rolle eine Person zu einem Zeitpunkt hatte und wer sie
+    vergeben hat. `actor` ist leer bei Verwaltungsbefehlen auf dem Server.
+    """
+
+    user = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name="account_events", verbose_name="Konto"
+    )
+    kind = models.CharField("Vorgang", max_length=20, choices=AccountEventKind.choices)
+    old_role = models.CharField("Rolle vorher", max_length=20, choices=Role.choices, blank=True)
+    new_role = models.CharField("Rolle nachher", max_length=20, choices=Role.choices, blank=True)
+    reason = models.TextField("Begründung", blank=True)
+    at = models.DateTimeField("Zeitpunkt", default=timezone.now)
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="durch",
+    )
+
+    class Meta:
+        verbose_name = "Vorgang der Kontoverwaltung"
+        verbose_name_plural = "Vorgänge der Kontoverwaltung"
+        ordering = ("at", "id")
+        constraints = (
+            models.CheckConstraint(
+                condition=Q(kind__in=AccountEventKind.values), name="accounts_event_kind_valid"
+            ),
+            models.CheckConstraint(
+                condition=~Q(kind__in=EVENTS_WITH_REASON) | Q(reason__regex=r"\S"),
+                name="accounts_event_reason_required",
+            ),
+            models.CheckConstraint(
+                condition=~Q(kind=AccountEventKind.ROLE_CHANGED)
+                | (~Q(old_role="") & ~Q(new_role="") & ~Q(old_role=models.F("new_role"))),
+                name="accounts_event_role_change_complete",
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.get_kind_display()}: {self.user} am {self.at:%d.%m.%Y %H:%M}"

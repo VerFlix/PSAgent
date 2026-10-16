@@ -1,9 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Passkey einrichten{% endblock %}
+{% block title %}Zugang einrichten{% endblock %}
 {% block content %}
-<h1>Passkey einrichten</h1>
+<h1>Zugang einrichten</h1>
+<p>Konto <strong>{{ account.get_username }}</strong>. Der Link gilt nur einmal.</p>
 <section class="card">
-  <p>Ersten Passkey für das Konto <strong>{{ account.get_username }}</strong> einrichten. Der Link gilt nur einmal.</p>
+  <h2>Passkey einrichten</h2>
+  {% if password_form %}<p>Empfohlen: ein Sicherheitsschlüssel (z. B. YubiKey) oder der Passkey des Geräts.</p>{% endif %}
   <label for="passkey-name">Bezeichnung</label>
   <input id="passkey-name" maxlength="100" placeholder="z. B. YubiKey blau">
   <button type="button" class="primary" data-passkey="register" data-name-input="passkey-name"
@@ -11,4 +13,20 @@
           data-submit-url="{% url 'accounts:enroll_finish' token %}">Passkey einrichten</button>
   <p class="status" id="passkey-status" role="status" aria-live="polite"></p>
 </section>
+{% if password_form %}
+<section class="card">
+  <h2>Oder: eigenes Passwort festlegen</h2>
+  <form method="post" action="{% url 'accounts:enroll_password' token %}">
+    {% csrf_token %}
+    {% for error in password_form.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+    {% for field in password_form %}
+      <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+      {{ field }}
+      {% for error in field.errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+    {% endfor %}
+    <p>Mindestens 12 Zeichen, nicht nur Ziffern, kein gängiges Passwort.</p>
+    <button type="submit">Passwort festlegen</button>
+  </form>
+</section>
+{% endif %}
 {% endblock %}
