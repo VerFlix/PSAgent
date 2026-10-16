@@ -5,7 +5,7 @@
 <section class="card">
   <h2>Passkeys</h2>
   {% if passkeys %}
-    <table class="list">
+    <div class="table-scroll"><table class="list">
       <thead><tr><th>Bezeichnung</th><th>angelegt</th><th>zuletzt benutzt</th><th></th></tr></thead>
       <tbody>
       {% for passkey in passkeys %}
@@ -21,7 +21,7 @@
         </tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
   {% else %}
     <p>Noch kein Passkey eingerichtet.</p>
   {% endif %}

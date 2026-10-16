@@ -3,7 +3,7 @@
 {% block content %}
 <h1>Nutzer verwalten</h1>
 <p><a href="{% url 'accounts:user_create' %}">Neues Konto anlegen</a></p>
-<table class="list">
+<div class="table-scroll"><table class="list">
   <thead><tr><th>Name</th><th>Benutzername</th><th>Rolle</th><th>Passkeys</th><th>Status</th></tr></thead>
   <tbody>
   {% for account in accounts %}
@@ -16,5 +16,5 @@
     </tr>
   {% endfor %}
   </tbody>
-</table>
+</table></div>
 {% endblock %}

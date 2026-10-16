@@ -30,7 +30,7 @@
 <section class="card">
   <h2>Zugang</h2>
   {% if passkeys %}
-    <table class="list">
+    <div class="table-scroll"><table class="list">
       <thead><tr><th>Passkey</th><th>angelegt</th><th>zuletzt benutzt</th><th>Widerrufen (z. B. Schlüssel verloren)</th></tr></thead>
       <tbody>
       {% for passkey in passkeys %}
@@ -48,7 +48,7 @@
         </tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
   {% else %}
     <p>Kein Passkey eingerichtet.{% if account.requires_passkey %} Diese Rolle meldet sich nur mit Passkey an; ohne Passkey hilft ein Einrichtungslink.{% endif %}</p>
   {% endif %}
@@ -63,7 +63,7 @@
   <h2>Sachkunde</h2>
   <p>{% if valid_qualification %}Zurzeit gültig.{% else %}Zurzeit keine gültige Sachkunde.{% endif %}</p>
   {% if qualifications %}
-    <table class="list">
+    <div class="table-scroll"><table class="list">
       <thead><tr><th>gültig</th><th>Nachweis</th><th>Stand</th></tr></thead>
       <tbody>
       {% for entry in qualifications %}
@@ -84,7 +84,7 @@
         </tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
   {% endif %}
   <form method="post" action="{% url 'accounts:qualification_grant' account.pk %}">
     {% csrf_token %}
@@ -116,7 +116,7 @@
 <section class="card">
   <h2>Protokoll</h2>
   {% if events %}
-    <table class="list">
+    <div class="table-scroll"><table class="list">
       <thead><tr><th>Zeitpunkt</th><th>Vorgang</th><th>Rolle</th><th>Begründung</th><th>durch</th></tr></thead>
       <tbody>
       {% for event in events %}
@@ -129,7 +129,7 @@
         </tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
   {% else %}
     <p>Noch keine Vorgänge.</p>
   {% endif %}
