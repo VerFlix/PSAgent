@@ -46,6 +46,7 @@ class Right(StrEnum):
     PPE_DOCUMENTS = "ppe_documents"
     EXPORT_PERSONAL = "export_personal"
     INSPECT = "inspect"
+    CLARIFY = "clarify"
     MANAGE_USERS = "manage_users"
     MODIFY_SIGNED = "modify_signed"
 
@@ -144,6 +145,7 @@ RIGHTS: dict[Right, Rule] = {
         Role.PPE_EXPERT,
         qualification=True,
     ),
+    Right.CLARIFY: Rule("Klärungsliste nach dem Notbetrieb bearbeiten", Role.PPE_EXPERT),
     Right.MANAGE_USERS: Rule("Nutzer, Rollen, Sachkunde-Zertifikate verwalten", Role.ADMIN),
     Right.MODIFY_SIGNED: Rule("Signierte Einträge ändern oder löschen", None),
 }

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Sperrungen nacherfassen{% endblock %}
+{% block content %}
+<h1>Sperrungen nacherfassen</h1>
+<p>Formular „Sperrung“ aus dem Notbetrieb: Nummer eingeben, Scan hochladen, jede Zeile mit dem
+  Datum vom Formular eintragen. Die Sperre gilt ab diesem Datum und trägt den Vermerk
+  „nachgetragen von {{ user.get_full_name|default:user.username }} am heutigen Tag“.</p>
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  <section class="card">
+    <h2>Formular und Scan</h2>
+    <label for="capture-number">Formularnummer (z. B. S-00003)</label>
+    <input id="capture-number" name="number" maxlength="20" required autocomplete="off"
+           value="{{ form.number.value|default:'' }}">
+    <label for="capture-file">Scan als PDF oder Fotos (JPEG, PNG)</label>
+    <input id="capture-file" type="file" name="scan" multiple accept="application/pdf,image/jpeg,image/png">
+    <label for="capture-camera">oder mit der Kamera aufnehmen</label>
+    <input id="capture-camera" type="file" name="scan" multiple accept="image/jpeg,image/png" capture="environment">
+    <p class="hint">Mehrere Fotos werden zu einer PDF zusammengefasst. Maßgeblich bleibt das Papier;
+      das Original kommt zurück ins Fach.</p>
+  </section>
+  <section class="card">
+    <h2>Zeilen des Formulars</h2>
+    {{ rows.management_form }}
+    {% for row in rows %}
+      <fieldset class="row-block">
+        <legend>Zeile {{ forloop.counter }}</legend>
+        {% for field in row %}
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% for error in field.errors %}<p class="error">{{ error }}</p>{% endfor %}
+        {% endfor %}
+      </fieldset>
+    {% endfor %}
+    <p class="hint">Leere Zeilen werden übersprungen. Ist ein Teil schon gesperrt, kommt die Zeile auf die Klärungsliste.</p>
+  </section>
+  <button type="submit" class="primary">Nacherfassen</button>
+</form>
+<p><a href="{% url 'emergency:index' %}">Zurück zum Notbetrieb</a></p>
+{% endblock %}

@@ -10,4 +10,7 @@ urlpatterns = [
     path("", views.index, name="index"),
     path("mappe/neu/", views.create, name="create"),
     path("mappe/neueste.pdf", views.latest, name="latest"),
+    path("nacherfassen/sperrungen/", views.backfill_locks, name="backfill_locks"),
+    path("klaerung/", views.clarifications, name="clarifications"),
+    path("formular/<int:pk>/scan.pdf", views.scan, name="scan"),
 ]
