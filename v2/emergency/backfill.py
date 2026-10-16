@@ -37,6 +37,11 @@ IMAGE_MAGIC = {b"\xff\xd8\xff": "jpg", b"\x89PNG\r\n\x1a\n": "png"}
 MAX_SCAN_FILES = 10
 MAX_SCAN_BYTES = 25 * 1024 * 1024
 MAX_LOCK_ROWS = 10  # Zeilen auf dem Formular „Sperrung“
+# Obergrenze je Foto, gelesen aus dem Dateikopf vor dem Entpacken (Schutz vor Pixelbomben).
+# Handykameras liefern meist 12–50 Megapixel.
+MAX_PIXELS = 60_000_000
+# JPEG-Marker mit Bildgröße (SOF0–SOF15 ohne DHT, JPG und DAC).
+_JPEG_SOF = {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
 # Uhrzeit für Vorgänge, von denen das Formular nur den Tag kennt.
 NOON = time(12, 0)
 
@@ -79,6 +84,48 @@ def _image_kind(content: bytes) -> str | None:
     return None
 
 
+def _image_size(content: bytes, kind: str) -> tuple[int, int] | None:
+    """Breite und Höhe aus dem Dateikopf, ohne das Bild zu entpacken; None, wenn unlesbar."""
+    if kind == "png":
+        if len(content) < 24 or content[12:16] != b"IHDR":
+            return None
+        return int.from_bytes(content[16:20]), int.from_bytes(content[20:24])
+    index = 2
+    while index + 4 <= len(content):
+        if content[index] != 0xFF:
+            return None
+        marker = content[index + 1]
+        index += 2
+        if marker == 0xFF:
+            index -= 1  # Füllbyte
+            continue
+        if marker == 0x01 or 0xD0 <= marker <= 0xD9:
+            continue
+        length = int.from_bytes(content[index : index + 2])
+        if marker in _JPEG_SOF:
+            if index + 7 > len(content):
+                return None
+            height = int.from_bytes(content[index + 3 : index + 5])
+            width = int.from_bytes(content[index + 5 : index + 7])
+            return width, height
+        if length < 2:
+            return None
+        index += length
+    return None
+
+
+def _check_image(content: bytes, kind: str, name: str) -> None:
+    size = _image_size(content, kind)
+    if size is None or 0 in size:
+        raise BackfillError(f"{name} ließ sich nicht lesen; bitte neu aufnehmen.")
+    width, height = size
+    if width * height > MAX_PIXELS:
+        raise BackfillError(
+            f"{name} ist mit {width} x {height} Bildpunkten zu groß "
+            f"(höchstens {MAX_PIXELS // 1_000_000} Megapixel)."
+        )
+
+
 def scan_to_pdf(scans: Sequence[Scan]) -> bytes:
     """Eine PDF unverändert, oder Fotos als je eine Seite einer neuen PDF."""
     if not scans:
@@ -96,6 +143,9 @@ def scan_to_pdf(scans: Sequence[Scan]) -> bytes:
     if None in kinds:
         bad = next(name for (_, name), kind in zip(scans, kinds, strict=True) if kind is None)
         raise BackfillError(f"{bad} ist kein PDF oder Foto (JPEG, PNG).")
+    for (content, name), kind in zip(scans, kinds, strict=True):
+        assert kind is not None  # noqa: S101 – oben geprüft
+        _check_image(content, kind, name)
     with tempfile.TemporaryDirectory(prefix="psagent-scan-") as folder:
         names = []
         for index, ((content, _), suffix) in enumerate(zip(scans, kinds, strict=True), 1):
@@ -152,7 +202,24 @@ def _backfill_note(form: PaperForm, actor: User | None) -> str:
 
 
 def _moment(day: date) -> datetime:
-    return timezone.make_aware(datetime.combine(day, NOON))
+    """Mittag des Tages vom Formular; für heute höchstens jetzt, damit der Vorgang schon gilt."""
+    return min(timezone.make_aware(datetime.combine(day, NOON)), timezone.now())
+
+
+# Vorgänge, deren Reihenfolge über Sperr- und Prüfstatus entscheidet.
+STATUS_EVENTS = (EventKind.LOCKED, EventKind.UNLOCKED, EventKind.RETIRED)
+
+
+def _check_form_date(day: date, sheet: FormSheet) -> None:
+    """Das Datum vom Formular liegt zwischen dem Druck der Mappe und heute."""
+    printed = timezone.localtime(sheet.binder.created_at).date()
+    if day > timezone.localdate():
+        raise BackfillError(f"Das Datum {day:%d.%m.%Y} liegt in der Zukunft.")
+    if day < printed:
+        raise BackfillError(
+            f"Das Datum {day:%d.%m.%Y} liegt vor dem Druck der Notfallmappe "
+            f"({printed:%d.%m.%Y}); das Formular kann nicht älter sein."
+        )
 
 
 def find_part(ei: str) -> Part | None:
@@ -185,6 +252,7 @@ def capture_locks(
             raise BackfillError(f"{part} ist ausgesondert und lässt sich nicht mehr sperren.")
         if not str(row["reason"]).strip() or not str(row["locked_by_name"]).strip():
             raise BackfillError("Jede Sperrung braucht Grund und Namen der sperrenden Person.")
+        _check_form_date(row["locked_on"], sheet)
         parts.append(part)
     form = _record_form(sheet, scans, actor)
     note = _backfill_note(form, actor)
@@ -197,15 +265,21 @@ def capture_locks(
             "locked_by_name": row["locked_by_name"].strip(),
         }
         part.refresh_from_db()
+        moment = _moment(row["locked_on"])
         if part.is_locked():
             entry["note"] = "Teil war bei der Nacherfassung bereits gesperrt; nicht übernommen."
+        elif part.events.filter(kind__in=STATUS_EVENTS, at__gte=moment).exists():
+            entry["note"] = (
+                "Am Teil gibt es spätere Sperr- oder Prüfvorgänge; nicht übernommen, damit die "
+                "Reihenfolge stimmt."
+            )
         else:
             entry["part_event"] = record_event(
                 part,
                 EventKind.LOCKED,
                 actor=actor,
                 comment=(f"{entry['reason']} – gesperrt von {entry['locked_by_name']}; {note}"),
-                at=_moment(row["locked_on"]),
+                at=moment,
             )
         LockEntry.objects.create(**entry)
     return form

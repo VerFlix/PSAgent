@@ -11,7 +11,7 @@ import hashlib
 import io
 import struct
 import zlib
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from django.core.exceptions import PermissionDenied
@@ -22,8 +22,8 @@ from django.utils import timezone
 
 from accounts.models import Role, User
 from emergency import backfill
-from emergency.binder import create_binder
-from emergency.models import Clarification, LockEntry, PaperForm
+from emergency.binder import SHEETS_PER_BINDER, create_binder
+from emergency.models import Binder, Clarification, FormSheet, LockEntry, PaperForm
 from inventory.models import EventKind, PartEvent
 from inventory.services import record_event
 from tests.helpers import make_inspector
@@ -51,10 +51,22 @@ def expert() -> User:
     return make_inspector()
 
 
-def lock_row(
-    ei: str, *, reason: str = "Naht offen", on: date = date(2026, 10, 10)
-) -> dict[str, object]:
-    return {"ei": ei, "reason": reason, "locked_on": on, "locked_by_name": "Testperson Sperrer"}
+def lock_row(ei: str, *, reason: str = "Naht offen", on: date | None = None) -> dict[str, object]:
+    day = on or timezone.localdate()
+    return {"ei": ei, "reason": reason, "locked_on": day, "locked_by_name": "Testperson Sperrer"}
+
+
+def binder_printed(days_ago: int) -> Binder:
+    """Mappe, die vor `days_ago` Tagen gedruckt wurde (Nummern wie von `create_binder`)."""
+    binder = Binder.objects.create(
+        created_at=timezone.now() - timedelta(days=days_ago), sha256="0" * 64
+    )
+    for kind, count in SHEETS_PER_BINDER.items():
+        start = FormSheet.objects.filter(kind=kind).count()
+        FormSheet.objects.bulk_create(
+            FormSheet(binder=binder, kind=kind, number=start + n) for n in range(1, count + 1)
+        )
+    return binder
 
 
 # --- Dienst: Sperrungen nacherfassen ---
@@ -62,15 +74,18 @@ def lock_row(
 
 def test_parity_22_lock_backfilled_with_original_date(make_part: MakePart, lender: User) -> None:
     part = make_part()
-    create_binder(actor=None)
+    binder_printed(days_ago=10)
     ei = part.components.get().ei
+    on = timezone.localdate() - timedelta(days=6)
 
-    form = backfill.capture_locks("S-00001", [(SCAN, "scan.pdf")], [lock_row(ei)], actor=lender)
+    form = backfill.capture_locks(
+        "S-00001", [(SCAN, "scan.pdf")], [lock_row(ei, on=on)], actor=lender
+    )
 
     part.refresh_from_db()
     assert part.is_locked()
     event = PartEvent.objects.get(part=part, kind=EventKind.LOCKED)
-    assert timezone.localtime(event.at).date() == date(2026, 10, 10)
+    assert timezone.localtime(event.at).date() == on
     assert event.actor == lender
     assert "Naht offen" in event.comment
     assert "Formular S-00001" in event.comment and "Testperson Sperrer" in event.comment
@@ -307,7 +322,7 @@ def test_parity_22_capture_via_form(client: Client, lender: User, make_part: Mak
             "rows-INITIAL_FORMS": "0",
             "rows-0-ei": ei,
             "rows-0-reason": "Naht offen",
-            "rows-0-locked_on": "2026-10-10",
+            "rows-0-locked_on": timezone.localdate().isoformat(),
             "rows-0-locked_by_name": "Testperson Sperrer",
         },
         follow=True,
@@ -334,7 +349,7 @@ def test_capture_form_shows_errors(client: Client, lender: User, make_part: Make
             "rows-INITIAL_FORMS": "0",
             "rows-0-ei": "TST-GIBTSNICHT",
             "rows-0-reason": "Naht offen",
-            "rows-0-locked_on": "2026-10-10",
+            "rows-0-locked_on": timezone.localdate().isoformat(),
             "rows-0-locked_by_name": "Testperson Sperrer",
         },
     )
@@ -370,3 +385,86 @@ def test_lender_has_no_clarification_page(client: Client, lender: User) -> None:
     client.force_login(lender)
 
     assert client.get(reverse("emergency:clarifications")).status_code == 403
+
+
+# --- Sicherheit: Datum, spätere Vorgänge, Fotogröße ---
+
+
+@pytest.mark.parametrize(
+    ("days", "message"),
+    [(1, "Zukunft"), (-11, "vor dem Druck")],
+    ids=["morgen", "vor-der-mappe"],
+)
+def test_form_date_between_print_and_today(
+    days: int, message: str, make_part: MakePart, lender: User
+) -> None:
+    """Rückdatieren über das Formular ist begrenzt: nicht vor der Mappe, nicht nach heute."""
+    part = make_part()
+    binder_printed(days_ago=10)
+    row = lock_row(part.components.get().ei, on=timezone.localdate() + timedelta(days=days))
+
+    with pytest.raises(backfill.BackfillError, match=message):
+        backfill.capture_locks("S-00001", [(SCAN, "scan.pdf")], [row], actor=lender)
+
+    assert PaperForm.objects.count() == 0
+
+
+def test_later_status_event_becomes_clarification(
+    make_part: MakePart, lender: User, expert: User
+) -> None:
+    """Ein rückdatierter Vorgang darf die Reihenfolge späterer Vorgänge nicht verändern."""
+    part = make_part()
+    binder_printed(days_ago=10)
+    record_event(part, EventKind.LOCKED, actor=None, comment="nach dem Ausfall gesperrt")
+    record_event(part, EventKind.UNLOCKED, actor=expert, comment="geprüft, in Ordnung")
+    row = lock_row(part.components.get().ei, on=timezone.localdate() - timedelta(days=5))
+
+    form = backfill.capture_locks("S-00001", [(SCAN, "scan.pdf")], [row], actor=lender)
+
+    part.refresh_from_db()
+    assert not part.is_locked()
+    entry = LockEntry.objects.get(paper_form=form)
+    assert entry.part_event is None and "spätere" in entry.note
+    assert [case.key for case in backfill.open_cases()] == [f"sperre:{entry.pk}"]
+
+
+def huge_png() -> bytes:
+    """PNG-Kopf, der 100 000 x 100 000 Bildpunkte ankündigt (Pixelbombe)."""
+    content = bytearray(png())
+    content[16:24] = (100_000).to_bytes(4) + (100_000).to_bytes(4)
+    return bytes(content)
+
+
+def huge_jpeg() -> bytes:
+    """JPEG-Kopf (SOI, APP0, SOF0) mit 60 000 x 60 000 Bildpunkten."""
+    app0 = b"\xff\xe0" + (16).to_bytes(2) + b"JFIF\x00" + bytes(9)
+    size = (60_000).to_bytes(2) * 2
+    sof0 = b"\xff\xc0" + (11).to_bytes(2) + b"\x08" + size + b"\x01\x01\x11\x00"
+    return b"\xff\xd8" + app0 + sof0
+
+
+@pytest.mark.parametrize("content", [huge_png(), huge_jpeg()], ids=["png", "jpeg"])
+def test_oversized_photo_is_refused_before_decoding(
+    content: bytes, make_part: MakePart, lender: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def no_compile(*args: object, **kwargs: object) -> bytes:
+        raise AssertionError("Typst darf die Pixelbombe nicht entpacken")
+
+    part = make_part()
+    create_binder(actor=None)
+    row = lock_row(part.components.get().ei)
+    monkeypatch.setattr("emergency.backfill.typst.compile", no_compile)
+
+    with pytest.raises(backfill.BackfillError, match="zu groß"):
+        backfill.capture_locks("S-00001", [(content, "foto")], [row], actor=lender)
+
+
+def test_photo_without_size_is_refused(make_part: MakePart, lender: User) -> None:
+    part = make_part()
+    create_binder(actor=None)
+    row = lock_row(part.components.get().ei)
+
+    with pytest.raises(backfill.BackfillError, match="nicht lesen"):
+        backfill.capture_locks(
+            "S-00001", [(b"\xff\xd8\xff\xd9", "kaputt.jpg")], [row], actor=lender
+        )

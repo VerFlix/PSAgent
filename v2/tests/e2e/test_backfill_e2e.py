@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from django.utils import timezone
 from playwright.sync_api import Page, expect
 
 from accounts.models import Role
@@ -20,7 +21,7 @@ def fill_lock(page: Page, number: str, ei: str, scan: Path) -> None:
     page.get_by_label("Scan als PDF oder Fotos (JPEG, PNG)").set_input_files(str(scan))
     page.locator("#id_rows-0-ei").fill(ei)
     page.locator("#id_rows-0-reason").fill("Naht an der Beinschlaufe offen")
-    page.locator("#id_rows-0-locked_on").fill("2026-10-10")
+    page.locator("#id_rows-0-locked_on").fill(timezone.localdate().isoformat())
     page.locator("#id_rows-0-locked_by_name").fill("Testperson Sperrer")
     page.get_by_role("button", name="Nacherfassen").click()
 
