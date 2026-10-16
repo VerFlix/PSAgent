@@ -18,4 +18,7 @@ urlpatterns = [
     path("<int:pk>/bearbeiten/", views.part_edit, name="part_edit"),
     path("<int:pk>/sperren/", views.part_lock, name="part_lock"),
     path("<int:pk>/entsperren/", views.part_unlock, name="part_unlock"),
+    path("<int:pk>/einsatzdokumentation.pdf", views.part_usage_log, name="part_usage_log"),
+    path("<int:pk>/pd.pdf", views.part_data_sheet, name="part_data_sheet"),
+    path("<int:pk>/haftungsausschluss.pdf", views.part_disclaimer, name="part_disclaimer"),
 ]

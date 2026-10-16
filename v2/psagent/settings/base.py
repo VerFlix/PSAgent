@@ -107,6 +107,8 @@ PSAGENT_WEBAUTHN_ORIGINS = env_list("PSAGENT_WEBAUTHN_ORIGINS", "http://localhos
 PSAGENT_CLUB_DEVICE_COOKIE = "psagent_vereinsgeraet"
 PSAGENT_CLUB_DEVICE_IDLE_SECONDS = 3 * 60
 PSAGENT_ENROLLMENT_HOURS = 24
+# Verein als Besitzer auf der Einsatzdokumentation (Parität 5); leer: Platz für einen Stempel.
+PSAGENT_CLUB_NAME = env("PSAGENT_CLUB_NAME", "")
 
 ROOT_URLCONF = "psagent.urls"
 

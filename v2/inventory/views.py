@@ -5,6 +5,7 @@ anlegen ab Trainer/Materialwart, sperren ab Verleiher, entsperren und „keine P
 gültiger Sachkunde. Die Regeln selbst prüfen die Dienste in `inventory.services`.
 """
 
+import io
 from typing import Any
 
 from django.contrib import messages
@@ -21,7 +22,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from accounts.models import User
 from accounts.rights import Right, has_right, requires
 from inspections.services import next_inspection_due
-from inventory import export
+from inventory import documents, export
 from inventory.forms import (
     CommentForm,
     ComponentEditFormSet,
@@ -102,6 +103,8 @@ def part_detail(request: HttpRequest, pk: int) -> HttpResponse:
         and has_right(user, Right.LOCK),
         "may_unlock": status == PartStatus.LOCKED and has_right(user, Right.INSPECT),
         "may_edit": status != PartStatus.RETIRED and has_right(user, Right.MANAGE_PARTS),
+        "may_usage_log": has_right(user, Right.MANAGE_PARTS),
+        "may_ppe_documents": has_right(user, Right.PPE_DOCUMENTS),
         "comment_form": CommentForm(),
     }
     return render(request, "inventory/part_detail.html", context)
@@ -432,3 +435,39 @@ def part_export(request: HttpRequest) -> HttpResponse:
     response = HttpResponse(content, content_type=content_type)
     response["Content-Disposition"] = f'attachment; filename="teileliste-{stand:%Y-%m-%d}.{kind}"'
     return response
+
+
+# --- PDF-Dokumente je Teil (Parität 5) ---
+
+
+def _document(request: HttpRequest, pk: int, kind: documents.DocumentKind) -> FileResponse:
+    part = get_object_or_404(Part, pk=pk)
+    assert isinstance(request.user, User)  # noqa: S101 – von requires() geprüft
+    content = documents.render(kind, part, user=request.user)
+    return FileResponse(
+        io.BytesIO(content),
+        as_attachment=True,
+        filename=documents.filename(kind, part),
+        content_type="application/pdf",
+    )
+
+
+@requires(Right.MANAGE_PARTS)
+@require_GET
+def part_usage_log(request: HttpRequest, pk: int) -> FileResponse:
+    """Leere Einsatzdokumentation mit dem Verein als Besitzer."""
+    return _document(request, pk, documents.DocumentKind.USAGE_LOG)
+
+
+@requires(Right.PPE_DOCUMENTS)
+@require_GET
+def part_data_sheet(request: HttpRequest, pk: int) -> FileResponse:
+    """PSA-Produktdatenblatt mit Stempel der erzeugenden Person (nur mit Sachkunde)."""
+    return _document(request, pk, documents.DocumentKind.DATA_SHEET)
+
+
+@requires(Right.PPE_DOCUMENTS)
+@require_GET
+def part_disclaimer(request: HttpRequest, pk: int) -> FileResponse:
+    """Haftungsausschluss mit Name und Stempel der erzeugenden Person (nur mit Sachkunde)."""
+    return _document(request, pk, documents.DocumentKind.DISCLAIMER)
