@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Einrichtungslink{% endblock %}
+{% block content %}
+<h1>Einrichtungslink für {{ account.get_full_name|default:account.username }}</h1>
+<section class="card">
+  <p>Dieser Link erscheint nur jetzt. Er gilt einmal und {{ hours }} Stunden; ältere offene Links dieses Kontos sind damit ungültig.</p>
+  <label for="enroll-link">Link</label>
+  <input id="enroll-link" value="{{ link }}" readonly>
+  <p>Nur persönlich weitergeben, nicht über offene Kanäle: Wer den Link hat, richtet den Zugang ein.</p>
+</section>
+<p><a href="{% url 'accounts:user_detail' account.pk %}">Zum Konto</a></p>
+{% endblock %}

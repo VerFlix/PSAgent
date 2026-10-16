@@ -46,7 +46,13 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
   sich **nur** mit Passkey an. Trainer/Materialwart, Verleiher und Viewer dürfen zusätzlich
   ein Passwort nutzen. Nach 5 Fehlversuchen ist die Kombination aus Benutzername und
   Adresse 15 Minuten gesperrt.
-- Den ersten Passkey eines Kontos richtet ein Einmal-Link ein (24 Stunden gültig):
+- Konten legt ein Admin unter „Nutzer verwalten“ an (`/verwaltung/nutzer/`): Rolle,
+  Aktiv-Status, Sachkunde und Passkeys der anderen, jeweils mit Begründung und Protokoll.
+  Zugang gibt es nur über einen Einmal-Link (72 Stunden gültig): Admin und PSA-Sachkundige
+  richten damit einen Passkey ein, die übrigen Rollen wahlweise einen Passkey oder ein eigenes
+  Passwort. Ein neuer Link macht ältere ungültig.
+- Notzugang auf dem Server (z. B. für das erste Admin-Konto nach `createsuperuser`), 24 Stunden
+  gültig, ebenfalls protokolliert:
 
   ```bash
   uv run python manage.py passkey_einrichtung <benutzername>

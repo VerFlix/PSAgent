@@ -32,6 +32,7 @@ PUBLIC = {
     "accounts:enroll",
     "accounts:enroll_options",
     "accounts:enroll_finish",
+    "accounts:enroll_password",
     "healthz",
 }
 

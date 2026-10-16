@@ -5,14 +5,16 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
 
-from accounts.rights import Right, public, requires
+from accounts.rights import Right, has_right, public, requires
 
 
 @requires(Right.ACCOUNT)
 @require_GET
 def home(request: HttpRequest) -> HttpResponse:
     """Startseite nach der Anmeldung. Die Fachbereiche kommen mit den Paritäts-Issues dazu."""
-    return render(request, "home.html")
+    return render(
+        request, "home.html", {"may_manage_users": has_right(request.user, Right.MANAGE_USERS)}
+    )
 
 
 @public

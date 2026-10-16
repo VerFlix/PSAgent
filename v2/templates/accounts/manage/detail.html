@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}{{ account.get_full_name|default:account.username }}{% endblock %}
+{% block content %}
+<h1>{{ account.get_full_name|default:account.username }}</h1>
+<p>Benutzername <strong>{{ account.username }}</strong> · Rolle <strong>{{ account.get_role_display }}</strong> ·
+  {% if account.is_active %}aktiv{% else %}<span class="danger">deaktiviert</span>{% endif %}
+  {% if is_self %} · Ihr eigenes Konto{% endif %}</p>
+
+<section class="card">
+  <h2>Rolle</h2>
+  {% if is_self and account.role == "admin" %}
+    <p>Die eigene Admin-Rolle ändert ein anderer Admin.</p>
+  {% else %}
+  <form method="post" action="{% url 'accounts:user_role' account.pk %}">
+    {% csrf_token %}
+    <label for="role-new">Neue Rolle</label>
+    <select id="role-new" name="role">
+      {% for value, label in role_form.fields.role.choices %}
+        <option value="{{ value }}"{% if value == account.role %} selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <label for="role-reason">Begründung</label>
+    <input id="role-reason" name="reason" maxlength="500" required>
+    <p>Admin und PSA-Sachkundige melden sich nur mit Passkey an; das gilt sofort nach dem Wechsel.</p>
+    <button type="submit">Rolle ändern</button>
+  </form>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Zugang</h2>
+  {% if passkeys %}
+    <table class="list">
+      <thead><tr><th>Passkey</th><th>angelegt</th><th>zuletzt benutzt</th><th>Widerrufen (z. B. Schlüssel verloren)</th></tr></thead>
+      <tbody>
+      {% for passkey in passkeys %}
+        <tr>
+          <td>{{ passkey.name }}</td>
+          <td>{{ passkey.created_at|date:"d.m.Y" }}</td>
+          <td>{{ passkey.last_used_at|date:"d.m.Y H:i"|default:"–" }}</td>
+          <td>
+            <form method="post" action="{% url 'accounts:user_passkey_revoke' account.pk passkey.pk %}">{% csrf_token %}
+              <label for="passkey-reason-{{ passkey.pk }}">Begründung</label>
+              <input id="passkey-reason-{{ passkey.pk }}" name="reason" maxlength="500" required>
+              <button type="submit" class="danger">Widerrufen</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>Kein Passkey eingerichtet.{% if account.requires_passkey %} Diese Rolle meldet sich nur mit Passkey an; ohne Passkey hilft ein Einrichtungslink.{% endif %}</p>
+  {% endif %}
+  {% if account.is_active %}
+  <form method="post" action="{% url 'accounts:user_enrollment' account.pk %}">{% csrf_token %}
+    <button type="submit">Neuen Einrichtungslink ausstellen</button>
+  </form>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Sachkunde</h2>
+  <p>{% if valid_qualification %}Zurzeit gültig.{% else %}Zurzeit keine gültige Sachkunde.{% endif %}</p>
+  {% if qualifications %}
+    <table class="list">
+      <thead><tr><th>gültig</th><th>Nachweis</th><th>Stand</th></tr></thead>
+      <tbody>
+      {% for entry in qualifications %}
+        <tr>
+          <td>{{ entry.valid_from|date:"d.m.Y" }} – {{ entry.valid_until|date:"d.m.Y" }}</td>
+          <td>{{ entry.evidence }}</td>
+          <td>
+            {% if entry.revocation %}
+              widerrufen am {{ entry.revocation.revoked_at|date:"d.m.Y" }}: {{ entry.revocation.reason }}
+            {% else %}
+              <form method="post" action="{% url 'accounts:qualification_revoke' account.pk entry.pk %}">{% csrf_token %}
+                <label for="qualification-reason-{{ entry.pk }}">Begründung</label>
+                <input id="qualification-reason-{{ entry.pk }}" name="reason" maxlength="500" required>
+                <button type="submit" class="danger">Widerrufen</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+  <form method="post" action="{% url 'accounts:qualification_grant' account.pk %}">
+    {% csrf_token %}
+    <h3>Sachkunde eintragen</h3>
+    <label for="qualification-from">gültig ab</label>
+    <input id="qualification-from" name="valid_from" type="date" required>
+    <label for="qualification-until">gültig bis einschließlich</label>
+    <input id="qualification-until" name="valid_until" type="date" required>
+    <label for="qualification-evidence">Nachweis (z. B. Lehrgang, Anbieter und Datum)</label>
+    <input id="qualification-evidence" name="evidence" maxlength="500" required>
+    <p>Einträge werden nicht geändert. Verlängern heißt: neuen Eintrag anlegen.</p>
+    <button type="submit">Eintragen</button>
+  </form>
+</section>
+
+{% if not is_self %}
+<section class="card">
+  <h2>Konto {% if account.is_active %}deaktivieren{% else %}wieder aktivieren{% endif %}</h2>
+  <form method="post" action="{% if account.is_active %}{% url 'accounts:user_deactivate' account.pk %}{% else %}{% url 'accounts:user_reactivate' account.pk %}{% endif %}">
+    {% csrf_token %}
+    <label for="status-reason">Begründung</label>
+    <input id="status-reason" name="reason" maxlength="500" required>
+    {% if account.is_active %}<p>Laufende Sitzungen und offene Einrichtungslinks enden sofort. Die Historie bleibt.</p>{% endif %}
+    <button type="submit"{% if account.is_active %} class="danger"{% endif %}>{% if account.is_active %}Deaktivieren{% else %}Wieder aktivieren{% endif %}</button>
+  </form>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Protokoll</h2>
+  {% if events %}
+    <table class="list">
+      <thead><tr><th>Zeitpunkt</th><th>Vorgang</th><th>Rolle</th><th>Begründung</th><th>durch</th></tr></thead>
+      <tbody>
+      {% for event in events %}
+        <tr>
+          <td>{{ event.at|date:"d.m.Y H:i" }}</td>
+          <td>{{ event.get_kind_display }}</td>
+          <td>{% if event.old_role %}{{ event.get_old_role_display }} → {% endif %}{% if event.new_role %}{{ event.get_new_role_display }}{% endif %}</td>
+          <td>{{ event.reason }}</td>
+          <td>{{ event.actor|default:"Verwaltungsbefehl" }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>Noch keine Vorgänge.</p>
+  {% endif %}
+</section>
+<p><a href="{% url 'accounts:users' %}">Zurück zur Übersicht</a></p>
+{% endblock %}
