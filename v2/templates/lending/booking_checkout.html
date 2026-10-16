@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Reservierung ausgeben{% endblock %}
+{% block content %}
+<h1>Reservierung ausgeben</h1>
+<form method="post" class="card">
+  {% csrf_token %}
+  <p>Entleiher: <strong>{{ booking.borrower.display_name }}</strong></p>
+  {% for error in checkout.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  {% for error in borrower_form.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  <fieldset>
+    <legend>Teile</legend>
+    {% for loan in reserved %}
+      <label class="check"><input type="checkbox" name="ausleihe" value="{{ loan.pk }}" class="check"{% if loan.pk in chosen %} checked{% endif %}> {{ loan.part.name }} ({{ loan.start|date:"d.m." }}–{{ loan.end|date:"d.m.Y" }})</label>
+      <p class="hint">GAL: {% for document in loan.part.documents.all %}<a href="{% if document.url %}{{ document.url }}{% else %}{% url 'inventory:document_open' document.pk %}{% endif %}" target="_blank" rel="noopener noreferrer">{{ document.title }}</a>{% if not forloop.last %}, {% endif %}{% empty %}<span class="error">keine</span>{% endfor %}</p>
+    {% endfor %}
+  </fieldset>
+  <input type="hidden" name="borrower" value="{{ booking.borrower_id }}">
+  {% include "lending/_borrower_status.html" %}
+  <fieldset>
+    <legend>Neue Angaben (leer = unverändert)</legend>
+    {% for field in borrower_form %}{% if field.name != "borrower" and field.name != "contact_confirmed" %}{% include "inventory/_field.html" %}{% endif %}{% endfor %}
+  </fieldset>
+  <label class="check">{{ checkout.quick_check }} {{ checkout.quick_check.label }}</label>
+  <label class="check">{{ checkout.gal_provided }} {{ checkout.gal_provided.label }}</label>
+  {% with field=checkout.signer_name %}{% include "inventory/_field.html" %}{% endwith %}
+  <p id="signature-label">Unterschrift</p>
+  <canvas class="signature" width="600" height="200" aria-labelledby="signature-label" data-signature-for="id_signature"></canvas>
+  {{ checkout.signature }}
+  {% for error in checkout.signature.errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  <button type="button" data-signature-clear="id_signature">Unterschrift löschen</button>
+  <button type="submit" class="primary">Ausgeben</button>
+</form>
+<p><a href="{% url 'lending:booking_detail' booking.pk %}">Abbrechen</a></p>
+<script src="{% static 'js/signature.js' %}" defer></script>
+{% endblock %}

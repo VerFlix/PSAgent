@@ -82,3 +82,28 @@ class CheckoutForm(forms.Form):
         if not strokes:
             raise forms.ValidationError("Bitte im Feld unterschreiben.")
         return strokes
+
+
+class ReturnForm(forms.Form):
+    """Rückgabe wie im Altsystem: Kommentar, Kurzprüfung, Unterschrift, optional sperren (17)."""
+
+    comment = forms.CharField(
+        label="Kommentar", required=False, widget=forms.Textarea(attrs={"rows": 2})
+    )
+    quick_check = forms.BooleanField(label="Kurzprüfung durchgeführt", required=False)
+    signer_name = forms.CharField(label="Name der unterschreibenden Person", max_length=200)
+    signature = forms.CharField(widget=forms.HiddenInput, required=False)
+    lock_reason = forms.CharField(
+        label="Grund der Sperre (für markierte Teile)", max_length=1000, required=False
+    )
+
+    clean_signature = CheckoutForm.clean_signature
+
+    def clean_quick_check(self) -> bool:
+        if not self.cleaned_data.get("quick_check"):
+            raise forms.ValidationError("Bitte die Kurzprüfung bestätigen.")
+        return True
+
+
+class CancelForm(forms.Form):
+    comment = forms.CharField(label="Grund", max_length=1000, required=False)

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Rückgabe{% endblock %}
+{% block content %}
+<h1>Rückgabe</h1>
+<form method="post" class="card">
+  {% csrf_token %}
+  <p>Entleiher: <strong>{{ booking.borrower.display_name }}</strong></p>
+  {% for error in form.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  <div class="table-scroll"><table class="list">
+    <thead><tr><th>zurück</th><th>Teil</th><th>bis</th><th>sperren</th></tr></thead>
+    <tbody>
+    {% for loan in lent %}
+      <tr>
+        <td><input type="checkbox" name="ausleihe" value="{{ loan.pk }}" class="check" aria-label="{{ loan.part.name }} zurücknehmen"{% if loan.pk in chosen %} checked{% endif %}></td>
+        <td>{{ loan.part.name }}</td>
+        <td>{{ loan.end|date:"d.m.Y" }}</td>
+        <td><input type="checkbox" name="sperren" value="{{ loan.pk }}" class="check" aria-label="{{ loan.part.name }} sperren"{% if loan.pk in locked %} checked{% endif %}></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% with field=form.lock_reason %}{% include "inventory/_field.html" %}{% endwith %}
+  {% with field=form.comment %}{% include "inventory/_field.html" %}{% endwith %}
+  <label class="check">{{ form.quick_check }} {{ form.quick_check.label }}</label>
+  {% for error in form.quick_check.errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  {% with field=form.signer_name %}{% include "inventory/_field.html" %}{% endwith %}
+  <p id="signature-label">Unterschrift</p>
+  <canvas class="signature" width="600" height="200" aria-labelledby="signature-label" data-signature-for="id_signature"></canvas>
+  {{ form.signature }}
+  {% for error in form.signature.errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  <button type="button" data-signature-clear="id_signature">Unterschrift löschen</button>
+  <button type="submit" class="primary">Zurücknehmen</button>
+</form>
+<p><a href="{% url 'lending:booking_detail' booking.pk %}">Abbrechen</a></p>
+<script src="{% static 'js/signature.js' %}" defer></script>
+{% endblock %}
