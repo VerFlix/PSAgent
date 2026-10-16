@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Nächste Prüfungen{% endblock %}
+{% block content %}
+<h1>Nächste Prüfungen</h1>
+<form method="get" class="card search">
+  {% for field in form %}{% include "inventory/_field.html" %}{% endfor %}
+  <button type="submit">Filtern</button>
+</form>
+{% if limit %}<p class="hint">Fällig bis {{ limit|date:"d.m.Y" }}.</p>{% endif %}
+{% if rows %}
+<div class="table-scroll"><table class="list">
+  <thead><tr><th>Teil</th><th>EI</th><th>Status</th><th>nächste Prüfung</th></tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td><a href="{% url 'inventory:part_detail' row.part.pk %}#zeitleiste">{{ row.part.name }}</a></td>
+      <td>{% for component in row.part.components.all %}{{ component.ei }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+      <td><span class="status status-{{ row.status }}">{{ row.status.label }}</span></td>
+      <td>
+        {% if row.no_ppe %}keine PSA
+        {% elif row.due is None %}<span class="status status-new">erste Prüfung offen</span>
+        {% else %}{{ row.due|date:"d.m.Y" }}
+          {% if row.overdue_days %}<span class="status status-locked">seit {{ row.overdue_days }} Tag{{ row.overdue_days|pluralize:"en" }} überfällig</span>
+          {% elif row.days == 0 %}<span class="status status-locked">heute</span>
+          {% elif row.days <= 30 %}<span class="status status-new">in {{ row.days }} Tagen</span>{% endif %}
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p>Keine Teile gefunden.</p>
+{% endif %}
+{% endblock %}
