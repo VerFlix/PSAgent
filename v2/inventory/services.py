@@ -6,8 +6,8 @@ eine Sperre setzt ein nicht gesperrtes Teil voraus.
 
 Was die PSA betrifft, braucht eine gültige Sachkunde (CLAUDE.md, Fachregeln): Entsperren,
 Aussondern, „keine PSA“ setzen oder aufheben und die PSA-relevanten Felder EI, Herstellungsjahr
-und Datum 1. Einsatz ändern. Freigeben geht nur über eine PSA-Prüfung. Sperren darf jede Rolle;
-die übrigen Rollenregeln prüft #12.
+und Datum 1. Einsatz ändern. Freigeben geht nur über eine PSA-Prüfung. Sperren darf jede Rolle ab
+Verleiher; Teile anlegen und pflegen ab Trainer/Materialwart (Rechtetabelle, `accounts.rights`).
 """
 
 import hashlib
@@ -21,7 +21,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from accounts.models import User
-from accounts.permissions import require_inspection_right
+from accounts.rights import Right, require
 from inventory.models import (
     EVENTS_WITH_COMMENT,
     Component,
@@ -37,14 +37,15 @@ if TYPE_CHECKING:
 
 PDF_MAGIC = b"%PDF-"
 
-# Vorgänge, die eine gültige Sachkunde brauchen. Sperren gehört nicht dazu.
-EVENTS_NEEDING_QUALIFICATION = (
-    EventKind.RELEASED,
-    EventKind.UNLOCKED,
-    EventKind.RETIRED,
-    EventKind.NO_PPE_SET,
-    EventKind.NO_PPE_CLEARED,
-)
+# Recht je Vorgang (Rechtetabelle). Nur Sperren braucht keine Sachkunde.
+EVENT_RIGHTS = {
+    EventKind.RELEASED: Right.PPE_FIELDS,
+    EventKind.NO_PPE_SET: Right.PPE_FIELDS,
+    EventKind.NO_PPE_CLEARED: Right.PPE_FIELDS,
+    EventKind.LOCKED: Right.LOCK,
+    EventKind.UNLOCKED: Right.INSPECT,
+    EventKind.RETIRED: Right.INSPECT,
+}
 
 # Bauteilfelder, die geändert werden dürfen, und die davon PSA-relevanten.
 COMPONENT_FIELDS = (
@@ -81,6 +82,7 @@ def create_product(
     legacy_id: int | None = None,
 ) -> Part:
     """Legt ein Produkt mit genau einem Bauteil an; Status „neu, nicht freigegeben“."""
+    require(actor, Right.MANAGE_PARTS)
     default_name = " ".join(
         value for value in (component.get("designation"), component.get("model_name")) if value
     )
@@ -105,6 +107,7 @@ def create_system(
     legacy_id: int | None = None,
 ) -> Part:
     """Legt ein System mit mindestens einem Bauteil an; Status „neu, nicht freigegeben“."""
+    require(actor, Right.MANAGE_PARTS)
     if not components:
         raise InventoryError("Ein System braucht mindestens ein Bauteil.")
     part = Part.objects.create(
@@ -127,6 +130,7 @@ def store_document_file(
     immer als `.pdf`, damit keine hochgeladene Datei als HTML oder Skript ausgeliefert wird.
     `filename` dient nur der Fehlermeldung.
     """
+    require(actor, Right.MANAGE_PARTS)
     if not content.startswith(PDF_MAGIC):
         raise InventoryError(f"{filename} ist kein PDF; GAL-Dateien müssen PDFs sein.")
     digest = hashlib.sha256(content).hexdigest()
@@ -144,6 +148,7 @@ def link_document(url: str, *, title: str, actor: User | None = None) -> Documen
 
     Nur http- und https-Adressen; `javascript:` und Ähnliches wird abgewiesen.
     """
+    require(actor, Right.MANAGE_PARTS)
     try:
         _validate_url(url)
     except ValidationError as error:
@@ -158,8 +163,9 @@ def link_document(url: str, *, title: str, actor: User | None = None) -> Documen
 def update_component(component: Component, *, actor: User | None, **fields: Any) -> Component:
     """Ändert Felder eines Bauteils (Parität 3).
 
-    EI, Herstellungsjahr und Datum 1. Einsatz nur mit gültiger Sachkunde. „Nächste Prüfung“
-    ist kein Feld des Bauteils; sie ändert sich nur über eine Prüfung.
+    Beschreibende Felder ab Trainer/Materialwart; EI, Herstellungsjahr und Datum 1. Einsatz
+    nur mit gültiger Sachkunde. „Nächste Prüfung“ ist kein Feld des Bauteils; sie ändert sich
+    nur über eine Prüfung.
     """
     unknown = set(fields) - set(COMPONENT_FIELDS)
     if unknown:
@@ -168,7 +174,9 @@ def update_component(component: Component, *, actor: User | None, **fields: Any)
     if not changed:
         return component
     if set(changed) & set(PPE_COMPONENT_FIELDS):
-        require_inspection_right(actor, "Das Ändern von EI, Herstellungsjahr oder Datum 1. Einsatz")
+        require(actor, Right.PPE_FIELDS)
+    if set(changed) - set(PPE_COMPONENT_FIELDS):
+        require(actor, Right.MANAGE_PARTS)
     if component.part.is_retired():
         raise InventoryError(f"{component.part} ist ausgesondert; Änderungen sind nicht möglich.")
     for name in changed:
@@ -195,8 +203,7 @@ def record_event(
     """
     Part.objects.select_for_update().get(pk=part.pk)
     moment = at or timezone.now()
-    if kind in EVENTS_NEEDING_QUALIFICATION:
-        require_inspection_right(actor, f"„{kind.label}“")
+    require(actor, EVENT_RIGHTS[kind])
     if part.is_retired():
         raise InventoryError(f"{part} ist ausgesondert; weitere Vorgänge sind nicht möglich.")
     if kind == EventKind.RELEASED and actor is not None and inspection_result is None:

@@ -1,6 +1,7 @@
 """Reservieren, ausgeben, zurücknehmen, stornieren (Parität 12, 14, 15, 17, 18)."""
 
 import pytest
+from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, connection, transaction
 
 from accounts.models import Role, User
@@ -282,8 +283,11 @@ def test_legacy_signature_is_marked(db: None) -> None:
     assert signature.get_origin_display() == "Altbestand, ungesichert"
 
 
-def test_viewer_role_is_irrelevant_here(make_part: MakePart, borrower: Borrower) -> None:
-    """Rechte prüft #12; das Datenmodell nimmt jede angemeldete Person als ausgebend an."""
+def test_viewer_may_not_lend(make_part: MakePart, borrower: Borrower) -> None:
+    """Verbotener Fall (#12): Viewer verleihen nicht; es entsteht nichts."""
     viewer = User.objects.create_user(username="v", role=Role.VIEWER)
 
-    lend(borrower, [make_part()], TODAY, TODAY + DAY, **checkout_kwargs(viewer))
+    with pytest.raises(PermissionDenied, match="ab der Rolle Verleiher"):
+        lend(borrower, [make_part()], TODAY, TODAY + DAY, **checkout_kwargs(viewer))
+
+    assert not Loan.objects.exists()

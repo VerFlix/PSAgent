@@ -28,7 +28,7 @@ def test_contact_data_can_be_added_later(db: None) -> None:
     """Parität 16: Kontaktdaten nachtragen."""
     person = create_borrower("Robin Exempel")
 
-    update_contact(person, address="Beispielweg 4", phone="0000 654321")
+    update_contact(person, actor=None, address="Beispielweg 4", phone="0000 654321")
 
     person.refresh_from_db()
     assert (person.contact.address, person.contact.phone) == ("Beispielweg 4", "0000 654321")
@@ -39,7 +39,7 @@ def test_erasing_contact_keeps_history(
 ) -> None:
     booking = lend(borrower, [make_part()], TODAY, TODAY + DAY, **checkout_kwargs(lender))
 
-    erase_contact(borrower)
+    erase_contact(borrower, actor=None)
 
     borrower = Borrower.objects.get(pk=borrower.pk)
     assert not BorrowerContact.objects.filter(borrower=borrower).exists()
