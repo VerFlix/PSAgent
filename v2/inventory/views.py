@@ -48,6 +48,7 @@ from inventory.services import (
     store_document_file,
     update_component,
 )
+from inventory.timeline import timeline
 
 COMPONENTS = "bauteile"
 
@@ -95,7 +96,7 @@ def part_detail(request: HttpRequest, pk: int) -> HttpResponse:
         "status": status,
         "next_due": next_inspection_due(part),
         "no_ppe": part.has_no_ppe(),
-        "events": part.events.select_related("actor").order_by("-at", "-id"),
+        "timeline": timeline(part, with_names=has_right(user, Right.LEND)),
         "documents": part.documents.order_by("title"),
         "may_lock": status not in (PartStatus.LOCKED, PartStatus.RETIRED)
         and has_right(user, Right.LOCK),
