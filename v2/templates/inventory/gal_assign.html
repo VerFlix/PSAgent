@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}GAL an mehrere Teile{% endblock %}
+{% block content %}
+<h1>GAL an mehrere Teile</h1>
+<form method="post" enctype="multipart/form-data" class="card">
+  {% csrf_token %}
+  <p>Markiert: {{ parts|length }} Teil(e)</p>
+  <ul class="plain">
+    {% for part in parts %}<li>{{ part.name }} ({% for component in part.components.all %}{{ component.ei }}{% if not forloop.last %}, {% endif %}{% endfor %})<input type="hidden" name="teil" value="{{ part.pk }}"></li>{% endfor %}
+  </ul>
+  {% for error in form.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  {% for field in form %}{% include "inventory/_field.html" %}{% endfor %}
+  <p class="hint">Eine Datei wird nur einmal gespeichert, auch wenn sie an viele Teile angehängt ist.</p>
+  <button type="submit" class="primary">GAL anhängen</button>
+</form>
+<p><a href="{% url 'inventory:part_list' %}">Zurück zur Teileliste</a></p>
+{% endblock %}

@@ -97,3 +97,5 @@ label.check input { width: auto; display: inline; }
 .status-released { background: #e3f4e6; }
 .status-locked, .status-retired { background: #fde4e4; }
 .status-new { background: #fff3cd; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+input.check { width: auto; display: inline; }

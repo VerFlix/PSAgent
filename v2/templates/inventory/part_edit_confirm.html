@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Änderungen bestätigen{% endblock %}
+{% block content %}
+<h1>Änderungen an {{ part.name }} bestätigen</h1>
+<section class="card">
+  <div class="table-scroll"><table class="list">
+    <thead><tr><th>Wo</th><th>Feld</th><th>bisher</th><th>neu</th></tr></thead>
+    <tbody>
+    {% for change in changes %}
+      <tr><td>{{ change.where }}</td><td>{{ change.field }}</td><td>{{ change.old }}</td><td><strong>{{ change.new }}</strong></td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <form method="post">
+    {% csrf_token %}
+    {% for field in form %}{{ field.as_hidden }}{% endfor %}
+    {{ components.management_form }}
+    {% for row in components %}{% for field in row %}{{ field.as_hidden }}{% endfor %}{% endfor %}
+    <button type="submit" name="confirm" value="1" class="primary">Speichern</button>
+    <button type="submit" name="back" value="1">Zurück zum Formular</button>
+  </form>
+</section>
+{% endblock %}

@@ -160,6 +160,43 @@ def link_document(url: str, *, title: str, actor: User | None = None) -> Documen
 
 
 @transaction.atomic
+def rename_part(part: Part, name: str, *, actor: User | None) -> Part:
+    """Ändert die Bezeichnung eines Teils (Parität 3); ab Trainer/Materialwart."""
+    require(actor, Right.MANAGE_PARTS)
+    name = name.strip()
+    if not name:
+        raise InventoryError("Bitte eine Bezeichnung angeben.")
+    part = Part.objects.select_for_update().get(pk=part.pk)
+    if part.is_retired():
+        raise InventoryError(f"{part} ist ausgesondert; Änderungen sind nicht möglich.")
+    if part.name != name:
+        part.name = name
+        part.save(update_fields=["name"])
+    return part
+
+
+@transaction.atomic
+def attach_document(parts: list[Part], document: Document, *, actor: User | None) -> int:
+    """Hängt eine GAL an mehrere Teile (Parität 4); die Datei liegt dabei nur einmal vor.
+
+    Gibt die Zahl der Teile zurück, die die GAL neu bekommen haben. Ausgesonderte Teile
+    weisen den ganzen Vorgang ab.
+    """
+    require(actor, Right.MANAGE_PARTS)
+    if not parts:
+        raise InventoryError("Keine Teile ausgewählt.")
+    retired = [str(part) for part in parts if part.is_retired()]
+    if retired:
+        raise InventoryError(f"Ausgesondert, keine Änderungen möglich: {', '.join(retired)}.")
+    added = 0
+    for part in parts:
+        if not part.documents.filter(pk=document.pk).exists():
+            part.documents.add(document)
+            added += 1
+    return added
+
+
+@transaction.atomic
 def update_component(component: Component, *, actor: User | None, **fields: Any) -> Component:
     """Ändert Felder eines Bauteils (Parität 3).
 
