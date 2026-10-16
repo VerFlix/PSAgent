@@ -15,8 +15,9 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 | Sperren, jederzeit (mit Pflichtkommentar) | ✓ | ✓ | ✓ | ✓ | – |
 | Ausleihen nacherfassen (Notbetrieb) | ✓ | ✓ | eigene | eigene | – |
 | Prüfprotokolle nacherfassen (Notbetrieb) | ✓, nur mit Sachkunde | eigene, nur mit Sachkunde | – | – | – |
-| Teile anlegen, Beschreibung und GAL pflegen, PDFs erzeugen | ✓ | ✓ | ✓ | – | – |
+| Teile anlegen, Beschreibung und GAL pflegen, Einsatzdokumentation erzeugen | ✓ | ✓ | ✓ | – | – |
 | PSA-relevante Felder ändern, „keine PSA“ setzen, neues Teil freigeben | ✓, nur mit Sachkunde | ✓, nur mit Sachkunde | – | – | – |
+| PD und Haftungsausschluss erzeugen (mit eigenem Namen und Stempel) | ✓, nur mit Sachkunde | ✓, nur mit Sachkunde | – | – | – |
 | Export mit Personendaten | ✓ | ✓ | – | – | – |
 | Prüfungsrunde, entsperren, aussondern, nächste Prüfung setzen | ✓, nur mit Sachkunde | ✓, nur mit Sachkunde | – | – | – |
 | Nutzer, Rollen, Sachkunde-Zertifikate verwalten | ✓ | – | – | – | – |
@@ -69,3 +70,6 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 - Briefkopf/Stempel (Felix, 16.10.2026): Den eigenen pflegt jede Person unter „Konto“, fremde
   nur der Admin in der Nutzerverwaltung. Jede Änderung steht mit dem neuen Text im Protokoll
   `AccountEvent`. Der Stempel erscheint auf PD und Haftungsausschluss (#35).
+- PDF-Dokumente (Felix, 16.10.2026): PD und Haftungsausschluss tragen Name und Stempel der
+  erzeugenden Person und sind darum an gültige Sachkunde gebunden. Die Einsatzdokumentation
+  (Besitzer: Verein aus `PSAGENT_CLUB_NAME`) bleibt bei „Teile anlegen …“ ab Trainer.

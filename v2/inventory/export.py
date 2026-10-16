@@ -60,7 +60,7 @@ def parts_for_export(ids: Iterable[int] | None, *, with_retired: bool) -> list[P
     return [part for part in parts if with_retired or part.status() != PartStatus.RETIRED]
 
 
-def _text(value: Any) -> str:
+def as_text(value: Any) -> str:
     if value is None:
         return ""
     if isinstance(value, bool):
@@ -101,7 +101,7 @@ def rows(parts: Iterable[Part]) -> list[dict[str, str]]:
                 "serial_number",
             ):
                 values[name] = getattr(component, name)
-            result.append({key: _text(values[key]) for key, _ in COLUMNS})
+            result.append({key: as_text(values[key]) for key, _ in COLUMNS})
     return result
 
 

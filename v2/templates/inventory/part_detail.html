@@ -42,6 +42,21 @@
   {% endif %}
 </section>
 
+{% if may_usage_log %}
+<section class="card">
+  <h2>Dokumente</h2>
+  <ul class="plain">
+    <li><a href="{% url 'inventory:part_usage_log' part.pk %}">Einsatzdokumentation (PDF)</a></li>
+    {% if may_ppe_documents %}
+    <li><a href="{% url 'inventory:part_data_sheet' part.pk %}">PSA-Produktdatenblatt (PD, PDF)</a></li>
+    <li><a href="{% url 'inventory:part_disclaimer' part.pk %}">Haftungsausschluss (PDF)</a></li>
+    {% endif %}
+  </ul>
+  {% if may_ppe_documents %}<p class="hint">PD und Haftungsausschluss tragen Ihren Namen und Ihren Briefkopf/Stempel aus dem <a href="{% url 'accounts:account' %}">Konto</a>.</p>
+  {% else %}<p class="hint">PD und Haftungsausschluss erzeugen Personen mit gültiger Sachkunde.</p>{% endif %}
+</section>
+{% endif %}
+
 {% if may_lock %}
 <section class="card">
   <h2>Sperren</h2>

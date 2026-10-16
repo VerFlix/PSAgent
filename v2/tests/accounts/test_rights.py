@@ -39,6 +39,7 @@ EXPECTED: dict[Right, str] = {
     Right.BACKFILL_LOANS: "+ + o o -",
     Right.BACKFILL_INSPECTIONS: "q oq - - -",
     Right.MANAGE_PARTS: "+ + + - -",
+    Right.PPE_DOCUMENTS: "q q - - -",
     Right.PPE_FIELDS: "q q - - -",
     Right.EXPORT_PERSONAL: "+ + - - -",
     Right.INSPECT: "q q - - -",

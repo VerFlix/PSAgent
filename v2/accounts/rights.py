@@ -43,6 +43,7 @@ class Right(StrEnum):
     BACKFILL_INSPECTIONS = "backfill_inspections"
     MANAGE_PARTS = "manage_parts"
     PPE_FIELDS = "ppe_fields"
+    PPE_DOCUMENTS = "ppe_documents"
     EXPORT_PERSONAL = "export_personal"
     INSPECT = "inspect"
     MANAGE_USERS = "manage_users"
@@ -124,10 +125,16 @@ RIGHTS: dict[Right, Rule] = {
         scope_label="eigene",
     ),
     Right.MANAGE_PARTS: Rule(
-        "Teile anlegen, Beschreibung und GAL pflegen, PDFs erzeugen", Role.TRAINER
+        "Teile anlegen, Beschreibung und GAL pflegen, Einsatzdokumentation erzeugen",
+        Role.TRAINER,
     ),
     Right.PPE_FIELDS: Rule(
         "PSA-relevante Felder ändern, „keine PSA“ setzen, neues Teil freigeben",
+        Role.PPE_EXPERT,
+        qualification=True,
+    ),
+    Right.PPE_DOCUMENTS: Rule(
+        "PD und Haftungsausschluss erzeugen (mit eigenem Namen und Stempel)",
         Role.PPE_EXPERT,
         qualification=True,
     ),

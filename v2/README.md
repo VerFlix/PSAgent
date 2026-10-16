@@ -64,7 +64,11 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
   die Sitzung nach 3 Minuten ohne Eingabe und nach jedem abgeschlossenen Vorgang; sonst gilt
   sie 8 Stunden.
 - Einstellungen: `PSAGENT_WEBAUTHN_RP_ID`, `PSAGENT_WEBAUTHN_ORIGINS`, im Betrieb hinter Caddy
-  `PSAGENT_TRUSTED_PROXIES` (siehe `.env.example`).
+  `PSAGENT_TRUSTED_PROXIES`, der Verein als Besitzer auf der Einsatzdokumentation
+  `PSAGENT_CLUB_NAME` (siehe `.env.example`).
+- PDF-Dokumente je Teil (Teileseite, Kasten „Dokumente“): Einsatzdokumentation ab Trainer;
+  PD und Haftungsausschluss nur mit gültiger Sachkunde, mit Name und Briefkopf/Stempel aus
+  dem Konto der erzeugenden Person.
 
 Browser-Tests (Playwright, eigener CI-Job; bei Fehlern Screenshots und Traces als Artefakt):
 
