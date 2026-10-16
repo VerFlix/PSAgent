@@ -1,0 +1,13 @@
+<fieldset>
+  <legend>GAL und PSA</legend>
+  {% for error in options.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  {% for field in options %}
+    {% if field.name == "no_ppe" %}
+      <label class="check">{{ field }} {{ field.label }}</label>
+      <p class="hint">{{ field.help_text }}</p>
+      {% for error in field.errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+    {% else %}
+      {% include "inventory/_field.html" %}
+    {% endif %}
+  {% endfor %}
+</fieldset>
