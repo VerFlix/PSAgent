@@ -27,8 +27,10 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 - Rollen bauen aufeinander auf: Admin > PSA-Sachkundig > Trainer/Materialwart > Verleiher > Viewer.
 - „nur mit Sachkunde“: zusätzlich eine zum Zeitpunkt gültige Sachkunde (Qualifikation mit
   Ablaufdatum, nicht die Rolle).
-- „nur laufende Ausleihen“: Kontaktdaten nur von Entleihern mit einer Reservierung oder Ausleihe,
-  die noch nicht zurückgegeben oder storniert ist.
+- „nur laufende Ausleihen“: Kontaktdaten nur von Entleihern, die gerade etwas ausgeliehen
+  und noch nicht zurückgegeben haben. Eine Reservierung zählt nicht; sonst ließe sich jede
+  Adresse durch eine Reservierung auf den Namen freischalten (Befund der Sicherheitsprüfung,
+  16.10.2026).
 - „nur eigene“ / „eigene“: nur Vorgänge, die die Person selbst angelegt oder erfasst hat.
 - „Eigenes Konto und Startseite“ steht nicht im Konzept; es beschreibt, was jede angemeldete
   Person darf (Startseite, eigene Passkeys).

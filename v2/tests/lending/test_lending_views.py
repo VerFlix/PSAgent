@@ -345,6 +345,23 @@ def test_status_shows_gaps_and_date_but_not_values(
     assert "Teststraße" not in html
 
 
+def test_own_reservation_does_not_reveal_values(
+    lender_client: Client, lender: User, make_part: MakePart, borrower: Borrower
+) -> None:
+    """Befund der Sicherheitsprüfung: erst reservieren, dann Adresse ansehen, geht nicht."""
+    lender_client.post(
+        reverse("lending:new_booking"),
+        booking_data(make_part(), action="reserve", borrower=str(borrower.pk)),
+    )
+    assert Loan.objects.filter(booking__borrower=borrower).exists()
+
+    html = lender_client.get(
+        reverse("lending:borrower_status", args=[borrower.pk])
+    ).content.decode()
+
+    assert "Teststraße" not in html and "kim.beispiel@example.org" not in html
+
+
 def test_status_shows_values_to_experts(client: Client, borrower: Borrower) -> None:
     client.force_login(make_inspector())
 

@@ -50,15 +50,20 @@ class Right(StrEnum):
 
 
 def _active_loan(user: User, obj: object) -> bool:
-    """Kontaktdaten nur, solange der Entleiher etwas reserviert oder ausgeliehen hat."""
-    from lending.models import ACTIVE_STATUSES, Booking, Borrower, Loan
+    """Kontaktdaten nur, solange der Entleiher etwas ausgeliehen und noch nicht zurück hat.
+
+    Eine Reservierung zählt bewusst nicht: Sonst könnte ein Verleiher die Kontaktdaten jedes
+    Entleihers sehen, indem er auf dessen Namen etwas reserviert. Eine Ausgabe dagegen braucht
+    Kurzkontrolle und Unterschrift vor Ort und steht mit Namen im Protokoll.
+    """
+    from lending.models import Booking, Borrower, Loan, LoanStatus
 
     if isinstance(obj, Borrower):
-        return Loan.objects.filter(booking__borrower=obj, status__in=ACTIVE_STATUSES).exists()
+        return Loan.objects.filter(booking__borrower=obj, status=LoanStatus.LENT).exists()
     if isinstance(obj, Booking):
-        return obj.loans.filter(status__in=ACTIVE_STATUSES).exists()
+        return obj.loans.filter(status=LoanStatus.LENT).exists()
     if isinstance(obj, Loan):
-        return obj.status in ACTIVE_STATUSES
+        return obj.status == LoanStatus.LENT
     return False
 
 

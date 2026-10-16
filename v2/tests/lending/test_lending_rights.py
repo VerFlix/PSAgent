@@ -156,7 +156,7 @@ def test_imported_reservation_is_not_own_for_lender(
 def test_lender_updates_contacts_only_during_loan(
     make_part: MakePart, borrower: Borrower, lender: User
 ) -> None:
-    """Kontaktdaten ändern nur, wer sie sehen darf: Verleiher nur bei laufender Ausleihe."""
+    """Kontaktdaten frei bearbeiten nur, wer sie sehen darf: Verleiher nur bei Ausleihe."""
     before = snapshot()
 
     with pytest.raises(PermissionDenied, match="nur laufende Ausleihen"):
@@ -164,6 +164,9 @@ def test_lender_updates_contacts_only_during_loan(
     assert snapshot() == before
 
     reserve(borrower, [make_part()], TODAY, TODAY + DAY, actor=lender)
+    with pytest.raises(PermissionDenied):  # eine Reservierung schaltet nichts frei
+        update_contact(borrower, actor=lender, phone="0000 111111")
+    lend(borrower, [make_part()], TODAY, TODAY + DAY, **checkout_kwargs(lender))
     update_contact(borrower, actor=lender, phone="0000 111111")
     assert BorrowerContact.objects.get(borrower=borrower).phone == "0000 111111"
 
