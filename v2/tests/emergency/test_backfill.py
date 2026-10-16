@@ -468,3 +468,24 @@ def test_photo_without_size_is_refused(make_part: MakePart, lender: User) -> Non
         backfill.capture_locks(
             "S-00001", [(b"\xff\xd8\xff\xd9", "kaputt.jpg")], [row], actor=lender
         )
+
+
+def test_photos_together_are_limited(
+    make_part: MakePart, lender: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch viele Fotos knapp unter der Grenze je Foto werden vor dem Entpacken abgewiesen."""
+
+    def no_compile(*args: object, **kwargs: object) -> bytes:
+        raise AssertionError("Typst darf die Fotos nicht entpacken")
+
+    content = bytearray(png())
+    content[16:24] = (7_000).to_bytes(4) + (8_000).to_bytes(4)  # 56 Megapixel
+    part = make_part()
+    create_binder(actor=None)
+    row = lock_row(part.components.get().ei)
+    monkeypatch.setattr("emergency.backfill.typst.compile", no_compile)
+
+    with pytest.raises(backfill.BackfillError, match="zusammen zu groß"):
+        backfill.capture_locks(
+            "S-00001", [(bytes(content), f"foto{n}.png") for n in range(3)], [row], actor=lender
+        )

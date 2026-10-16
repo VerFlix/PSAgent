@@ -40,6 +40,8 @@ MAX_LOCK_ROWS = 10  # Zeilen auf dem Formular „Sperrung“
 # Obergrenze je Foto, gelesen aus dem Dateikopf vor dem Entpacken (Schutz vor Pixelbomben).
 # Handykameras liefern meist 12–50 Megapixel.
 MAX_PIXELS = 60_000_000
+# Obergrenze für alle Fotos eines Formulars zusammen (z. B. 10 Fotos mit 12 Megapixeln).
+MAX_TOTAL_PIXELS = 150_000_000
 # JPEG-Marker mit Bildgröße (SOF0–SOF15 ohne DHT, JPG und DAC).
 _JPEG_SOF = {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
 # Uhrzeit für Vorgänge, von denen das Formular nur den Tag kennt.
@@ -114,7 +116,8 @@ def _image_size(content: bytes, kind: str) -> tuple[int, int] | None:
     return None
 
 
-def _check_image(content: bytes, kind: str, name: str) -> None:
+def _check_image(content: bytes, kind: str, name: str) -> int:
+    """Prüft ein Foto anhand des Dateikopfs und gibt seine Bildpunkte zurück."""
     size = _image_size(content, kind)
     if size is None or 0 in size:
         raise BackfillError(f"{name} ließ sich nicht lesen; bitte neu aufnehmen.")
@@ -124,6 +127,7 @@ def _check_image(content: bytes, kind: str, name: str) -> None:
             f"{name} ist mit {width} x {height} Bildpunkten zu groß "
             f"(höchstens {MAX_PIXELS // 1_000_000} Megapixel)."
         )
+    return width * height
 
 
 def scan_to_pdf(scans: Sequence[Scan]) -> bytes:
@@ -143,9 +147,15 @@ def scan_to_pdf(scans: Sequence[Scan]) -> bytes:
     if None in kinds:
         bad = next(name for (_, name), kind in zip(scans, kinds, strict=True) if kind is None)
         raise BackfillError(f"{bad} ist kein PDF oder Foto (JPEG, PNG).")
+    total = 0
     for (content, name), kind in zip(scans, kinds, strict=True):
         assert kind is not None  # noqa: S101 – oben geprüft
-        _check_image(content, kind, name)
+        total += _check_image(content, kind, name)
+    if total > MAX_TOTAL_PIXELS:
+        raise BackfillError(
+            f"Die Fotos sind zusammen zu groß (höchstens {MAX_TOTAL_PIXELS // 1_000_000} "
+            "Megapixel); bitte mit geringerer Auflösung aufnehmen."
+        )
     with tempfile.TemporaryDirectory(prefix="psagent-scan-") as folder:
         names = []
         for index, ((content, _), suffix) in enumerate(zip(scans, kinds, strict=True), 1):
