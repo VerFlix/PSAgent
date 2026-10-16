@@ -65,22 +65,18 @@
 </section>
 {% endif %}
 
-<section class="card">
-  <h2>Verlauf</h2>
-  {% if events %}
-    <div class="table-scroll"><table class="list">
-      <thead><tr><th>Zeitpunkt</th><th>Vorgang</th><th>Kommentar</th><th>durch</th></tr></thead>
-      <tbody>
-      {% for event in events %}
-        <tr>
-          <td>{{ event.at|date:"d.m.Y H:i" }}</td>
-          <td>{{ event.get_kind_display }}</td>
-          <td>{{ event.comment|default:"–" }}</td>
-          <td>{% if event.actor %}{{ event.actor.get_full_name|default:event.actor.username }}{% else %}Altsystem{% endif %}</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table></div>
+<section class="card" id="zeitleiste">
+  <h2>Zeitleiste</h2>
+  {% if timeline %}
+    <ol class="timeline">
+    {% for entry in timeline %}
+      <li class="timeline-{{ entry.kind }}">
+        <span class="hint">{{ entry.at|date:"d.m.Y H:i" }} · {{ entry.actor }}</span><br>
+        <strong>{{ entry.title }}</strong>{% if entry.detail %} – {{ entry.detail }}{% endif %}
+        {% if entry.booking_id %} · <a href="{% url 'lending:booking_detail' entry.booking_id %}">Vorgang</a>{% endif %}
+      </li>
+    {% endfor %}
+    </ol>
   {% else %}
     <p>Noch keine Vorgänge.</p>
   {% endif %}
