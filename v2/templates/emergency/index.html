@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Notbetrieb{% endblock %}
+{% block content %}
+<h1>Notbetrieb</h1>
+<p>Fällt PSAgent aus, laufen Verleih und Prüfung mit der Notfallmappe auf Papier weiter.
+  Danach wird alles mit Formularnummer und Scan nacherfasst.</p>
+
+<section class="card">
+  <h2>Neueste Notfallmappe</h2>
+  {% if latest %}
+    <p>{{ latest }}{% if latest.created_by %}, erzeugt von {{ latest.created_by }}{% else %}, erzeugt vom wöchentlichen Timer{% endif %}.</p>
+    <ul class="plain">
+      {% for title, numbers in ranges %}<li>{{ title }}: {{ numbers }}</li>{% endfor %}
+    </ul>
+    <p><a href="{% url 'emergency:latest' %}">Neueste Notfallmappe herunterladen (PDF)</a></p>
+  {% else %}
+    <p>Noch keine Notfallmappe erzeugt.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Neue Notfallmappe erzeugen</h2>
+  <p>Enthält alle Teile mit EI, Status, nächster Prüfung und GAL, die laufenden Ausleihen und
+    Reservierungen der nächsten vier Wochen (Entleiher nur mit Namen) und leere Formulare mit neuen
+    Nummern: {{ sheets.A }} × Ausgabe und Rückgabe, {{ sheets.S }} × Sperrung, {{ sheets.P }} × Prüfprotokoll.</p>
+  <p class="hint">Gespeichert werden nur die letzten {{ keep }} Mappen, weil sie Namen enthalten.
+    Die vergebenen Formularnummern bleiben immer erfasst.</p>
+  <form method="post" action="{% url 'emergency:create' %}">
+    {% csrf_token %}
+    <button type="submit" class="primary">Erzeugen und herunterladen</button>
+  </form>
+</section>
+{% endblock %}

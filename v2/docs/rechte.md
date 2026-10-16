@@ -73,3 +73,6 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 - PDF-Dokumente (Felix, 16.10.2026): PD und Haftungsausschluss tragen Name und Stempel der
   erzeugenden Person und sind darum an gültige Sachkunde gebunden. Die Einsatzdokumentation
   (Besitzer: Verein aus `PSAGENT_CLUB_NAME`) bleibt bei „Teile anlegen …“ ab Trainer.
+- Notfallmappe (#52): Sie nennt Entleiher (nur mit Namen) und gehört darum zu „Reservieren,
+  ausgeben, zurücknehmen“ (ab Verleiher). Erzeugen vergibt neue Formularnummern; der
+  Verwaltungsbefehl `notfallmappe` (wöchentlicher Timer) läuft ohne Konto.

@@ -23,7 +23,7 @@ from django.db import models
 
 from inventory.models import Document
 
-APPS = ("accounts", "inventory", "inspections", "lending", "legacy")
+APPS = ("accounts", "inventory", "inspections", "lending", "emergency", "legacy")
 LEFT_OUT = {
     "accounts.passkey",
     "accounts.enrollmenttoken",

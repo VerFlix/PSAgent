@@ -66,6 +66,10 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
 - Einstellungen: `PSAGENT_WEBAUTHN_RP_ID`, `PSAGENT_WEBAUTHN_ORIGINS`, im Betrieb hinter Caddy
   `PSAGENT_TRUSTED_PROXIES`, der Verein als Besitzer auf der Einsatzdokumentation
   `PSAGENT_CLUB_NAME` (siehe `.env.example`).
+- Notbetrieb (`/notbetrieb/`, ab Verleiher): Notfallmappe als PDF mit allen Teilen, anstehenden
+  Ausleihen (Entleiher nur mit Namen) und leeren Formularen mit fortlaufender Formularnummer.
+  Für die wöchentliche Fassung im Betrieb einen Timer auf
+  `uv run python manage.py notfallmappe` setzen. Gespeichert bleiben die letzten 5 Mappen.
 - PDF-Dokumente je Teil (Teileseite, Kasten „Dokumente“): Einsatzdokumentation ab Trainer;
   PD und Haftungsausschluss nur mit gültiger Sachkunde, mit Name und Briefkopf/Stempel aus
   dem Konto der erzeugenden Person.

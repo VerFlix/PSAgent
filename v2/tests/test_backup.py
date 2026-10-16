@@ -106,3 +106,15 @@ def test_backup_page_explains_content(client: Client) -> None:
     html = client.get(reverse("backup")).content.decode()
 
     assert "Enthält Personendaten" in html and "Ohne Zugangsdaten" in html
+
+
+def test_backup_contains_form_numbers(client: Client) -> None:
+    """Die vergebenen Formularnummern des Notbetriebs (#52) gehören zur Sicherung."""
+    from emergency.binder import create_binder
+
+    client.force_login(make_inspector(role=Role.ADMIN))
+    create_binder(actor=None)
+
+    models = {record["model"] for record in json.loads(download(client).read("daten.json"))}
+
+    assert {"emergency.binder", "emergency.formsheet"} <= models
