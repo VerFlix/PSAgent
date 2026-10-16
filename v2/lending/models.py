@@ -209,6 +209,7 @@ class Loan(models.Model):
 class SignatureOrigin(models.TextChoices):
     APP = "app", "in der App erfasst"
     LEGACY = "legacy", "Altbestand, ungesichert"
+    PAPER = "paper", "auf dem Papierformular (Notbetrieb)"
 
 
 class Signature(AppendOnlyModel):
@@ -240,6 +241,10 @@ class Signature(AppendOnlyModel):
     @property
     def is_legacy(self) -> bool:
         return self.origin == SignatureOrigin.LEGACY
+
+    @property
+    def is_paper(self) -> bool:
+        return self.origin == SignatureOrigin.PAPER
 
 
 class LoanEventKind(models.TextChoices):

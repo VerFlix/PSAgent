@@ -7,7 +7,11 @@
 3. Was sich nicht sauber übernehmen lässt, landet auf der Klärungsliste für PSA-Prüfer oder
    Admin, ebenso fehlende Formularnummern (Lücken zwischen erfassten Nummern einer Mappe).
 
-Dieser Teil erfasst Sperrungen. Ausgaben und Rückgaben folgen; Prüfprotokolle in Phase 3 (#80).
+Erfasst werden Sperrungen sowie Ausgaben und Rückgaben; Prüfprotokolle folgen in Phase 3 (#80).
+Was auf Papier ausgegeben wurde, wird eingetragen, auch wenn es gegen eine Regel verstieß (das
+Teil ist ja draußen); ein PSA-Prüfer sieht den Fall auf der Klärungsliste. Nur Doppelbuchungen
+verhindert die Datenbank: Sie warten, bis ein PSA-Prüfer die Reservierung storniert und die
+Ausleihe übernimmt oder sie mit Begründung verwirft.
 """
 
 import hashlib
@@ -27,9 +31,33 @@ from django.utils import timezone
 
 from accounts.models import User
 from accounts.rights import Right, require
-from emergency.models import Binder, Clarification, FormKind, FormSheet, LockEntry, PaperForm
+from emergency.models import (
+    Binder,
+    Clarification,
+    FormKind,
+    FormSheet,
+    LoanForm,
+    LoanFormPart,
+    LoanFormResult,
+    LockEntry,
+    PaperForm,
+)
+from inspections.services import next_inspection_due
 from inventory.models import Component, EventKind, Part, normalize_ei
 from inventory.services import record_event
+from lending import services as lending
+from lending.models import (
+    ACTIVE_STATUSES,
+    Booking,
+    Borrower,
+    BorrowerContact,
+    Loan,
+    LoanEvent,
+    LoanEventKind,
+    LoanStatus,
+    Signature,
+    SignatureOrigin,
+)
 
 NUMBER = re.compile(r"^\s*([A-Za-z])\s*-?\s*0*(\d{1,6})\s*$")
 PDF_MAGIC = b"%PDF-"
@@ -306,6 +334,8 @@ class Case:
     title: str
     detail: str = ""
     form: PaperForm | None = None
+    loan_form: LoanForm | None = None
+    can_apply: bool = False
 
 
 def _gaps() -> Iterable[Case]:
@@ -342,9 +372,42 @@ def _unapplied_locks() -> Iterable[Case]:
         )
 
 
+def _loan_form_cases() -> Iterable[Case]:
+    forms = LoanForm.objects.select_related("paper_form__sheet").prefetch_related("parts__part")
+    for form in forms.order_by("id"):
+        label = form.paper_form.sheet.label
+        if not hasattr(form, "result"):
+            conflicts = _conflicts(form)
+            running = [loan for loan in conflicts if loan.status == LoanStatus.LENT]
+            lines = [
+                f"{loan.part} ist {loan.start:%d.%m.%Y}–{loan.end:%d.%m.%Y} "
+                f"{loan.get_status_display()}."
+                for loan in conflicts
+            ]
+            if running:
+                lines.append("Zuerst die laufende Ausleihe klären (z. B. Rückgabe nacherfassen).")
+            yield Case(
+                key=f"ausgabe:{form.pk}",
+                title=f"Doppelbuchung: Ausgabe aus Formular {label} nicht eingetragen",
+                detail=" ".join(lines + form.warnings.splitlines()),
+                form=form.paper_form,
+                loan_form=form,
+                can_apply=bool(conflicts) and not running,
+            )
+        elif form.warnings:
+            yield Case(
+                key=f"ausgabe-pruefen:{form.pk}",
+                title=f"Ausgabe/Rückgabe aus Formular {label} prüfen",
+                detail=" ".join(form.warnings.splitlines()),
+                form=form.paper_form,
+                loan_form=form,
+            )
+
+
 def open_cases() -> list[Case]:
     resolved = set(Clarification.objects.values_list("key", flat=True))
-    return [case for case in (*_gaps(), *_unapplied_locks()) if case.key not in resolved]
+    cases = (*_gaps(), *_unapplied_locks(), *_loan_form_cases())
+    return [case for case in cases if case.key not in resolved]
 
 
 @transaction.atomic
@@ -356,3 +419,285 @@ def resolve(key: str, *, note: str, actor: User | None) -> Clarification:
     if key not in {case.key for case in open_cases()}:
         raise BackfillError("Das ist kein offener Fall der Klärungsliste.")
     return Clarification.objects.create(key=key, note=note.strip(), resolved_by=actor)
+
+
+# --- Ausgaben und Rückgaben ---
+
+MAX_LOAN_PARTS = 6  # Zeilen auf dem Formular „Ausgabe und Rückgabe“
+
+
+def _parts_of(eis: Sequence[str]) -> list[Part]:
+    cleaned = [value.strip() for value in eis if value.strip()]
+    if not cleaned:
+        raise BackfillError("Bitte mindestens ein Teil (EI) vom Formular eintragen.")
+    if len(cleaned) > MAX_LOAN_PARTS:
+        raise BackfillError(f"Das Formular hat höchstens {MAX_LOAN_PARTS} Zeilen für Teile.")
+    parts: list[Part] = []
+    for value in cleaned:
+        part = find_part(value)
+        if part is None:
+            raise BackfillError(f"Kein Teil mit der EI „{value}“.")
+        if part.is_retired():
+            raise BackfillError(f"{part} ist ausgesondert.")
+        if part in parts:
+            raise BackfillError(f"{part} steht zweimal auf dem Formular.")
+        parts.append(part)
+    return parts
+
+
+def _validate(data: dict[str, Any], sheet: FormSheet) -> None:
+    issued, returned = data.get("issued_on"), data.get("returned_on")
+    if issued is None and returned is None:
+        raise BackfillError("Bitte Ausgabe oder Rückgabe vom Formular eintragen.")
+    if issued is not None:
+        _check_form_date(issued, sheet)
+        planned = data.get("planned_return")
+        if planned is None:
+            raise BackfillError("Bitte „Rückgabe geplant am“ vom Formular eintragen.")
+        if planned < issued:
+            raise BackfillError("„Rückgabe geplant am“ liegt vor der Ausgabe.")
+        if not str(data.get("borrower_name", "")).strip():
+            raise BackfillError("Bitte den Namen des Entleihers vom Formular eintragen.")
+        if not str(data.get("issued_by_name", "")).strip():
+            raise BackfillError("Bitte den Namen der ausgebenden Person eintragen.")
+    if returned is not None:
+        _check_form_date(returned, sheet)
+        if issued is not None and returned < issued:
+            raise BackfillError("Die Rückgabe liegt vor der Ausgabe.")
+        if not str(data.get("received_by_name", "")).strip():
+            raise BackfillError("Bitte den Namen der rücknehmenden Person eintragen.")
+
+
+def _borrower(data: dict[str, Any], actor: User | None) -> Borrower:
+    """Bekannter Entleiher bei eindeutigem Namen, sonst neu; Angaben vom Papier gelten."""
+    name = str(data["borrower_name"]).strip()
+    address, email, phone = (str(data.get(key) or "") for key in ("address", "email", "phone"))
+    matches = list(BorrowerContact.objects.filter(name__iexact=name)[:2])
+    if len(matches) == 1:
+        borrower = matches[0].borrower
+        lending.overwrite_contact(borrower, actor=actor, address=address, email=email, phone=phone)
+        return borrower
+    return lending.create_borrower(name, address=address, email=email, phone=phone, actor=actor)
+
+
+def _checkout_warnings(form: LoanForm, parts: Sequence[Part]) -> list[str]:
+    """Was laut Stand gegen die Regeln der Ausgabe verstieß; das Teil ist trotzdem draußen."""
+    assert form.issued_on is not None and form.planned_return is not None  # noqa: S101
+    warnings = []
+    if not form.quick_check:
+        warnings.append("Kurzkontrolle nicht angekreuzt.")
+    if not form.gal_provided:
+        warnings.append("„GAL bereitgestellt“ nicht angekreuzt.")
+    contact = BorrowerContact.objects.filter(borrower=form.borrower).first()
+    if contact is None or not contact.address.strip():
+        warnings.append("Adresse des Entleihers fehlt.")
+    if contact is None or not (contact.email.strip() or contact.phone.strip()):
+        warnings.append("E-Mail oder Telefon des Entleihers fehlt.")
+    moment = _moment(form.issued_on)
+    for part in parts:
+        if part.is_locked(moment):
+            warnings.append(f"{part} war bei der Ausgabe gesperrt.")
+        if not part.is_released(moment):
+            warnings.append(f"{part} war noch nicht freigegeben.")
+        elif not part.has_no_ppe(moment):
+            due = next_inspection_due(part)
+            if due is None:
+                warnings.append(f"{part} hatte keine gültige PSA-Prüfung.")
+            elif due < form.issued_on:
+                warnings.append(f"{part} war seit {due:%d.%m.%Y} zur PSA-Prüfung fällig.")
+            elif form.planned_return > due:
+                warnings.append(f"{part} sollte nach der PSA-Prüfung am {due:%d.%m.%Y} zurück.")
+        if not part.documents.exists():
+            warnings.append(f"Für {part} ist keine GAL hinterlegt.")
+    return warnings
+
+
+def _conflicts(form: LoanForm) -> list[Loan]:
+    """Reservierungen und Ausleihen, die sich mit der Ausgabe auf dem Papier überschneiden."""
+    if form.issued_on is None or form.planned_return is None:
+        return []
+    period = lending._period(form.issued_on, form.planned_return)
+    parts = [entry.part_id for entry in form.parts.all()]
+    return list(
+        Loan.objects.select_related("part")
+        .filter(part_id__in=parts, status__in=ACTIVE_STATUSES, period__overlap=period)
+        .order_by("part_id", "id")
+    )
+
+
+def _paper_signature(name: str) -> Signature:
+    return Signature.objects.create(strokes=[], signer_name=name, origin=SignatureOrigin.PAPER)
+
+
+def _return(loan: Loan, form: LoanForm, note: str, actor: User | None) -> None:
+    assert form.returned_on is not None  # noqa: S101 – nur mit Rückgabe aufgerufen
+    changed = Loan.objects.filter(pk=loan.pk, status=LoanStatus.LENT).update(
+        status=LoanStatus.RETURNED
+    )
+    if changed != 1:
+        raise BackfillError(f"{loan} ist nicht mehr ausgeliehen.")
+    comment = "; ".join(filter(None, [form.return_comment, note]))
+    LoanEvent.objects.create(
+        loan=loan,
+        kind=LoanEventKind.RETURNED,
+        at=_moment(form.returned_on),
+        actor=actor,
+        actor_name=form.received_by_name,
+        quick_check=form.return_quick_check,
+        comment=comment,
+        signature=_paper_signature(loan.booking.borrower.display_name),
+    )
+
+
+def _running_loan(part: Part, returned_on: date) -> Loan | None:
+    """Laufende Ausleihe von vor dem Ausfall, die mit der Rückgabe auf Papier endet."""
+    return (
+        Loan.objects.select_related("booking__borrower")
+        .filter(part=part, status=LoanStatus.LENT, period__startswith__lte=returned_on)
+        .first()
+    )
+
+
+def _lock_hint(part: Part, form: LoanForm) -> str | None:
+    """Warum die Sperre vom Formular nicht eingetragen wird; None, wenn sie es wird."""
+    assert form.returned_on is not None  # noqa: S101
+    if part.is_locked():
+        return f"{part} war bereits gesperrt; Sperre vom Formular nicht eingetragen."
+    if part.events.filter(kind__in=STATUS_EVENTS, at__gte=_moment(form.returned_on)).exists():
+        return f"{part} hat spätere Sperr- oder Prüfvorgänge; Sperre nicht eingetragen."
+    return None
+
+
+def _hints(form: LoanForm, parts: Sequence[Part]) -> list[str]:
+    """Hinweise, die schon vor dem Eintragen feststehen (Rückgabe ohne Ausleihe, Sperre)."""
+    hints = []
+    returned = list(parts)
+    if form.issued_on is None and form.returned_on is not None:
+        returned = []
+        for part in parts:
+            if _running_loan(part, form.returned_on) is None:
+                hints.append(
+                    f"Für {part} gibt es keine laufende Ausleihe; Rückgabe nicht eingetragen."
+                )
+            else:
+                returned.append(part)
+    if form.returned_on is not None and form.lock_reason:
+        hints.extend(hint for part in returned if (hint := _lock_hint(part, form)))
+    return hints
+
+
+def _apply(form: LoanForm, actor: User | None, *, applied_by: User | None) -> LoanFormResult:
+    """Trägt das Formular in den Verleih ein: Ausgabe, Rückgabe und Sperre vom Papier."""
+    note = _backfill_note(form.paper_form, actor)
+    parts = [entry.part for entry in form.parts.select_related("part")]
+    booking = None
+    loans: list[Loan] = []
+    if form.issued_on is not None:
+        assert form.borrower is not None and form.planned_return is not None  # noqa: S101
+        booking = Booking.objects.create(borrower=form.borrower, created_by=actor)
+        period = lending._period(form.issued_on, form.planned_return)
+        signature = _paper_signature(form.borrower.display_name)
+        for part in parts:
+            loan = Loan.objects.create(
+                booking=booking, part=part, period=period, status=LoanStatus.LENT
+            )
+            LoanEvent.objects.create(
+                loan=loan,
+                kind=LoanEventKind.CHECKED_OUT,
+                at=_moment(form.issued_on),
+                actor=actor,
+                actor_name=form.issued_by_name,
+                quick_check=form.quick_check,
+                gal_provided=form.gal_provided,
+                comment=note,
+                signature=signature,
+            )
+            loans.append(loan)
+    elif form.returned_on is not None:
+        running = [_running_loan(part, form.returned_on) for part in parts]
+        loans = [loan for loan in running if loan is not None]
+    if form.returned_on is not None:
+        for loan in loans:
+            locks = form.lock_reason and _lock_hint(loan.part, form) is None
+            _return(loan, form, note, actor)
+            if locks:
+                record_event(
+                    loan.part,
+                    EventKind.LOCKED,
+                    actor=actor,
+                    comment=f"{form.lock_reason} – gesperrt bei der Rückgabe; {note}",
+                    at=_moment(form.returned_on),
+                )
+    return LoanFormResult.objects.create(loan_form=form, booking=booking, applied_by=applied_by)
+
+
+def _overlaps(parts: Sequence[Part], form: LoanForm) -> bool:
+    assert form.issued_on is not None and form.planned_return is not None  # noqa: S101
+    period = lending._period(form.issued_on, form.planned_return)
+    return Loan.objects.filter(
+        part__in=parts, status__in=ACTIVE_STATUSES, period__overlap=period
+    ).exists()
+
+
+@transaction.atomic
+def capture_loan_form(
+    number: str, scans: Sequence[Scan], data: dict[str, Any], *, actor: User | None
+) -> PaperForm:
+    """Erfasst ein Formular „Ausgabe und Rückgabe“ mit Scan und Datum vom Papier.
+
+    Bei einer Doppelbuchung bleibt das Formular mit Scan erfasst; die Ausleihe wartet auf die
+    Klärungsliste (`apply_loan_form`). Regelverstöße stehen als Hinweise am Formular.
+    """
+    require(actor, Right.LEND)
+    if str(data.get("lock_reason") or "").strip():
+        require(actor, Right.LOCK)
+    sheet = find_sheet(number, FormKind.LOAN)
+    parts = _parts_of(data.get("eis", []))
+    _validate(data, sheet)
+    paper = _record_form(sheet, scans, actor)
+    issued = data.get("issued_on")
+    form = LoanForm(
+        paper_form=paper,
+        borrower=_borrower(data, actor) if issued is not None else None,
+        quick_check=bool(data.get("quick_check")),
+        gal_provided=bool(data.get("gal_provided")),
+        issued_on=issued,
+        planned_return=data.get("planned_return") if issued is not None else None,
+        issued_by_name=str(data.get("issued_by_name") or "").strip(),
+        returned_on=data.get("returned_on"),
+        return_quick_check=bool(data.get("return_quick_check")),
+        return_comment=str(data.get("return_comment") or "").strip(),
+        received_by_name=str(data.get("received_by_name") or "").strip(),
+        lock_reason=str(data.get("lock_reason") or "").strip(),
+    )
+    warnings = _checkout_warnings(form, parts) if issued is not None else []
+    form.warnings = "\n".join([*warnings, *_hints(form, parts)])
+    form.save()
+    LoanFormPart.objects.bulk_create(LoanFormPart(loan_form=form, part=part) for part in parts)
+    if issued is None or not _overlaps(parts, form):
+        _apply(form, actor, applied_by=actor)
+    return paper
+
+
+@transaction.atomic
+def apply_loan_form(form: LoanForm, *, note: str, actor: User | None) -> LoanFormResult:
+    """Doppelbuchung klären: überschneidende Reservierungen stornieren, Ausgabe eintragen."""
+    require(actor, Right.CLARIFY)
+    if not note.strip():
+        raise BackfillError("Bitte eine Begründung angeben.")
+    if LoanFormResult.objects.filter(loan_form=form).exists():
+        raise BackfillError("Dieses Formular ist bereits eingetragen.")
+    conflicts = _conflicts(form)
+    running = [loan for loan in conflicts if loan.status == LoanStatus.LENT]
+    if running:
+        raise BackfillError(
+            f"{running[0].part} ist im Zeitraum als laufende Ausleihe erfasst; zuerst diese klären."
+        )
+    label = form.paper_form.sheet.label
+    if conflicts:
+        lending.cancel(
+            conflicts, actor=actor, comment=f"storniert für die Ausgabe aus Formular {label}"
+        )
+    result = _apply(form, actor, applied_by=actor)
+    Clarification.objects.create(key=f"ausgabe:{form.pk}", note=note.strip(), resolved_by=actor)
+    return result

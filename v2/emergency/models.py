@@ -176,3 +176,100 @@ class Clarification(AppendOnlyModel):
 
     def __str__(self) -> str:
         return f"{self.key}: {self.note}"
+
+
+class LoanForm(AppendOnlyModel):
+    """Formular „Ausgabe und Rückgabe“, wie es auf dem Papier steht (Konzept Abschnitt 7).
+
+    Kontaktdaten stehen nicht hier, sondern beim Entleiher. Ob und wie das Formular in den
+    Verleih übernommen wurde, steht in `LoanFormResult`; fehlt es, wartet eine Doppelbuchung
+    auf die Klärungsliste.
+    """
+
+    paper_form = models.OneToOneField(
+        PaperForm, on_delete=models.PROTECT, related_name="loan_form", verbose_name="Formular"
+    )
+    borrower = models.ForeignKey(
+        "lending.Borrower",
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="Entleiher",
+    )
+    quick_check = models.BooleanField("Kurzkontrolle angekreuzt", default=False)
+    gal_provided = models.BooleanField("GAL bereitgestellt angekreuzt", default=False)
+    issued_on = models.DateField("Datum Ausgabe", null=True, blank=True)
+    planned_return = models.DateField("Rückgabe geplant am", null=True, blank=True)
+    issued_by_name = models.CharField("ausgebende Person", max_length=200, blank=True)
+    returned_on = models.DateField("Datum Rückgabe", null=True, blank=True)
+    return_quick_check = models.BooleanField("Kurzkontrolle bei Rückgabe", default=False)
+    return_comment = models.TextField("Rückgabe-Kommentar", blank=True)
+    received_by_name = models.CharField("rücknehmende Person", max_length=200, blank=True)
+    lock_reason = models.TextField("Sperrung bei Rückgabe, Grund", blank=True)
+    warnings = models.TextField(
+        "zu prüfen", blank=True, help_text="Regelverstöße laut Stand, je Zeile einer."
+    )
+
+    class Meta:
+        verbose_name = "nacherfasste Ausgabe/Rückgabe"
+        verbose_name_plural = "nacherfasste Ausgaben/Rückgaben"
+        ordering = ("paper_form", "id")
+        constraints = (
+            models.CheckConstraint(
+                condition=Q(issued_on__isnull=False) | Q(returned_on__isnull=False),
+                name="emergency_loan_form_has_content",
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"Ausgabe/Rückgabe aus {self.paper_form}"
+
+
+class LoanFormPart(AppendOnlyModel):
+    """Ein Teil (EI) auf dem Formular „Ausgabe und Rückgabe“."""
+
+    loan_form = models.ForeignKey(
+        LoanForm, on_delete=models.PROTECT, related_name="parts", verbose_name="Formular"
+    )
+    part = models.ForeignKey(
+        "inventory.Part", on_delete=models.PROTECT, related_name="+", verbose_name="Teil"
+    )
+
+    class Meta:
+        verbose_name = "Teil auf dem Formular"
+        verbose_name_plural = "Teile auf dem Formular"
+        ordering = ("loan_form", "id")
+        constraints = (
+            models.UniqueConstraint(fields=["loan_form", "part"], name="emergency_form_part_once"),
+        )
+
+
+class LoanFormResult(AppendOnlyModel):
+    """Übernahme eines Formulars in den Verleih; bei Doppelbuchung erst nach der Klärung."""
+
+    loan_form = models.OneToOneField(
+        LoanForm, on_delete=models.PROTECT, related_name="result", verbose_name="Formular"
+    )
+    booking = models.ForeignKey(
+        "lending.Booking",
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="Ausleihvorgang",
+        help_text="Leer bei reiner Rückgabe.",
+    )
+    applied_at = models.DateTimeField("übernommen am", default=timezone.now)
+    applied_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="übernommen von",
+    )
+
+    class Meta:
+        verbose_name = "Übernahme in den Verleih"
+        verbose_name_plural = "Übernahmen in den Verleih"

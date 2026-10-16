@@ -14,8 +14,8 @@ from accounts.models import User
 from accounts.rights import Right, has_right, requires
 from emergency import backfill
 from emergency import binder as service
-from emergency.forms import CaptureForm, LockRowFormSet, ResolveForm
-from emergency.models import Binder, Clarification, PaperForm
+from emergency.forms import CaptureForm, LoanFormForm, LockRowFormSet, NoteForm, ResolveForm
+from emergency.models import Binder, Clarification, LoanForm, PaperForm
 
 
 def _download(binder: Binder) -> FileResponse:
@@ -93,6 +93,55 @@ def backfill_locks(request: HttpRequest) -> HttpResponse:
     elif request.method == "POST":
         messages.error(request, "Bitte die markierten Felder prüfen.")
     return render(request, "emergency/backfill_locks.html", {"form": form, "rows": rows})
+
+
+@requires(Right.BACKFILL_LOANS)
+def backfill_loans(request: HttpRequest) -> HttpResponse:
+    """Formular „Ausgabe und Rückgabe“ mit Scan nacherfassen."""
+    form = CaptureForm(request.POST or None, request.FILES or None)
+    fields = LoanFormForm(request.POST or None)
+    if request.method == "POST" and form.is_valid() and fields.is_valid():
+        scans = [
+            (upload.read(), upload.name or "Datei") for upload in request.FILES.getlist("scan")
+        ]
+        try:
+            paper = backfill.capture_loan_form(
+                form.cleaned_data["number"], scans, fields.backfill_data(), actor=_actor(request)
+            )
+        except backfill.BackfillError as error:
+            messages.error(request, str(error))
+        else:
+            loan_form = paper.loan_form
+            if not hasattr(loan_form, "result"):
+                messages.warning(
+                    request,
+                    f"Formular {paper.sheet.label} erfasst; wegen einer Doppelbuchung wartet die "
+                    "Ausgabe auf die Klärungsliste.",
+                )
+            else:
+                messages.success(request, f"Formular {paper.sheet.label} nacherfasst.")
+            return redirect("emergency:backfill_loans")
+    elif request.method == "POST":
+        messages.error(request, "Bitte die markierten Felder prüfen.")
+    return render(request, "emergency/backfill_loans.html", {"form": form, "fields": fields})
+
+
+@requires(Right.CLARIFY)
+@require_POST
+def apply_loan_form(request: HttpRequest, pk: int) -> HttpResponse:
+    """Doppelbuchung klären: Reservierung stornieren und Ausgabe vom Papier übernehmen."""
+    loan_form = get_object_or_404(LoanForm, pk=pk)
+    form = NoteForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, "Bitte eine Begründung angeben.")
+        return redirect("emergency:clarifications")
+    try:
+        backfill.apply_loan_form(loan_form, note=form.cleaned_data["note"], actor=_actor(request))
+    except backfill.BackfillError as error:
+        messages.error(request, str(error))
+    else:
+        messages.success(request, "Reservierung storniert und Ausgabe eingetragen.")
+    return redirect("emergency:clarifications")
 
 
 @requires(Right.CLARIFY)

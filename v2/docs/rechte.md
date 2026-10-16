@@ -81,3 +81,7 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   trägt die erfassende Person und das Datum vom Formular. Die Klärungsliste („Klärungsliste
   nach dem Notbetrieb bearbeiten“) sehen und bearbeiten nur PSA-Sachkundige und Admin, laut
   Konzept „für PSA-Prüfer oder Admin“, ohne Sachkunde-Pflicht.
+- Ausgaben und Rückgaben nacherfassen (#52): ab Verleiher, wie Verleihen. Die Unterschriften
+  stehen auf dem Papier (Herkunft „auf dem Papierformular“, Scan am Formular). Eine
+  Doppelbuchung übernimmt nur, wer die Klärungsliste bearbeiten darf; dabei werden die
+  überschneidenden Reservierungen storniert (Recht „Reservierungen anderer ändern“).
