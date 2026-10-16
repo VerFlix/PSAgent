@@ -12,7 +12,7 @@ from typing import Any
 from django import forms
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.forms import SetPasswordForm
 from django.contrib.auth.signals import user_login_failed
 from django.core.exceptions import PermissionDenied
@@ -180,6 +180,10 @@ def passkey_revoke(request: HttpRequest, pk: int) -> HttpResponse:
     except webauthn.PasskeyError as error:
         messages.error(request, str(error))
     else:
+        # Andere Sitzungen (etwa mit einem verlorenen Schlüssel geöffnet) enden, diese bleibt.
+        user = _current_user(request)
+        user.end_sessions()
+        update_session_auth_hash(request, user)
         messages.success(request, f"Passkey „{passkey.name}“ widerrufen.")
     return redirect("accounts:account")
 

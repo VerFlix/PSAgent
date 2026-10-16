@@ -19,6 +19,7 @@ from django.contrib.auth.models import UserManager as DjangoUserManager
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 
 from core.append_only import AppendOnlyModel
 
@@ -76,6 +77,13 @@ class User(AbstractUser):
         help_text="Zufällige Kennung, die Passkeys statt des Benutzernamens speichern.",
     )
 
+    session_epoch = models.PositiveIntegerField(
+        "Sitzungsstand",
+        default=0,
+        editable=False,
+        help_text="Erhöhen beendet alle laufenden Sitzungen des Kontos.",
+    )
+
     objects: ClassVar[UserManager] = UserManager()
 
     class Meta:
@@ -102,6 +110,25 @@ class User(AbstractUser):
         PSA-relevante Felder ändern (Rechtetabelle, Konzept Abschnitt 5).
         """
         return self.has_role(Role.PPE_EXPERT) and self.has_valid_qualification(at)
+
+    def _get_session_auth_hash(self, secret: str | None = None) -> str:
+        """Wie in Django (HMAC über den Passwort-Hash), zusätzlich über den Sitzungsstand.
+
+        Django bindet jede Sitzung an diesen Wert und beendet sie, sobald er sich ändert. Den
+        Sitzungsstand erhöhen Rollenwechsel und Passkey-Widerruf (`end_sessions`); so enden
+        auch Sitzungen, die ohne Passwort, also per Passkey, geöffnet wurden.
+        """
+        return salted_hmac(
+            "psagent.accounts.User.get_session_auth_hash",
+            f"{self.password}|{self.session_epoch}",
+            secret=secret,
+            algorithm="sha256",
+        ).hexdigest()
+
+    def end_sessions(self) -> None:
+        """Beendet alle laufenden Sitzungen dieses Kontos beim nächsten Seitenaufruf."""
+        User.objects.filter(pk=self.pk).update(session_epoch=models.F("session_epoch") + 1)
+        self.refresh_from_db(fields=["session_epoch"])
 
     @property
     def requires_passkey(self) -> bool:

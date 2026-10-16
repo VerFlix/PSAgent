@@ -140,6 +140,9 @@ def change_role(user: User, role: Role, *, actor: User | None, reason: str) -> U
     old = user.role
     user.role = new
     user.save(update_fields=["role"])
+    # Laufende Sitzungen enden: Eine Passwort-Sitzung darf nach der Beförderung zu Admin oder
+    # PSA-Sachkundig nicht weiterlaufen, und neue Rechte gelten erst nach neuer Anmeldung.
+    user.end_sessions()
     _log(
         user, AccountEventKind.ROLE_CHANGED, actor=actor, reason=reason, old_role=old, new_role=new
     )
@@ -239,6 +242,7 @@ def revoke_passkey(passkey: Passkey, *, actor: User | None, reason: str) -> Pass
             )
     passkey.revoked_at = timezone.now()
     passkey.save(update_fields=["revoked_at"])
+    passkey.user.end_sessions()  # auch eine mit dem gestohlenen Schlüssel geöffnete Sitzung
     _log(
         passkey.user,
         AccountEventKind.PASSKEY_REVOKED,

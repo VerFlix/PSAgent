@@ -338,3 +338,74 @@ def test_password_link_works_once(client: Client, make_user: MakeUser) -> None:
 
     assert response.status_code == 404
     assert "_auth_user_id" not in client.session
+
+
+# --- Laufende Sitzungen nach Rollenwechsel und Passkey-Widerruf ---
+
+
+def session_of(user: User) -> Client:
+    other = Client()
+    other.force_login(user)
+    assert other.get(reverse("home")).status_code == 200
+    return other
+
+
+@pytest.mark.parametrize("role", [Role.PPE_EXPERT, Role.ADMIN, Role.VIEWER])
+def test_role_change_ends_running_sessions(
+    role: Role, client: Client, admin: User, make_user: MakeUser
+) -> None:
+    """Sonst behielte eine Passwort-Sitzung nach der Beförderung die neuen Rechte."""
+    user = make_user(Role.LENDER)
+    running = session_of(user)
+
+    client.post(reverse("accounts:user_role", args=[user.pk]), {"role": role, "reason": "Wechsel"})
+
+    assert running.get(reverse("home")).status_code == 302
+    assert client.get(reverse("accounts:users")).status_code == 200  # Admin bleibt angemeldet
+
+
+def test_admin_passkey_revocation_ends_running_sessions(
+    client: Client, admin: User, make_user: MakeUser
+) -> None:
+    """Ein gestohlener Schlüssel: auch die damit geöffnete Sitzung endet sofort."""
+    user = make_user(Role.PPE_EXPERT)
+    passkey = Passkey.objects.create(
+        user=user, name="YubiKey", credential_id=b"k3", public_key=b"\x00", sign_count=0
+    )
+    running = session_of(user)
+
+    client.post(
+        reverse("accounts:user_passkey_revoke", args=[user.pk, passkey.pk]),
+        {"reason": "gestohlen"},
+    )
+
+    assert running.get(reverse("home")).status_code == 302
+
+
+def test_own_passkey_revocation_ends_other_sessions_only(
+    client: Client, make_user: MakeUser
+) -> None:
+    user = make_user(Role.LENDER)
+    passkey = Passkey.objects.create(
+        user=user, name="YubiKey", credential_id=b"k4", public_key=b"\x00", sign_count=0
+    )
+    elsewhere = session_of(user)
+    client.force_login(user)
+
+    client.post(reverse("accounts:passkey_revoke", args=[passkey.pk]))
+
+    assert elsewhere.get(reverse("home")).status_code == 302
+    assert client.get(reverse("home")).status_code == 200
+
+
+def test_unrelated_changes_keep_sessions(client: Client, admin: User, make_user: MakeUser) -> None:
+    user = make_user(Role.PPE_EXPERT)
+    running = session_of(user)
+    today = timezone.localdate()
+
+    client.post(
+        reverse("accounts:qualification_grant", args=[user.pk]),
+        {"valid_from": today.isoformat(), "valid_until": today.isoformat(), "evidence": "Lehrgang"},
+    )
+
+    assert running.get(reverse("home")).status_code == 200
