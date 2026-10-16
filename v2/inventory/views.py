@@ -14,12 +14,14 @@ from django.db.models import Prefetch, QuerySet
 from django.http import FileResponse, HttpRequest, HttpResponse
 from django.http.response import HttpResponseBase
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.utils.text import slugify
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from accounts.models import User
 from accounts.rights import Right, has_right, requires
 from inspections.services import next_inspection_due
+from inventory import export
 from inventory.forms import (
     CommentForm,
     ComponentEditFormSet,
@@ -400,4 +402,32 @@ def document_open(request: HttpRequest, pk: int) -> HttpResponseBase:
     # Das PDF läuft ohne Skripte und Formulare, auch wenn eine Datei welche enthielte.
     response["Content-Security-Policy"] = "sandbox; default-src 'none'; object-src 'self'"
     response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+# --- Export (Parität 11) ---
+
+
+@requires(Right.VIEW_AVAILABILITY)
+@require_GET
+def part_export(request: HttpRequest) -> HttpResponse:
+    """Parität 11: alle oder markierte Teile als CSV oder PDF, ohne Personendaten."""
+    kind = request.GET.get("format", "csv")
+    if kind not in ("csv", "pdf"):
+        kind = "csv"
+    ids = [int(value) for value in request.GET.getlist("teil") if value.isdigit()]
+    marked = bool(ids)
+    with_retired = marked or request.GET.get("ausgesondert") == "1"
+    parts = export.parts_for_export(ids if marked else None, with_retired=with_retired)
+    data = export.rows(parts)
+    stand = timezone.localdate()
+    if kind == "pdf":
+        title = "Teileliste (markierte Teile)" if marked else "Teileliste"
+        content = export.to_pdf(data, title=title, stand=f"{stand:%d.%m.%Y}")
+        content_type = "application/pdf"
+    else:
+        content = export.to_csv(data)
+        content_type = "text/csv; charset=utf-8"
+    response = HttpResponse(content, content_type=content_type)
+    response["Content-Disposition"] = f'attachment; filename="teileliste-{stand:%Y-%m-%d}.{kind}"'
     return response

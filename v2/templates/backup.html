@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Vollständige Sicherung{% endblock %}
+{% block content %}
+<h1>Vollständige Sicherung</h1>
+<section class="card">
+  <p>Ein ZIP mit allen Daten von PSAgent, lesbar ohne Werkzeug:</p>
+  <ul>
+    <li><code>daten.json</code>: alle Tabellen (Teile, Prüfungen, Verleih, Konten, Protokolle)</li>
+    <li><code>dateien/</code>: die GAL-PDFs</li>
+    <li><code>pruefsummen.sha256</code>: Prüfsummen aller Dateien</li>
+  </ul>
+  <p class="error">Enthält Personendaten (Entleiher, Unterschriften). Sicher aufbewahren und nicht weitergeben. Der Abruf wird protokolliert.</p>
+  <p class="hint">Ohne Zugangsdaten (Passwörter, Passkeys, Einrichtungslinks). Ersetzt nicht das verschlüsselte Datenbank-Backup.</p>
+  <form method="post">{% csrf_token %}<button type="submit" class="primary">Sicherung herunterladen</button></form>
+</section>
+{% endblock %}

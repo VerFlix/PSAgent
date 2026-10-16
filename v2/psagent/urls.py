@@ -10,4 +10,5 @@ urlpatterns = [
     path("teile/", include("inventory.urls")),
     path("verleih/", include("lending.urls")),
     path("healthz", views.healthz, name="healthz"),
+    path("verwaltung/sicherung/", views.backup_view, name="backup"),
 ]
