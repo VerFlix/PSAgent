@@ -27,7 +27,14 @@ from tests.legacy.reference import export_legacy_code, legacy_program
 pytestmark = pytest.mark.django_db
 
 # Varianten, die der aktuelle Altsystem-Code abfragen kann (alle Spalten nachgerüstet).
-VARIANTS = ("s7", "s6_aktualisiert", "s5_aktualisiert", "s3_aktualisiert", "s2_aktualisiert")
+VARIANTS = (
+    "s7",
+    "s6_aktualisiert",
+    "s5_aktualisiert",
+    "s3_aktualisiert",
+    "s2_aktualisiert",
+    "echt_2026_10_15",
+)
 PERIODS = ((0, 0), (1, 3), (5, 12), (20, 35), (60, 61))
 
 # Gründe, aus denen PSAgent 2.0 bewusst anders entscheidet (docs/altsystem-verhalten.md, #9).

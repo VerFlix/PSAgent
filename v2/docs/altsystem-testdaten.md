@@ -32,6 +32,7 @@ dabei entstehen können, und füllt sie mit künstlichen Daten. Echte Altdaten w
 | `s2_nur_verleih` | S2, danach nur mit dem aktuellen Verleih-Programm geöffnet | – |
 | `s3_nur_verleih` | S3 oder S4, danach nur mit dem aktuellen Verleih-Programm geöffnet | – |
 | `s5_nur_verleih` | S5, danach nur mit dem aktuellen Verleih-Programm geöffnet | Stand S5 |
+| `echt_2026_10_15` | gemessen an den echten Datenbanken (`.schema`, #54), siehe unten | wie Hauptdatenbank + `archived_items` |
 
 - Das Verleih-Programm rüstet bei `products`/`systems` nur `naechste_pruefung_am` und
   `keine_psa` nach, nicht die `last_psa_*`-Spalten.
@@ -41,8 +42,15 @@ dabei entstehen können, und füllt sie mit künstlichen Daten. Echte Altdaten w
   `s4_*` = `s3_*`, `s6_nur_verleih` = `s6_aktualisiert`). Startet man die Programme in anderer
   Reihenfolge, kann sich die Spaltenreihenfolge noch einmal ändern, nicht aber die Spaltenmenge.
   Der Import (#10) liest deshalb immer über Spaltennamen, nie über Positionen.
-- Die Schema-Variante aus einer echten Altdatenbank (nur `.schema`, keine Daten) wird
-  nachgereicht.
+- `echt_2026_10_15` stammt aus der `.schema`-Ausgabe der echten `psa.db` und `psa_archiv.db`
+  (nur Tabellendefinitionen, keine Daten; abgelegt unter `tests/legacy/data/`). Alle Spalten
+  des aktuellen Stands sind vorhanden, aber in eigener Reihenfolge: Die Hauptdatenbank
+  entsteht, wenn man den Stand S3, dann S6 und dann den aktuellen Stand startet
+  (`test_real_main_db_arises_from_legacy_history`). Die Archivdatenbank hat dieselben
+  nachgerüsteten Spalten wie die Hauptdatenbank, dazu `archived_items`; das passt zu keinem
+  Programmablauf und spricht für eine Kopie der Hauptdatenbank. Der Import (#10) liest über
+  Spaltennamen und deckt die Variante mit ab; sie läuft durch alle parametrisierten Tests und
+  den Abgleich alt gegen neu.
 
 `tests/legacy/test_legacy_schema.py` führt bei jedem Testlauf die Schema-Funktionen des
 jeweiligen historischen Commits aus und vergleicht das Ergebnis mit `legacy/schema.py`. Dafür
