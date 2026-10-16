@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Kalender{% endblock %}
+{% block content %}
+<h1>Kalender</h1>
+<form method="get" class="card search">
+  {% for field in form %}{% if field.name != "von" and field.name != "bis" %}{% if field.name != "name" or with_names %}{% include "inventory/_field.html" %}{% endif %}{% endif %}{% endfor %}
+  <button type="submit">Anzeigen</button>
+</form>
+
+<section class="card">
+  <h2>{{ title }}</h2>
+  <p>
+    <a href="?ansicht={{ view }}&amp;datum={{ previous|date:'Y-m-d' }}&amp;q={{ query|urlencode }}&amp;name={{ name|urlencode }}">« zurück</a> ·
+    <a href="?ansicht={{ view }}&amp;q={{ query|urlencode }}&amp;name={{ name|urlencode }}">heute</a> ·
+    <a href="?ansicht={{ view }}&amp;datum={{ next|date:'Y-m-d' }}&amp;q={{ query|urlencode }}&amp;name={{ name|urlencode }}">weiter »</a> ·
+    {% if view == "monat" %}<a href="?ansicht=woche&amp;datum={{ anchor|date:'Y-m-d' }}&amp;q={{ query|urlencode }}&amp;name={{ name|urlencode }}">Wochenansicht</a>{% else %}<a href="?ansicht=monat&amp;datum={{ anchor|date:'Y-m-d' }}&amp;q={{ query|urlencode }}&amp;name={{ name|urlencode }}">Monatsansicht</a>{% endif %}
+  </p>
+  <div class="table-scroll"><table class="calendar {{ view }}">
+    <thead><tr>{% for name in weekdays %}<th>{{ name }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for week in weeks %}
+      <tr>
+      {% for day in week %}
+        <td class="{% if not day.inside %}outside{% endif %}{% if day.today %} today{% endif %}">
+          <a href="?ansicht={{ view }}&amp;datum={{ day.date|date:'Y-m-d' }}&amp;tag=1&amp;q={{ query|urlencode }}&amp;name={{ name|urlencode }}" aria-label="{{ day.date|date:'d.m.Y' }}: {{ day.loans|length }} belegt">{{ day.date|date:"j" }}</a>
+          {% if day.loans %}<span class="count{% if day.overdue %} overdue{% endif %}">{{ day.loans|length }}</span>{% endif %}
+          {% if view == "woche" %}
+            <ul class="plain day-list">{% for loan in day.loans %}<li>{{ loan.part.name }}{% if with_names %} · {{ loan.booking.borrower.display_name }}{% endif %}</li>{% endfor %}</ul>
+          {% endif %}
+        </td>
+      {% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+
+{% if day %}
+<section class="card">
+  <h2>{{ day.date|date:"l, d.m.Y" }}</h2>
+  {% if day.loans %}
+  <ul class="plain">
+    {% for loan in day.loans %}
+      <li>{{ loan.part.name }} · {{ loan.start|date:"d.m." }}–{{ loan.end|date:"d.m.Y" }} · {{ loan.get_status_display }}{% if with_names %} · <a href="{% url 'lending:booking_detail' loan.booking_id %}">{{ loan.booking.borrower.display_name }}</a>{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="hint">An diesem Tag ist nichts belegt.</p>{% endif %}
+</section>
+{% endif %}
+
+<form method="get" class="card search">
+  <h2>Verfügbarkeit im Zeitraum</h2>
+  <input type="hidden" name="ansicht" value="{{ view }}"><input type="hidden" name="datum" value="{{ anchor|date:'Y-m-d' }}">
+  <input type="hidden" name="q" value="{{ query }}">
+  {% with field=form.von %}{% include "inventory/_field.html" %}{% endwith %}
+  {% with field=form.bis %}{% include "inventory/_field.html" %}{% endwith %}
+  <button type="submit">Verfügbarkeit prüfen</button>
+  {% if availability %}
+    {% if availability.error %}<p class="error" role="alert">{{ availability.error }}</p>{% else %}
+    <div class="table-scroll"><table class="list">
+      <thead><tr><th>Teil</th><th>{{ availability.start|date:"d.m." }}–{{ availability.end|date:"d.m.Y" }}</th></tr></thead>
+      <tbody>
+      {% for row in availability.rows %}
+        <tr><td>{{ row.part.name }}</td><td>{% if row.reasons %}<span class="status status-locked">nein</span> <span class="hint">{{ row.reasons|join:", " }}</span>{% else %}<span class="status status-released">frei</span>{% endif %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% endif %}
+  {% endif %}
+</form>
+{% endblock %}

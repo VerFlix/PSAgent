@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Anstehende Ausleihen{% endblock %}
+{% block content %}
+<h1>Anstehende Ausleihen</h1>
+<p><a href="{% url 'lending:new_booking' %}">Reservieren oder ausgeben</a> · <a href="{% url 'lending:calendar' %}">Kalender</a></p>
+<section class="card">
+  <h2>Überfällig ({{ overdue|length }})</h2>
+  {% include "lending/_loan_rows.html" with loans=overdue empty="Nichts überfällig." %}
+</section>
+<section class="card">
+  <h2>Heute zurück ({{ due_today|length }})</h2>
+  {% include "lending/_loan_rows.html" with loans=due_today empty="Heute ist keine Rückgabe fällig." %}
+</section>
+<section class="card">
+  <h2>Ausgeliehen ({{ lent|length }})</h2>
+  {% include "lending/_loan_rows.html" with loans=lent empty="Sonst ist nichts ausgeliehen." %}
+</section>
+<section class="card">
+  <h2>Reserviert ({{ reserved|length }})</h2>
+  {% include "lending/_loan_rows.html" with loans=reserved empty="Keine Reservierungen." %}
+</section>
+{% endblock %}

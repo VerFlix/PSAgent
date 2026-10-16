@@ -3,8 +3,9 @@
 {% block content %}
 <h1>Willkommen, {{ user.get_full_name|default:user.username }}</h1>
 <p><a href="{% url 'inventory:part_list' %}">Teile</a></p>
-{% if may_lend %}<p><a href="{% url 'lending:new_booking' %}">Reservieren oder ausgeben</a></p>{% endif %}
-<p>Rückgabe, Übersicht und Prüfung folgen in den nächsten Ausbaustufen.</p>
+{% if may_lend %}<p><a href="{% url 'lending:overview' %}">Anstehende Ausleihen</a> · <a href="{% url 'lending:new_booking' %}">Reservieren oder ausgeben</a></p>{% endif %}
+<p><a href="{% url 'lending:calendar' %}">Kalender und Verfügbarkeit</a></p>
+<p>Prüfung folgt in der nächsten Ausbaustufe.</p>
 <p><a href="{% url 'accounts:account' %}">Konto und Passkeys</a></p>
 {% if may_manage_users %}<p><a href="{% url 'accounts:users' %}">Nutzer verwalten</a></p>{% endif %}
 {% endblock %}
