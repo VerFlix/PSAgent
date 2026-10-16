@@ -1,0 +1,5 @@
+<fieldset class="component">
+  <legend>Bauteil{% if number %} {{ number }}{% endif %}</legend>
+  {% for error in row.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  {% for field in row %}{% include "inventory/_field.html" %}{% endfor %}
+</fieldset>

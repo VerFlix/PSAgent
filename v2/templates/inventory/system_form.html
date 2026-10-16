@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}System anlegen{% endblock %}
+{% block content %}
+<h1>System anlegen</h1>
+<form method="post" enctype="multipart/form-data" class="card">
+  {% csrf_token %}
+  {% for field in form %}{% include "inventory/_field.html" %}{% endfor %}
+  {{ components.management_form }}
+  {% for error in components.non_form_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  <div id="components">
+    {% for row in components %}
+      {% with number=forloop.counter %}{% include "inventory/_component_fields.html" %}{% endwith %}
+    {% endfor %}
+  </div>
+  <p class="hint">Leere Bauteilzeilen werden ignoriert. Jedes Bauteil braucht eine eigene EI.</p>
+  <button type="button" hx-get="{% url 'inventory:system_component_row' %}"
+          hx-include="#id_bauteile-TOTAL_FORMS" hx-target="#components" hx-swap="beforeend">Weiteres Bauteil</button>
+  {% include "inventory/_options.html" %}
+  <p class="hint">* Pflichtfeld. Neue Teile sind erst nach der ersten PSA-Prüfung verleihbar (oder mit „keine PSA“).</p>
+  <button type="submit" class="primary">Anlegen</button>
+</form>
+<p><a href="{% url 'inventory:part_list' %}">Zurück zur Teileliste</a></p>
+{% endblock %}

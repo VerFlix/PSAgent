@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{{ part.name }}{% endblock %}
+{% block content %}
+<h1>{{ part.name }}</h1>
+<p>{{ part.get_kind_display }} · <span class="status status-{{ status }}">{{ status.label }}</span>
+  {% if no_ppe %} · keine PSA{% endif %}
+  · nächste Prüfung {{ next_due|date:"d.m.Y"|default:"–" }}</p>
+
+<section class="card">
+  <h2>{% if part.kind == "system" %}Bauteile{% else %}Angaben{% endif %}</h2>
+  <div class="table-scroll"><table class="list">
+    <thead><tr><th>EI</th><th>Produktbezeichnung</th><th>gem. EN</th><th>Produktname</th><th>Hersteller</th><th>Herstellungsjahr</th><th>Kaufdatum</th><th>Datum 1. Einsatz</th><th>Seriennummer</th></tr></thead>
+    <tbody>
+    {% for component in part.components.all %}
+      <tr>
+        <td>{{ component.ei }}</td>
+        <td>{{ component.designation|default:"–" }}</td>
+        <td>{{ component.standard|default:"–" }}</td>
+        <td>{{ component.model_name|default:"–" }}</td>
+        <td>{{ component.manufacturer|default:"–" }}</td>
+        <td>{{ component.year_of_manufacture|default:"–" }}</td>
+        <td>{{ component.purchase_date|date:"d.m.Y"|default:"–" }}</td>
+        <td>{{ component.first_use_date|date:"d.m.Y"|default:"–" }}</td>
+        <td>{{ component.serial_number|default:"–" }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+
+<section class="card">
+  <h2>GAL</h2>
+  {% if documents %}
+    <ul class="plain">
+    {% for document in documents %}
+      <li>{% if document.url %}<a href="{{ document.url }}" rel="noopener noreferrer" target="_blank">{{ document.title }}</a>{% else %}{{ document.title }} (PDF){% endif %}</li>
+    {% endfor %}
+    </ul>
+  {% else %}
+    <p>Keine GAL hinterlegt. Ohne GAL ist keine Ausgabe möglich.</p>
+  {% endif %}
+</section>
+
+{% if may_lock %}
+<section class="card">
+  <h2>Sperren</h2>
+  <form method="post" action="{% url 'inventory:part_lock' part.pk %}">
+    {% csrf_token %}
+    <label for="lock-comment">Grund der Sperre</label>
+    <input id="lock-comment" name="comment" maxlength="1000" required>
+    <button type="submit" class="danger">Sperren</button>
+  </form>
+</section>
+{% endif %}
+{% if may_unlock %}
+<section class="card">
+  <h2>Entsperren</h2>
+  <form method="post" action="{% url 'inventory:part_unlock' part.pk %}">
+    {% csrf_token %}
+    <label for="unlock-comment">Kommentar (z. B. Ergebnis der Sichtprüfung)</label>
+    <input id="unlock-comment" name="comment" maxlength="1000" required>
+    <button type="submit">Entsperren</button>
+  </form>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Verlauf</h2>
+  {% if events %}
+    <div class="table-scroll"><table class="list">
+      <thead><tr><th>Zeitpunkt</th><th>Vorgang</th><th>Kommentar</th><th>durch</th></tr></thead>
+      <tbody>
+      {% for event in events %}
+        <tr>
+          <td>{{ event.at|date:"d.m.Y H:i" }}</td>
+          <td>{{ event.get_kind_display }}</td>
+          <td>{{ event.comment|default:"–" }}</td>
+          <td>{% if event.actor %}{{ event.actor.get_full_name|default:event.actor.username }}{% else %}Altsystem{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  {% else %}
+    <p>Noch keine Vorgänge.</p>
+  {% endif %}
+</section>
+<p><a href="{% url 'inventory:part_list' %}">Zurück zur Teileliste</a></p>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Teile{% endblock %}
+{% block content %}
+<h1>Teile</h1>
+{% if may_create %}
+<p><a href="{% url 'inventory:product_create' %}">Produkt anlegen</a> · <a href="{% url 'inventory:system_create' %}">System anlegen</a></p>
+{% endif %}
+<form method="get" class="card search">
+  <label for="q">Suche (Bezeichnung, EI, Hersteller, Seriennummer)</label>
+  <input id="q" name="q" value="{{ query }}" type="search">
+  <label for="status">Status</label>
+  <select id="status" name="status">
+    <option value="">alle im Bestand</option>
+    {% for value, label in statuses %}<option value="{{ value }}"{% if value == wanted %} selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <button type="submit">Suchen</button>
+</form>
+{% if rows %}
+<div class="table-scroll"><table class="list">
+  <thead><tr><th>Teil</th><th>EI</th><th>Status</th><th>nächste Prüfung</th></tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td><a href="{% url 'inventory:part_detail' row.part.pk %}">{{ row.part.name }}</a> <span class="hint">{{ row.part.get_kind_display }}</span></td>
+      <td>{% for component in row.part.components.all %}{{ component.ei }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+      <td><span class="status status-{{ row.status }}">{{ row.status.label }}</span></td>
+      <td>{{ row.next_due|date:"d.m.Y"|default:"–" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p>Keine Teile gefunden.</p>
+{% endif %}
+{% endblock %}
