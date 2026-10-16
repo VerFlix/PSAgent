@@ -26,9 +26,10 @@ from accounts.rights import Right, has_right, requires
 from inventory.models import Component, Part, PartStatus
 from inventory.services import search_parts
 from lending import services
-from lending.forms import BorrowerForm, CheckoutForm, PeriodForm
-from lending.models import Booking, Borrower, BorrowerContact, Loan
+from lending.forms import BorrowerForm, CancelForm, CheckoutForm, PeriodForm, ReturnForm
+from lending.models import Booking, Borrower, BorrowerContact, Loan, LoanEvent, LoanStatus
 from lending.services import LendingError
+from lending.signatures import svg
 
 
 def _actor(request: HttpRequest) -> User:
@@ -285,10 +286,179 @@ def borrower_status(request: HttpRequest, pk: int) -> HttpResponse:
     return render(request, "lending/_borrower_status.html", _status(request, borrower))
 
 
+def _booking(pk: int) -> Booking:
+    return get_object_or_404(Booking.objects.select_related("borrower"), pk=pk)
+
+
+def _loans(booking: Booking) -> list[Loan]:
+    events = LoanEvent.objects.select_related("actor", "signature").order_by("at", "id")
+    return list(
+        Loan.objects.filter(booking=booking)
+        .select_related("part")
+        .prefetch_related(Prefetch("events", queryset=events))
+        .order_by("part__name", "pk")
+    )
+
+
+def _selected(request: HttpRequest, loans: list[Loan], status: LoanStatus) -> list[Loan]:
+    ids = {int(value) for value in request.POST.getlist("ausleihe") if value.isdigit()}
+    return [loan for loan in loans if loan.pk in ids and loan.status == status]
+
+
 @requires(Right.LEND)
 @require_GET
 def booking_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    """Ausleihvorgang mit seinen Teilen; die volle Detailansicht folgt mit Parität 19."""
-    booking = get_object_or_404(Booking.objects.select_related("borrower"), pk=pk)
-    loans = Loan.objects.filter(booking=booking).select_related("part").order_by("part__name")
-    return render(request, "lending/booking_detail.html", {"booking": booking, "loans": loans})
+    """Parität 19: Ausleihvorgang mit Vorgängen und beiden Unterschriften."""
+    booking = _booking(pk)
+    loans = _loans(booking)
+    today = services.today()
+    rows = [
+        {
+            "loan": loan,
+            "overdue": loan.is_overdue(today),
+            "events": [
+                {
+                    "event": event,
+                    "signature": svg(event.signature.strokes) if event.signature else None,
+                }
+                for event in loan.events.all()
+            ],
+        }
+        for loan in loans
+    ]
+    contact = None
+    if has_right(request.user, Right.VIEW_CONTACTS, booking):
+        contact = BorrowerContact.objects.filter(borrower=booking.borrower).first()
+    context = {
+        "booking": booking,
+        "rows": rows,
+        "contact": contact,
+        "reserved": [loan for loan in loans if loan.status == LoanStatus.RESERVED],
+        "lent": [loan for loan in loans if loan.status == LoanStatus.LENT],
+        "may_cancel": has_right(request.user, Right.CHANGE_OTHERS_RESERVATIONS, booking),
+        "cancel_form": CancelForm(),
+    }
+    return render(request, "lending/booking_detail.html", context)
+
+
+@requires(Right.LEND)
+@require_http_methods(["GET", "POST"])
+def booking_checkout(request: HttpRequest, pk: int) -> HttpResponse:
+    """Parität 15: Reservierung in Ausleihe umwandeln, mit denselben Prüfungen wie die Ausgabe."""
+    booking = _booking(pk)
+    loans = _loans(booking)
+    reserved = [loan for loan in loans if loan.status == LoanStatus.RESERVED]
+    if not reserved:
+        messages.error(request, "In diesem Vorgang ist nichts mehr reserviert.")
+        return redirect("lending:booking_detail", pk=booking.pk)
+    if not BorrowerContact.objects.filter(borrower=booking.borrower).exists():
+        messages.error(request, "Die Kontaktdaten dieses Entleihers sind gelöscht.")
+        return redirect("lending:booking_detail", pk=booking.pk)
+    data = request.POST if request.method == "POST" else None
+    borrower_form = BorrowerForm(data, initial={"borrower": booking.borrower_id})
+    checkout = CheckoutForm(data, initial={"signer_name": booking.borrower.display_name})
+    context: dict[str, Any] = {
+        "booking": booking,
+        "reserved": reserved,
+        "chosen": {loan.pk for loan in reserved},
+        "borrower_form": borrower_form,
+        "checkout": checkout,
+        **_status(request, booking.borrower),
+    }
+    if request.method == "GET":
+        return render(request, "lending/booking_checkout.html", context)
+    chosen = _selected(request, loans, LoanStatus.RESERVED)
+    context["chosen"] = {loan.pk for loan in chosen}
+    if not (borrower_form.is_valid() and checkout.is_valid()):
+        return render(request, "lending/booking_checkout.html", context, status=400)
+    try:
+        if not chosen:
+            raise LendingError("Bitte mindestens ein reserviertes Teil wählen.")
+        if borrower_form.cleaned_data["borrower"] != booking.borrower_id:
+            raise LendingError("Der Entleiher gehört nicht zu diesem Vorgang.")
+        actor = _actor(request)
+        with transaction.atomic():
+            _borrower(borrower_form, actor, checkout=True)
+            services.check_out(
+                chosen,
+                actor=actor,
+                quick_check=checkout.cleaned_data["quick_check"],
+                gal_provided=checkout.cleaned_data["gal_provided"],
+                signature=checkout.cleaned_data["signature"],
+                signer_name=checkout.cleaned_data["signer_name"],
+            )
+    except LendingError as error:
+        checkout.add_error(None, str(error))
+        return render(request, "lending/booking_checkout.html", context, status=400)
+    return _done(request, booking, f"Ausgegeben: {len(chosen)} Teil(e).")
+
+
+@requires(Right.LEND)
+@require_http_methods(["GET", "POST"])
+def booking_return(request: HttpRequest, pk: int) -> HttpResponse:
+    """Parität 17: Rückgabe mit Kommentar, Kurzprüfung, Unterschrift; einzelne Teile sperren."""
+    booking = _booking(pk)
+    loans = _loans(booking)
+    lent = [loan for loan in loans if loan.status == LoanStatus.LENT]
+    if not lent:
+        messages.error(request, "In diesem Vorgang ist nichts ausgeliehen.")
+        return redirect("lending:booking_detail", pk=booking.pk)
+    data = request.POST if request.method == "POST" else None
+    form = ReturnForm(data, initial={"signer_name": booking.borrower.display_name})
+    context: dict[str, Any] = {
+        "booking": booking,
+        "lent": lent,
+        "chosen": {loan.pk for loan in lent},
+        "locked": set(),
+        "form": form,
+    }
+    if request.method == "GET":
+        return render(request, "lending/booking_return.html", context)
+    chosen = _selected(request, loans, LoanStatus.LENT)
+    lock = {int(value) for value in request.POST.getlist("sperren") if value.isdigit()}
+    lock &= {loan.pk for loan in chosen}
+    context.update(chosen={loan.pk for loan in chosen}, locked=lock)
+    if not form.is_valid():
+        return render(request, "lending/booking_return.html", context, status=400)
+    reason = form.cleaned_data["lock_reason"].strip()
+    try:
+        if not chosen:
+            raise LendingError("Bitte mindestens ein Teil wählen.")
+        if lock and not reason:
+            raise LendingError("Bitte den Grund der Sperre angeben.")
+        services.return_loans(
+            chosen,
+            actor=_actor(request),
+            quick_check=True,
+            signature=form.cleaned_data["signature"],
+            signer_name=form.cleaned_data["signer_name"],
+            comment=form.cleaned_data["comment"],
+            lock_comment=reason if lock else None,
+            lock=lock,
+        )
+    except LendingError as error:
+        form.add_error(None, str(error))
+        return render(request, "lending/booking_return.html", context, status=400)
+    text = f"Zurückgenommen: {len(chosen)} Teil(e)"
+    if lock:
+        text += f", davon {len(lock)} gesperrt"
+    return _done(request, booking, text + ".")
+
+
+@requires(Right.LEND)
+@require_POST
+def booking_cancel(request: HttpRequest, pk: int) -> HttpResponse:
+    """Reservierungen stornieren: Verleiher nur eigene, ab Trainer/Materialwart alle."""
+    booking = _booking(pk)
+    chosen = _selected(request, _loans(booking), LoanStatus.RESERVED)
+    form = CancelForm(request.POST)
+    form.is_valid()
+    if not chosen:
+        messages.error(request, "Bitte mindestens eine Reservierung wählen.")
+        return redirect("lending:booking_detail", pk=booking.pk)
+    try:
+        services.cancel(chosen, actor=_actor(request), comment=form.cleaned_data.get("comment", ""))
+    except LendingError as error:
+        messages.error(request, str(error))
+        return redirect("lending:booking_detail", pk=booking.pk)
+    return _done(request, booking, f"Storniert: {len(chosen)} Reservierung(en).")

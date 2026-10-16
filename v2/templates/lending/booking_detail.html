@@ -3,13 +3,52 @@
 {% block content %}
 <h1>Ausleihvorgang #{{ booking.pk }}</h1>
 <p>Entleiher: <strong>{{ booking.borrower.display_name }}</strong> · angelegt {{ booking.created_at|date:"d.m.Y H:i" }}</p>
-<div class="table-scroll"><table class="list">
-  <thead><tr><th>Teil</th><th>Zeitraum</th><th>Status</th></tr></thead>
-  <tbody>
-  {% for loan in loans %}
-    <tr><td>{{ loan.part.name }}</td><td>{{ loan.start|date:"d.m.Y" }} – {{ loan.end|date:"d.m.Y" }}</td><td>{{ loan.get_status_display }}</td></tr>
-  {% endfor %}
-  </tbody>
-</table></div>
+{% if contact %}<p class="hint">{{ contact.address|linebreaksbr }}<br>{{ contact.email }} {{ contact.phone }}</p>{% endif %}
+
+{% if reserved or lent %}
+<p>
+  {% if reserved %}<a href="{% url 'lending:booking_checkout' booking.pk %}">Reservierung ausgeben</a>{% endif %}
+  {% if reserved and lent %} · {% endif %}
+  {% if lent %}<a href="{% url 'lending:booking_return' booking.pk %}">Zurücknehmen</a>{% endif %}
+</p>
+{% endif %}
+
+{% for row in rows %}
+<section class="card">
+  <h2>{{ row.loan.part.name }}</h2>
+  <p>{{ row.loan.start|date:"d.m.Y" }} – {{ row.loan.end|date:"d.m.Y" }} · <span class="status status-{{ row.loan.status }}">{{ row.loan.get_status_display }}</span>{% if row.overdue %} <span class="status status-locked">überfällig</span>{% endif %}</p>
+  {% if row.events %}
+  <div class="table-scroll"><table class="list">
+    <thead><tr><th>Vorgang</th><th>durch</th><th>Angaben</th><th>Unterschrift</th></tr></thead>
+    <tbody>
+    {% for item in row.events %}{% with event=item.event sig=item.signature %}
+      <tr>
+        <td>{{ event.get_kind_display }}<br><span class="hint">{{ event.at|date:"d.m.Y H:i" }}</span></td>
+        <td>{% if event.actor %}{{ event.actor.get_full_name|default:event.actor.username }}{% else %}{{ event.actor_name|default:"Altsystem" }}{% endif %}</td>
+        <td>
+          {% if event.kind == "checked_out" %}Kurzkontrolle: {{ event.quick_check|yesno:"ja,nein" }} · GAL bereitgestellt: {{ event.gal_provided|yesno:"ja,nein" }}{% if event.self_issued %} · Selbstausleihe{% endif %}{% endif %}
+          {% if event.kind == "returned" %}Kurzprüfung: {{ event.quick_check|yesno:"ja,nein" }}{% endif %}
+          {% if event.comment %}<br>{{ event.comment }}{% endif %}
+        </td>
+        <td>{% include "lending/_signature.html" %}</td>
+      </tr>
+    {% endwith %}{% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+</section>
+{% endfor %}
+
+{% if reserved and may_cancel %}
+<section class="card">
+  <h2>Reservierung stornieren</h2>
+  <form method="post" action="{% url 'lending:booking_cancel' booking.pk %}">
+    {% csrf_token %}
+    {% for loan in reserved %}<label class="check"><input type="checkbox" name="ausleihe" value="{{ loan.pk }}" class="check"> {{ loan.part.name }}</label>{% endfor %}
+    {% with field=cancel_form.comment %}{% include "inventory/_field.html" %}{% endwith %}
+    <button type="submit" class="danger">Stornieren</button>
+  </form>
+</section>
+{% endif %}
 <p><a href="{% url 'lending:new_booking' %}">Neuer Vorgang</a></p>
 {% endblock %}

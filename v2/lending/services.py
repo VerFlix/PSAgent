@@ -10,7 +10,7 @@ stornieren erst ab Trainer/Materialwart. Kontaktdaten ändern darf, wer verleihe
 Kontaktdaten dieses Entleihers sehen darf; löschen nur ein Admin oder ein Verwaltungsbefehl.
 """
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import date
 from typing import Any
 
@@ -399,11 +399,17 @@ def return_loans(
     signer_name: str,
     comment: str = "",
     lock_comment: str | None = None,
+    lock: Collection[int] | None = None,
 ) -> None:
-    """Nimmt Teile zurück; mit `lock_comment` wird das Teil zugleich gesperrt (Parität 17)."""
+    """Nimmt Teile zurück; mit `lock_comment` wird das Teil zugleich gesperrt (Parität 17).
+
+    `lock` nennt die Ausleihen, deren Teile gesperrt werden; ohne Angabe alle.
+    """
     require(actor, Right.LEND)
     if lock_comment is not None:
         require(actor, Right.LOCK)
+        if not lock_comment.strip():
+            raise LendingError("Bitte den Grund der Sperre angeben.")
     _require_status(loans, LoanStatus.LENT)
     signed = _signature(signature, signer_name)
     for loan in loans:
@@ -416,7 +422,8 @@ def return_loans(
             comment=comment,
             signature=signed,
         )
-        if lock_comment is not None and not loan.part.is_locked():
+        locks = lock is None or loan.pk in lock
+        if lock_comment is not None and locks and not loan.part.is_locked():
             record_event(loan.part, EventKind.LOCKED, actor=actor, comment=lock_comment)
 
 
