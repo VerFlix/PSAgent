@@ -2,6 +2,13 @@
 
 Die Tests laufen gegen den Live-Server von pytest-django. Passkeys kommen von einem virtuellen
 Authenticator des Browsers (Chrome DevTools Protocol), nicht von Hardware.
+
+- `sign_in(page, role)` meldet eine Person direkt per Sitzungs-Cookie an. Der Weg über die
+  Anmeldeseite hat eigene Tests; Ablauf-Tests sparen sich so das Durchklicken.
+- `device_page` öffnet eine Seite als Desktop, Handy oder Tablet (#13: mobile Ansicht);
+  `assert_fits_width` prüft, dass nichts seitlich übersteht.
+- Jeder Oberflächen-PR bringt seinen Browser-Test mit, für Verleih und Prüfmodus auch auf
+  Handy und Tablet.
 """
 
 import os
@@ -10,9 +17,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from django.test import override_settings
-from playwright.sync_api import BrowserType, Page
+from django.conf import settings
+from django.test import Client, override_settings
+from playwright.sync_api import Browser, BrowserType, Page, Playwright
 from pytest_django.live_server_helper import LiveServer
+
+from accounts.models import Role, User
 
 # Playwright betreibt im Testprozess eine Ereignisschleife; Django-Datenbankzugriffe aus den
 # Tests selbst sind trotzdem synchron und sicher.
@@ -60,3 +70,46 @@ def authenticator(page: Page) -> str:
         },
     )
     return str(result["authenticatorId"])
+
+
+# Geräte für die mobile Ansicht; immer mit Chromium, auch wo Playwright WebKit vorschlägt.
+DEVICES = {"Desktop": None, "Handy": "Pixel 7", "Tablet": "iPad Mini"}
+
+
+@pytest.fixture(params=list(DEVICES))
+def device_page(
+    request: pytest.FixtureRequest, browser: Browser, playwright: Playwright
+) -> Iterator[Page]:
+    """Eine Seite je Geräteprofil; der Testname zeigt das Gerät (z. B. `[Handy]`)."""
+    name = DEVICES[request.param]
+    profile = dict(playwright.devices[name]) if name else {}
+    profile.pop("default_browser_type", None)
+    context = browser.new_context(**profile)
+    yield context.new_page()
+    context.close()
+
+
+def sign_in(page: Page, site: str, role: Role = Role.LENDER, **fields: Any) -> User:
+    """Legt ein Konto an und meldet es im Browser an, ohne die Anmeldeseite zu benutzen."""
+    defaults = {"username": f"e2e-{role}", "first_name": "Testperson", "last_name": role.label}
+    user = User.objects.create_user(role=role, **{**defaults, **fields})
+    client = Client()
+    client.force_login(user)
+    page.context.add_cookies(
+        [
+            {
+                "name": settings.SESSION_COOKIE_NAME,
+                "value": client.cookies[settings.SESSION_COOKIE_NAME].value,
+                "url": site,
+            }
+        ]
+    )
+    return user
+
+
+def assert_fits_width(page: Page) -> None:
+    """Auf dem Gerät steht nichts seitlich über (kein waagerechtes Scrollen der Seite)."""
+    overflow = page.evaluate(
+        "document.documentElement.scrollWidth - document.documentElement.clientWidth"
+    )
+    assert overflow <= 0, f"Seite ist {overflow}px breiter als der Bildschirm: {page.url}"

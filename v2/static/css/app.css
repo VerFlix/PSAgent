@@ -79,6 +79,8 @@ button:disabled { opacity: 0.6; cursor: wait; }
 .messages { list-style: none; padding: 0; }
 .message { padding: 0.5rem 0.75rem; border-radius: 0.35rem; background: #e3f9e5; margin-bottom: 0.5rem; }
 .message.error { background: #ffe3e3; }
+/* Breite Tabellen scrollen auf dem Handy in sich, die Seite bleibt in Bildschirmbreite. */
+.table-scroll { overflow-x: auto; max-width: 100%; }
 .list { width: 100%; border-collapse: collapse; }
 .list th, .list td { text-align: left; padding: 0.4rem; border-bottom: 1px solid var(--border); }
 .plain { list-style: none; padding: 0; }

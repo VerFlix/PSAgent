@@ -66,12 +66,16 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
 - Einstellungen: `PSAGENT_WEBAUTHN_RP_ID`, `PSAGENT_WEBAUTHN_ORIGINS`, im Betrieb hinter Caddy
   `PSAGENT_TRUSTED_PROXIES` (siehe `.env.example`).
 
-Browser-Tests (Playwright, eigener CI-Job):
+Browser-Tests (Playwright, eigener CI-Job; bei Fehlern Screenshots und Traces als Artefakt):
 
 ```bash
 uv run playwright install chromium   # einmalig lokal; in Cloud-Sitzungen vorinstalliert
 uv run pytest -m e2e
 ```
+
+Jeder Oberflächen-PR bringt seinen Browser-Test mit. Hilfen in `tests/e2e/conftest.py`:
+`sign_in` meldet eine Person einer Rolle direkt an, `device_page` läuft als Desktop, Handy
+(Pixel 7) und Tablet (iPad Mini), `assert_fits_width` prüft, dass nichts seitlich übersteht.
 
 ## Testdaten im Format des Altsystems
 
