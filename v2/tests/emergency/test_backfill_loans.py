@@ -18,6 +18,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import Role, User
+from accounts.rights import Right, has_right
 from emergency import backfill
 from emergency.binder import SHEETS_PER_BINDER
 from emergency.models import Binder, Clarification, FormSheet, LoanForm, PaperForm
@@ -165,17 +166,35 @@ def test_parity_22_lock_on_return(make_part: MakePart, lender: User) -> None:
     assert "Formular A-00001" in part.events.get(kind=EventKind.LOCKED).comment
 
 
-def test_parity_22_existing_borrower_is_reused(make_part: MakePart, lender: User) -> None:
+def test_parity_22_existing_borrower_is_reused(make_part: MakePart, expert: User) -> None:
     printed()
     known = create_borrower("Noa Papier", address="alt")
     part = make_part()
 
-    backfill.capture_loan_form("A-00001", [(SCAN, "scan.pdf")], checkout(ei(part)), actor=lender)
+    backfill.capture_loan_form("A-00001", [(SCAN, "scan.pdf")], checkout(ei(part)), actor=expert)
 
     loan = Loan.objects.get(part=part)
     assert loan.booking.borrower == known
     known.contact.refresh_from_db()
     assert known.contact.address.startswith("Teststraße 2")
+
+
+def test_lender_cannot_reach_known_borrower_by_name(
+    client: Client, make_part: MakePart, lender: User
+) -> None:
+    """Verbotener Fall: Eine erfundene Ausgabe mit fremdem Namen gibt keine Kontaktdaten frei
+    und überschreibt nichts; der Verleiher legt einen eigenen Entleiher an."""
+    printed()
+    known = create_borrower("Noa Papier", address="Geheimweg 1", phone="0000 111111")
+    part = make_part()
+
+    backfill.capture_loan_form("A-00001", [(SCAN, "scan.pdf")], checkout(ei(part)), actor=lender)
+
+    loan = Loan.objects.get(part=part)
+    assert loan.booking.borrower != known
+    known.contact.refresh_from_db()
+    assert known.contact.address == "Geheimweg 1"
+    assert not has_right(lender, Right.VIEW_CONTACTS, known)
 
 
 def test_parity_22_locked_part_is_recorded_and_checked(make_part: MakePart, lender: User) -> None:

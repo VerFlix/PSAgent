@@ -30,7 +30,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from accounts.models import User
-from accounts.rights import Right, require
+from accounts.rights import Right, has_right, require
 from emergency.models import (
     Binder,
     Clarification,
@@ -469,10 +469,16 @@ def _validate(data: dict[str, Any], sheet: FormSheet) -> None:
 
 
 def _borrower(data: dict[str, Any], actor: User | None) -> Borrower:
-    """Bekannter Entleiher bei eindeutigem Namen, sonst neu; Angaben vom Papier gelten."""
+    """Bekannter Entleiher bei eindeutigem Namen, sonst neu; Angaben vom Papier gelten.
+
+    Einen bekannten Entleiher verknüpft nur, wer Kontaktdaten ohnehin sehen darf. Sonst könnte
+    ein Verleiher über eine erfundene Ausgabe mit fremdem Namen eine „laufende Ausleihe“ und
+    damit Einblick in dessen Kontaktdaten erzeugen, oder sie überschreiben.
+    """
     name = str(data["borrower_name"]).strip()
     address, email, phone = (str(data.get(key) or "") for key in ("address", "email", "phone"))
-    matches = list(BorrowerContact.objects.filter(name__iexact=name)[:2])
+    may_link = actor is None or has_right(actor, Right.VIEW_CONTACTS)
+    matches = list(BorrowerContact.objects.filter(name__iexact=name)[:2]) if may_link else []
     if len(matches) == 1:
         borrower = matches[0].borrower
         lending.overwrite_contact(borrower, actor=actor, address=address, email=email, phone=phone)

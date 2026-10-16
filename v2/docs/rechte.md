@@ -85,3 +85,6 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   stehen auf dem Papier (Herkunft „auf dem Papierformular“, Scan am Formular). Eine
   Doppelbuchung übernimmt nur, wer die Klärungsliste bearbeiten darf; dabei werden die
   überschneidenden Reservierungen storniert (Recht „Reservierungen anderer ändern“).
+  Einen bekannten Entleiher (gleicher Name) verknüpft die Nacherfassung nur für Personen, die
+  Kontaktdaten ohnehin sehen dürfen; Verleiher legen immer einen neuen Entleiher an. Sonst gäbe
+  eine erfundene Ausgabe Einblick in fremde Kontaktdaten (wie bei Reservierungen ausgeschlossen).
