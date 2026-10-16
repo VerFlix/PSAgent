@@ -33,6 +33,7 @@ PUBLIC = {
     "accounts:enroll_options",
     "accounts:enroll_finish",
     "accounts:enroll_password",
+    "emergency:service_worker",  # nur das Skript, keine Daten
     "healthz",
 }
 

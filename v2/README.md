@@ -70,6 +70,10 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
   Ausleihen (Entleiher nur mit Namen) und leeren Formularen mit fortlaufender Formularnummer.
   Für die wöchentliche Fassung im Betrieb einen Timer auf
   `uv run python manage.py notfallmappe` setzen. Gespeichert bleiben die letzten 5 Mappen.
+  Offline-Kopie: Auf Vereinsgeräten hält ein Service Worker die neueste Mappe bereit; ohne
+  Verbindung öffnet sie sich unter `/notbetrieb/mappe/neueste.pdf` (Lesezeichen anlegen). Andere
+  Geräte richten das auf der Seite „Notbetrieb“ von Hand ein. Service Worker brauchen HTTPS
+  (oder `localhost`).
 - PDF-Dokumente je Teil (Teileseite, Kasten „Dokumente“): Einsatzdokumentation ab Trainer;
   PD und Haftungsausschluss nur mit gültiger Sachkunde, mit Name und Briefkopf/Stempel aus
   dem Konto der erzeugenden Person.

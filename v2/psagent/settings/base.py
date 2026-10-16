@@ -124,6 +124,7 @@ TEMPLATES = [
                 "django.template.context_processors.csp",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "emergency.context.offline_binder",
             ],
         },
     },
