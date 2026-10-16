@@ -52,9 +52,16 @@ def _log(
     reason: str = "",
     old_role: str = "",
     new_role: str = "",
+    detail: str = "",
 ) -> AccountEvent:
     return AccountEvent.objects.create(
-        user=user, kind=kind, actor=actor, reason=reason, old_role=old_role, new_role=new_role
+        user=user,
+        kind=kind,
+        actor=actor,
+        reason=reason,
+        old_role=old_role,
+        new_role=new_role,
+        detail=detail,
     )
 
 
@@ -216,6 +223,42 @@ def revoke_qualification(
     return QualificationRevocation.objects.create(
         qualification=qualification, reason=reason, created_by=actor
     )
+
+
+# --- Briefkopf/Stempel ---
+
+STAMP_MAX_CHARS = 300
+STAMP_MAX_LINES = 5
+
+
+def normalize_stamp(text: str) -> str:
+    """Einheitliche Zeilenenden, ohne Leerraum am Rand und ohne leere Zeilen am Anfang/Ende."""
+    lines = [line.rstrip() for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
+    return "\n".join(lines).strip()
+
+
+@transaction.atomic
+def set_stamp(user: User, text: str, *, actor: User | None) -> User:
+    """Setzt den Briefkopf/Stempel für PD und Haftungsausschluss; leer heißt: voller Name.
+
+    Den eigenen Stempel pflegt jede Person selbst, fremde nur, wer Nutzer verwalten darf.
+    Der neue Text steht im Kontoprotokoll.
+    """
+    if actor is None or actor.pk != user.pk:
+        require(actor, Right.MANAGE_USERS)
+    text = normalize_stamp(text)
+    if len(text) > STAMP_MAX_CHARS or text.count("\n") >= STAMP_MAX_LINES:
+        raise AccountError(
+            f"Der Briefkopf/Stempel hat höchstens {STAMP_MAX_CHARS} Zeichen "
+            f"in höchstens {STAMP_MAX_LINES} Zeilen."
+        )
+    user = _lock(user)
+    if user.stamp_text == text:
+        return user
+    user.stamp_text = text
+    user.save(update_fields=["stamp_text"])
+    _log(user, AccountEventKind.STAMP_CHANGED, actor=actor, detail=text)
+    return user
 
 
 # --- Passkeys ---

@@ -23,7 +23,7 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods, require_POST
 
-from accounts import webauthn
+from accounts import services, webauthn
 from accounts.devices import register_device, revoke_device
 from accounts.enrollment import find_token, mark_used
 from accounts.models import ClubDevice, Passkey, User
@@ -41,6 +41,28 @@ class LoginForm(forms.Form):
 
 class DeviceForm(forms.Form):
     name = forms.CharField(label="Bezeichnung des Geräts", max_length=100)
+
+
+class StampForm(forms.Form):
+    # Die genaue Grenze prüft `services.set_stamp`; hier nur gegen übergroße Anfragen.
+    stamp_text = forms.CharField(
+        label="Briefkopf/Stempel", required=False, max_length=2000, widget=forms.Textarea
+    )
+
+
+def save_stamp(request: HttpRequest, account: User) -> None:
+    """Speichert den Stempel aus dem Formular und meldet Erfolg oder Fehler."""
+    form = StampForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, "Der Briefkopf/Stempel ist zu lang.")
+        return
+    assert isinstance(request.user, User)  # noqa: S101 – von requires() geprüft
+    try:
+        services.set_stamp(account, form.cleaned_data["stamp_text"], actor=request.user)
+    except services.AccountError as error:
+        messages.error(request, str(error))
+    else:
+        messages.success(request, "Briefkopf/Stempel gespeichert.")
 
 
 def _next_url(request: HttpRequest) -> str:
@@ -145,6 +167,14 @@ def account(request: HttpRequest) -> HttpResponse:
     if has_right(user, Right.MANAGE_USERS):
         context["devices"] = ClubDevice.objects.filter(revoked_at__isnull=True).order_by("name")
     return render(request, "accounts/account.html", context)
+
+
+@requires(Right.ACCOUNT)
+@require_POST
+def stamp(request: HttpRequest) -> HttpResponse:
+    """Eigenen Briefkopf/Stempel ändern; immer das angemeldete Konto."""
+    save_stamp(request, _current_user(request))
+    return redirect("accounts:account")
 
 
 @requires(Right.ACCOUNT)

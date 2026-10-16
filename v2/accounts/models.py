@@ -307,6 +307,7 @@ class AccountEventKind(models.TextChoices):
     REACTIVATED = "reactivated", "wieder aktiviert"
     ENROLLMENT_ISSUED = "enrollment_issued", "Einrichtungslink ausgestellt"
     PASSKEY_REVOKED = "passkey_revoked", "Passkey widerrufen"
+    STAMP_CHANGED = "stamp_changed", "Briefkopf/Stempel geändert"
 
 
 # Vorgänge, die eine Begründung brauchen.
@@ -332,6 +333,9 @@ class AccountEvent(AppendOnlyModel):
     old_role = models.CharField("Rolle vorher", max_length=20, choices=Role.choices, blank=True)
     new_role = models.CharField("Rolle nachher", max_length=20, choices=Role.choices, blank=True)
     reason = models.TextField("Begründung", blank=True)
+    detail = models.TextField(
+        "Angabe", blank=True, help_text="Neuer Wert, z. B. der neue Briefkopf/Stempel."
+    )
     at = models.DateTimeField("Zeitpunkt", default=timezone.now)
     actor = models.ForeignKey(
         User,
