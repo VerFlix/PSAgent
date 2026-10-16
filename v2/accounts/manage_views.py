@@ -19,6 +19,7 @@ from accounts import services
 from accounts.models import Passkey, Qualification, Role, User
 from accounts.rights import Right, requires
 from accounts.services import AccountError
+from accounts.views import save_stamp
 
 
 class AccountForm(forms.Form):
@@ -234,4 +235,12 @@ def qualification_revoke(request: HttpRequest, pk: int, qualification: int) -> H
         messages.error(request, str(error))
     else:
         messages.success(request, f"Sachkunde von {account} widerrufen.")
+    return _back(account)
+
+
+@requires(Right.MANAGE_USERS)
+@require_POST
+def user_stamp(request: HttpRequest, pk: int) -> HttpResponse:
+    account = get_object_or_404(User, pk=pk)
+    save_stamp(request, account)
     return _back(account)

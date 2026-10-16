@@ -12,6 +12,7 @@ urlpatterns = [
     path("anmelden/passkey/", views.passkey_login, name="passkey_login"),
     path("abmelden/", views.logout_view, name="logout"),
     path("konto/", views.account, name="account"),
+    path("konto/stempel/", views.stamp, name="stamp"),
     path(
         "konto/passkey/optionen/",
         views.passkey_register_options,
@@ -54,6 +55,7 @@ urlpatterns = [
         manage_views.user_passkey_revoke,
         name="user_passkey_revoke",
     ),
+    path("verwaltung/nutzer/<int:pk>/stempel/", manage_views.user_stamp, name="user_stamp"),
     path(
         "verwaltung/nutzer/<int:pk>/sachkunde/",
         manage_views.qualification_grant,

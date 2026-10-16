@@ -63,3 +63,6 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   sich nicht selbst; das letzte aktive Admin-Konto bleibt erhalten. Rollenwechsel, Deaktivieren,
   Reaktivieren, Einrichtungslinks und vom Admin widerrufene Passkeys stehen im nur anhängbaren
   Protokoll `AccountEvent`.
+- Briefkopf/Stempel (Felix, 16.10.2026): Den eigenen pflegt jede Person unter „Konto“, fremde
+  nur der Admin in der Nutzerverwaltung. Jede Änderung steht mit dem neuen Text im Protokoll
+  `AccountEvent`. Der Stempel erscheint auf PD und Haftungsausschluss (#35).
