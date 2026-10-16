@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Anmelden{% endblock %}
+{% block content %}
+<h1>Anmelden</h1>
+<section class="card">
+  <h2>Mit Passkey</h2>
+  <p>Sicherheitsschlüssel (YubiKey) oder Passkey auf dem eigenen Gerät. Pflicht für Admin und PSA-Sachkundige.</p>
+  <button type="button" class="primary" data-passkey="login"
+          data-options-url="{% url 'accounts:passkey_login_options' %}"
+          data-submit-url="{% url 'accounts:passkey_login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">
+    Mit Passkey anmelden
+  </button>
+  <p class="status" id="passkey-status" role="status" aria-live="polite"></p>
+</section>
+<section class="card">
+  <h2>Mit Passwort</h2>
+  <p>Nicht für Admin und PSA-Sachkundige; sie melden sich nur mit Passkey an.</p>
+  <form method="post" action="{% url 'accounts:login' %}">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    {% if form.non_field_errors %}<p class="error" role="alert">{{ form.non_field_errors|join:" " }}</p>{% endif %}
+    <label for="id_username">Benutzername</label>
+    <input id="id_username" name="username" autocomplete="username webauthn" required value="{{ form.username.value|default:'' }}">
+    <label for="id_password">Passwort</label>
+    <input id="id_password" name="password" type="password" autocomplete="current-password" required>
+    <button type="submit">Anmelden</button>
+  </form>
+</section>
+{% endblock %}

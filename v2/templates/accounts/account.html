@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Konto{% endblock %}
+{% block content %}
+<h1>Konto</h1>
+<section class="card">
+  <h2>Passkeys</h2>
+  {% if passkeys %}
+    <table class="list">
+      <thead><tr><th>Bezeichnung</th><th>angelegt</th><th>zuletzt benutzt</th><th></th></tr></thead>
+      <tbody>
+      {% for passkey in passkeys %}
+        <tr>
+          <td>{{ passkey.name }}</td>
+          <td>{{ passkey.created_at|date:"d.m.Y" }}</td>
+          <td>{{ passkey.last_used_at|date:"d.m.Y H:i"|default:"–" }}</td>
+          <td>
+            <form method="post" action="{% url 'accounts:passkey_revoke' passkey.pk %}">{% csrf_token %}
+              <button type="submit" class="link danger">Widerrufen</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>Noch kein Passkey eingerichtet.</p>
+  {% endif %}
+  <label for="passkey-name">Neuer Passkey, Bezeichnung</label>
+  <input id="passkey-name" maxlength="100" placeholder="z. B. YubiKey blau">
+  <button type="button" class="primary" data-passkey="register" data-name-input="passkey-name"
+          data-options-url="{% url 'accounts:passkey_register_options' %}"
+          data-submit-url="{% url 'accounts:passkey_register' %}">Passkey hinzufügen</button>
+  <p class="status" id="passkey-status" role="status" aria-live="polite"></p>
+</section>
+{% if devices is not None %}
+<section class="card">
+  <h2>Vereinsgeräte</h2>
+  <p>Am Vereinsgerät endet die Sitzung nach 3 Minuten ohne Eingabe und nach jedem abgeschlossenen Vorgang.</p>
+  {% if request.club_device %}<p>Dieses Gerät ist das Vereinsgerät „{{ request.club_device.name }}“.</p>{% endif %}
+  {% if devices %}
+    <ul class="plain">
+    {% for device in devices %}
+      <li>{{ device.name }} (seit {{ device.created_at|date:"d.m.Y" }})
+        <form method="post" action="{% url 'accounts:club_device_revoke' device.pk %}" class="inline">{% csrf_token %}
+          <button type="submit" class="link danger">Widerrufen</button>
+        </form>
+      </li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+  {% if not request.club_device %}
+  <form method="post" action="{% url 'accounts:club_device_register' %}">
+    {% csrf_token %}
+    <label for="id_name">Dieses Gerät als Vereinsgerät festlegen</label>
+    <input id="id_name" name="name" maxlength="100" placeholder="z. B. Tablet Ausgabe" required>
+    <button type="submit">Festlegen</button>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

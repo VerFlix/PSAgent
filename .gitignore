@@ -36,3 +36,4 @@ htmlcov/
 # Django
 v2/staticfiles/
 v2/media/
+v2/test-results/

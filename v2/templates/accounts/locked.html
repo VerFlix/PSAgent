@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Gesperrt{% endblock %}
+{% block content %}
+<h1>Zu viele Fehlversuche</h1>
+<p class="error" role="alert">Die Anmeldung ist für 15 Minuten gesperrt. Bitte später erneut versuchen oder mit Passkey anmelden.</p>
+<p><a href="{% url 'accounts:login' %}">Zur Anmeldung</a></p>
+{% endblock %}

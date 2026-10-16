@@ -25,3 +25,9 @@ CSRF_COOKIE_SECURE = True
 SECURE_HSTS_SECONDS = 60 * 60 * 24 * 365
 SECURE_HSTS_INCLUDE_SUBDOMAINS = False
 SECURE_HSTS_PRELOAD = False
+
+# Passkeys gelten nur für den echten Namen der App (z. B. psagent.<tailnet>.ts.net).
+PSAGENT_WEBAUTHN_RP_ID = env("PSAGENT_WEBAUTHN_RP_ID")
+PSAGENT_WEBAUTHN_ORIGINS = [
+    origin.strip() for origin in env("PSAGENT_WEBAUTHN_ORIGINS").split(",") if origin.strip()
+]
