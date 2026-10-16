@@ -47,10 +47,15 @@ CACHED = """async () => {
   const cache = await caches.open("psagent-notfallmappe-v1");
   return Boolean(await cache.match("/notbetrieb/mappe/neueste.pdf"));
 }"""
+CONTROLLED = "() => navigator.serviceWorker.controller !== null"
 FETCH = """async () => {
-  const response = await fetch("/notbetrieb/mappe/neueste.pdf");
-  const size = (await response.arrayBuffer()).byteLength;
-  return [response.status, response.headers.get("Content-Type"), size];
+  try {
+    const response = await fetch("/notbetrieb/mappe/neueste.pdf");
+    const size = (await response.arrayBuffer()).byteLength;
+    return [response.status, response.headers.get("Content-Type"), size];
+  } catch (error) {
+    return [0, String(error), 0];
+  }
 }"""
 
 
@@ -78,12 +83,16 @@ def test_club_device_opens_binder_offline(
     page.wait_for_function(CACHED)
     page.goto(f"{site}/notbetrieb/")
     expect(page.get_by_text("Offline gespeichert:")).to_be_visible()
+    # Headless Chrome steuert die erste Seite nach der Registrierung nicht immer schon über den
+    # Service Worker; jede weitere Navigation im Bereich /notbetrieb/ schon (so auch das
+    # Lesezeichen auf die Mappe ohne Verbindung).
+    page.reload()
+    page.wait_for_function(CONTROLLED)
 
-    page.context.set_offline(True)
-    try:
-        status, content_type, size = page.evaluate(FETCH)
-    finally:
-        page.context.set_offline(False)
+    # Server nicht erreichbar: Jede Netzanfrage nach der Mappe scheitert, wie bei einem
+    # ausgefallenen Pi. Antworten kann dann nur noch der Service Worker aus dem Speicher.
+    page.context.route("**/notbetrieb/mappe/neueste.pdf", lambda route: route.abort())
+    status, content_type, size = page.evaluate(FETCH)
 
-    assert status == 200 and content_type == "application/pdf"
+    assert (status, content_type) == (200, "application/pdf")
     assert size == len(path_of(binder).read_bytes())
