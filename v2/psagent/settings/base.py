@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "inventory",
     "inspections",
     "lending",
+    "emergency",
     "legacy",
 ]
 
