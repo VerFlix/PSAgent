@@ -5,6 +5,7 @@
 <p>{{ part.get_kind_display }} · <span class="status status-{{ status }}">{{ status.label }}</span>
   {% if no_ppe %} · keine PSA{% endif %}
   · nächste Prüfung {{ next_due|date:"d.m.Y"|default:"–" }}</p>
+{% if may_edit %}<p><a href="{% url 'inventory:part_edit' part.pk %}">Bearbeiten</a></p>{% endif %}
 
 <section class="card">
   <h2>{% if part.kind == "system" %}Bauteile{% else %}Angaben{% endif %}</h2>
@@ -33,7 +34,7 @@
   {% if documents %}
     <ul class="plain">
     {% for document in documents %}
-      <li>{% if document.url %}<a href="{{ document.url }}" rel="noopener noreferrer" target="_blank">{{ document.title }}</a>{% else %}{{ document.title }} (PDF){% endif %}</li>
+      <li>{% if document.url %}<a href="{{ document.url }}" rel="noopener noreferrer" target="_blank">{{ document.title }}</a>{% else %}<a href="{% url 'inventory:document_open' document.pk %}" target="_blank" rel="noopener">{{ document.title }} (PDF)</a>{% endif %}</li>
     {% endfor %}
     </ul>
   {% else %}

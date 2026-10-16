@@ -24,6 +24,7 @@ from django.conf import settings
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest, HttpResponse
+from django.http.response import HttpResponseBase
 from django.shortcuts import resolve_url
 
 from accounts.models import ROLE_ORDER, Role, User
@@ -192,7 +193,7 @@ def _login_required(request: HttpRequest) -> HttpResponse:
     return redirect_to_login(request.get_full_path())
 
 
-def requires[V: Callable[..., HttpResponse]](right: Right) -> Callable[[V], V]:
+def requires[V: Callable[..., HttpResponseBase]](right: Right) -> Callable[[V], V]:
     """Ansicht nur für angemeldete Personen mit `right` (wenigstens eingeschränkt).
 
     Gilt für ganze Seiten und htmx-Teilanfragen gleich. Eingeschränkte Rechte („nur eigene“)
@@ -201,7 +202,7 @@ def requires[V: Callable[..., HttpResponse]](right: Right) -> Callable[[V], V]:
 
     def decorator(view: V) -> V:
         @wraps(view)
-        def protected(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        def protected(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
             if not request.user.is_authenticated:
                 return _login_required(request)
             if not may_use(request.user, right):
@@ -214,7 +215,7 @@ def requires[V: Callable[..., HttpResponse]](right: Right) -> Callable[[V], V]:
     return decorator
 
 
-def public[V: Callable[..., HttpResponse]](view: V) -> V:
+def public[V: Callable[..., HttpResponseBase]](view: V) -> V:
     """Kennzeichnet eine Ansicht, die bewusst ohne Anmeldung erreichbar ist."""
     view.psagent_public = True  # type: ignore[attr-defined]
     return view

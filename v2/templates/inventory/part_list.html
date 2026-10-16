@@ -16,11 +16,13 @@
   <button type="submit">Suchen</button>
 </form>
 {% if rows %}
+{% if may_create %}<form method="get" action="{% url 'inventory:gal_assign' %}">{% endif %}
 <div class="table-scroll"><table class="list">
-  <thead><tr><th>Teil</th><th>EI</th><th>Status</th><th>nächste Prüfung</th></tr></thead>
+  <thead><tr>{% if may_create %}<th><span class="visually-hidden">markieren</span></th>{% endif %}<th>Teil</th><th>EI</th><th>Status</th><th>nächste Prüfung</th></tr></thead>
   <tbody>
   {% for row in rows %}
     <tr>
+      {% if may_create %}<td><input type="checkbox" name="teil" value="{{ row.part.pk }}" id="teil-{{ row.part.pk }}" aria-label="{{ row.part.name }} markieren" class="check"></td>{% endif %}
       <td><a href="{% url 'inventory:part_detail' row.part.pk %}">{{ row.part.name }}</a> <span class="hint">{{ row.part.get_kind_display }}</span></td>
       <td>{% for component in row.part.components.all %}{{ component.ei }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
       <td><span class="status status-{{ row.status }}">{{ row.status.label }}</span></td>
@@ -29,6 +31,7 @@
   {% endfor %}
   </tbody>
 </table></div>
+{% if may_create %}<button type="submit">GAL an markierte Teile</button></form>{% endif %}
 {% else %}
 <p>Keine Teile gefunden.</p>
 {% endif %}

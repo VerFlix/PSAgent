@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}{{ part.name }} bearbeiten{% endblock %}
+{% block content %}
+<h1>{{ part.name }} bearbeiten</h1>
+<form method="post" class="card">
+  {% csrf_token %}
+  {% for error in form.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  {% for field in form %}
+    {% if field.name == "no_ppe" %}
+      <label class="check">{{ field }} {{ field.label }}</label>
+      <p class="hint">{{ field.help_text }}</p>
+      {% for error in field.errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+    {% else %}
+      {% include "inventory/_field.html" %}
+    {% endif %}
+  {% endfor %}
+  {{ components.management_form }}
+  {% for error in components.non_form_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  {% for row in components %}
+    <fieldset class="component">
+      <legend>Bauteil {{ forloop.counter }}</legend>
+      {% for hidden in row.hidden_fields %}{{ hidden }}{% endfor %}
+      {% for field in row.visible_fields %}{% include "inventory/_field.html" %}{% endfor %}
+    </fieldset>
+  {% endfor %}
+  {% if not may_ppe %}<p class="hint">EI, Herstellungsjahr, Datum 1. Einsatz und „keine PSA“ ändert nur, wer eine gültige Sachkunde hat.</p>{% endif %}
+  <p class="hint">„Nächste Prüfung“ ändert sich nur über eine PSA-Prüfung.</p>
+  <button type="submit" class="primary">Weiter zur Bestätigung</button>
+</form>
+<p><a href="{% url 'inventory:part_detail' part.pk %}">Abbrechen</a></p>
+{% endblock %}

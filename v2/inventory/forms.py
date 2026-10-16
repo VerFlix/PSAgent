@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from django import forms
 
 from inventory.models import Component, normalize_ei
-from inventory.services import COMPONENT_FIELDS
+from inventory.services import COMPONENT_FIELDS, PPE_COMPONENT_FIELDS
 
 GAL_MAX_BYTES = 20 * 1024 * 1024
 
@@ -18,9 +18,15 @@ else:
     _FormSet = forms.BaseFormSet
 
 
-def ei_taken(ei: str) -> bool:
-    """EI schon vergeben? Ohne Groß-/Kleinschreibung und Leerzeichen (wie der Datenbank-Index)."""
-    return Component.objects.filter(ei_key=normalize_ei(ei)).exists()
+def ei_taken(ei: str, *, exclude: int | None = None) -> bool:
+    """EI schon vergeben? Ohne Groß-/Kleinschreibung und Leerzeichen (wie der Datenbank-Index).
+
+    `exclude` ist das Bauteil, das gerade bearbeitet wird; seine eigene EI zählt nicht.
+    """
+    others = Component.objects.filter(ei_key=normalize_ei(ei))
+    if exclude is not None:
+        others = others.exclude(pk=exclude)
+    return others.exists()
 
 
 class ComponentForm(_ModelForm):
@@ -38,7 +44,7 @@ class ComponentForm(_ModelForm):
         ei: str = self.cleaned_data["ei"].strip()
         if not normalize_ei(ei):
             raise forms.ValidationError("Bitte eine EI angeben.")
-        if ei_taken(ei):
+        if ei_taken(ei, exclude=self.instance.pk):
             raise forms.ValidationError(f"Die EI „{ei}“ ist schon vergeben.")
         return ei
 
@@ -66,19 +72,28 @@ ComponentFormSet = forms.formset_factory(
 )
 
 
-class PartOptionsForm(forms.Form):
-    """Was für Produkt und System gleich ist: GAL und „keine PSA“."""
+# Bauteile eines bestehenden Teils bearbeiten (Parität 3); Bauteile kommen nicht hinzu.
+ComponentEditFormSet = forms.modelformset_factory(
+    Component, form=ComponentForm, fields=COMPONENT_FIELDS, extra=0, edit_only=True
+)
+
+
+def lock_ppe_fields(formset: Any) -> None:
+    """Ohne Sachkunde: EI, Herstellungsjahr und Datum 1. Einsatz nur anzeigen."""
+    for form in formset:
+        for name in PPE_COMPONENT_FIELDS:
+            form.fields[name].disabled = True
+            form.fields[name].help_text = "Nur mit gültiger Sachkunde änderbar."
+
+
+class GalForm(forms.Form):
+    """GAL als PDF oder Link; die Datei wird nur einmal gespeichert (Parität 1, 4)."""
 
     gal_file = forms.FileField(
         label="GAL als PDF", required=False, help_text="Wird nur einmal gespeichert."
     )
     gal_url = forms.URLField(label="oder GAL als Link", required=False, assume_scheme="https")
     gal_title = forms.CharField(label="Titel der GAL", max_length=200, required=False)
-    no_ppe = forms.BooleanField(
-        label="keine PSA",
-        required=False,
-        help_text="Nur mit gültiger Sachkunde. Das Teil ist dann ohne PSA-Prüfung verleihbar.",
-    )
 
     def clean_gal_file(self) -> Any:
         upload = self.cleaned_data.get("gal_file")
@@ -93,6 +108,26 @@ class PartOptionsForm(forms.Form):
         return data
 
 
+class GalRequiredForm(GalForm):
+    """Beim Zuweisen an mehrere Teile ist eine GAL Pflicht."""
+
+    def clean(self) -> dict[str, Any]:
+        data = super().clean()
+        if not data.get("gal_file") and not data.get("gal_url") and not self.errors:
+            raise forms.ValidationError("Bitte eine GAL-Datei oder einen Link angeben.")
+        return data
+
+
+class PartOptionsForm(GalForm):
+    """Was für Produkt und System beim Anlegen gleich ist: GAL und „keine PSA“."""
+
+    no_ppe = forms.BooleanField(
+        label="keine PSA",
+        required=False,
+        help_text="Nur mit gültiger Sachkunde. Das Teil ist dann ohne PSA-Prüfung verleihbar.",
+    )
+
+
 class ProductForm(forms.Form):
     name = forms.CharField(
         label="Bezeichnung des Teils",
@@ -104,6 +139,15 @@ class ProductForm(forms.Form):
 
 class SystemForm(forms.Form):
     name = forms.CharField(label="Name des Systems", max_length=200)
+
+
+class PartEditForm(forms.Form):
+    """Bezeichnung und „keine PSA“ eines bestehenden Teils (Parität 3)."""
+
+    name = forms.CharField(label="Bezeichnung des Teils", max_length=200)
+    no_ppe = forms.BooleanField(
+        label="keine PSA", required=False, help_text="Nur mit gültiger Sachkunde änderbar."
+    )
 
 
 class CommentForm(forms.Form):
