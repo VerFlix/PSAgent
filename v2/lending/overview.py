@@ -18,7 +18,7 @@ from django.views.decorators.http import require_GET
 from accounts.rights import Right, has_right, requires
 from inventory.models import Part
 from inventory.services import search_parts
-from lending import services
+from lending import reminders, services
 from lending.models import ACTIVE_STATUSES, Loan, LoanStatus
 
 WEEKDAYS = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
@@ -47,6 +47,8 @@ def overview(request: HttpRequest) -> HttpResponse:
         "due_today": [loan for loan in lent if loan.end == today],
         "lent": [loan for loan in lent if loan.end > today],
         "reserved": reserved,
+        "reminders_on": reminders.enabled(),
+        "may_switch_reminders": has_right(request.user, Right.REMINDERS),
     }
     return render(request, "lending/overview.html", context)
 

@@ -26,9 +26,17 @@ from accounts.models import User
 from accounts.rights import Right, has_right, requires
 from inventory.models import Component, Part, PartStatus
 from inventory.services import search_parts
-from lending import receipts, services
+from lending import receipts, reminders, services
 from lending.forms import BorrowerForm, CancelForm, CheckoutForm, PeriodForm, ReturnForm
-from lending.models import Booking, Borrower, BorrowerContact, Loan, LoanEvent, LoanStatus
+from lending.models import (
+    Booking,
+    Borrower,
+    BorrowerContact,
+    Loan,
+    LoanEvent,
+    LoanStatus,
+    Reminder,
+)
 from lending.receipts import ReceiptKind
 from lending.services import LendingError
 from lending.signatures import svg
@@ -371,6 +379,10 @@ def booking_detail(request: HttpRequest, pk: int) -> HttpResponse:
         "hold": ErasureHold.current(booking.borrower_id),
         "erased": Erasure.objects.filter(borrower=booking.borrower).exists(),
         "contact_known": BorrowerContact.objects.filter(borrower=booking.borrower).exists(),
+        "reminders_on": reminders.booking_enabled(booking),
+        "sent_reminders": Reminder.objects.filter(loan__booking=booking).select_related(
+            "loan__part"
+        ),
         "cancel_form": CancelForm(),
     }
     return render(request, "lending/booking_detail.html", context)
@@ -499,6 +511,28 @@ def booking_receipt(request: HttpRequest, pk: int) -> HttpResponse:
         )
     messages.add_message(request, *_send_receipt(booking, kind))
     return redirect("lending:booking_detail", pk=booking.pk)
+
+
+@requires(Right.LEND)
+@require_POST
+def booking_reminders(request: HttpRequest, pk: int) -> HttpResponse:
+    """Erinnerungen für diesen Vorgang aus- oder wieder einschalten (#72)."""
+    booking = _booking(pk)
+    on = request.POST.get("an") == "1"
+    reminders.set_booking_enabled(booking, on, actor=_actor(request))
+    state = "eingeschaltet" if on else "ausgeschaltet"
+    messages.success(request, f"Erinnerungen für diesen Vorgang {state}.")
+    return redirect("lending:booking_detail", pk=booking.pk)
+
+
+@requires(Right.REMINDERS)
+@require_POST
+def reminder_switch(request: HttpRequest) -> HttpResponse:
+    """Erinnerungen für alle ein- oder ausschalten (nur Admin)."""
+    on = request.POST.get("an") == "1"
+    reminders.set_enabled(on, actor=_actor(request))
+    messages.success(request, f"E-Mail-Erinnerungen für alle {'an' if on else 'aus'}.")
+    return redirect("lending:overview")
 
 
 @requires(Right.LEND)

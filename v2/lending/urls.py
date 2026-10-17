@@ -18,4 +18,6 @@ urlpatterns = [
     path("<int:pk>/rueckgabe/", views.booking_return, name="booking_return"),
     path("<int:pk>/stornieren/", views.booking_cancel, name="booking_cancel"),
     path("<int:pk>/quittung/", views.booking_receipt, name="booking_receipt"),
+    path("<int:pk>/erinnerungen/", views.booking_reminders, name="booking_reminders"),
+    path("erinnerungen/", views.reminder_switch, name="reminder_switch"),
 ]

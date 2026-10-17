@@ -114,6 +114,13 @@ Danach prüfen:
 - Unter „Gesendete Elemente“ von `psagent@<domain>` liegt **keine** Kopie; PSAgent sendet mit
   `saveToSentItems = false`.
 
+## 8. Erinnerungen bei Überfälligkeit
+
+Einen täglichen Timer auf `uv run python manage.py erinnerungen` setzen, z. B. um 9 Uhr. Zuerst
+mit `--probelauf` prüfen. Die Ausgabe nennt nur Vorgangsnummern. Schlägt ein Versand fehl,
+versucht es der nächste Lauf erneut. Ausschalten für alle: Admin auf der Seite „Anstehende
+Ausleihen“.
+
 ## Fehlerbilder
 
 | Meldung | Ursache |
