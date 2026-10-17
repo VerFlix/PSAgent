@@ -106,6 +106,7 @@ Laufende Ausleihen und Reservierungen, die in den nächsten vier Wochen beginnen
     unterschrift[Unterschrift Entleiher],
     unterschrift[Name und Unterschrift ausgebende Person],
   )
+  #text(size: 7pt, data.notice)
   #v(6pt)
   #line(length: 100%, stroke: (dash: "dashed"))
   *Rückgabe*

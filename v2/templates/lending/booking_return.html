@@ -24,6 +24,7 @@
   {% with field=form.comment %}{% include "inventory/_field.html" %}{% endwith %}
   <label class="check">{{ form.quick_check }} {{ form.quick_check.label }}</label>
   {% for error in form.quick_check.errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  <label class="check">{{ form.receipt }} {{ form.receipt.label }}</label>
   {% with field=form.signer_name %}{% include "inventory/_field.html" %}{% endwith %}
   <p id="signature-label">Unterschrift</p>
   <canvas class="signature" width="600" height="200" aria-labelledby="signature-label" data-signature-for="id_signature"></canvas>

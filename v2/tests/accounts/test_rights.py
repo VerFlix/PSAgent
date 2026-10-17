@@ -44,6 +44,7 @@ EXPECTED: dict[Right, str] = {
     Right.EXPORT_PERSONAL: "+ + - - -",
     Right.INSPECT: "q q - - -",
     Right.CLARIFY: "+ + - - -",
+    Right.ERASURE_HOLD: "+ + - - -",
     Right.MANAGE_USERS: "+ - - - -",
     Right.MODIFY_SIGNED: "- - - - -",
 }

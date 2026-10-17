@@ -7,6 +7,7 @@ wie mit Finger oder Stift.
 from datetime import timedelta
 
 import pytest
+from django.core import mail
 from django.utils import timezone
 from playwright.sync_api import Page, expect
 
@@ -59,15 +60,18 @@ def test_lend_with_signature_on_devices(device_page: Page, site: str) -> None:
     assert_fits_width(page)
     page.get_by_label("Kurzkontrolle durchgeführt").check()
     page.get_by_label("GAL bereitgestellt").check()
+    page.get_by_label("Quittung per E-Mail an den Entleiher").check()
     sign(page)
     page.get_by_role("button", name="Ausgeben", exact=True).click()
 
     expect(page.get_by_text("Ausgegeben: 1 Teil(e).")).to_be_visible()
+    expect(page.get_by_text("Quittung per E-Mail gesendet.")).to_be_visible()
+    assert [message.to for message in mail.outbox] == [["robin@example.org"]]
     loan = Loan.objects.get(part=part)
     assert loan.status == LoanStatus.LENT
     signature = loan.events.get().signature
     assert signature is not None
-    strokes = signature.strokes
+    strokes = signature.content.strokes
     assert len(strokes) == 1 and len(strokes[0]) >= 10
 
 

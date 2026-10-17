@@ -1,0 +1,18 @@
+{% autoescape off %}Hallo {{ name }},
+
+{% if club %}{{ club }} bestätigt{% else %}wir bestätigen{% endif %} {% if kind == "ausgabe" %}die Ausgabe{% else %}die Rückgabe{% endif %} (Ausleihvorgang #{{ booking.pk }}):
+{% for item in events %}
+- {{ item.event.loan.part.name }}{% if item.eis %} (EI {{ item.eis }}){% endif %}
+  {% if kind == "ausgabe" %}ausgegeben am {{ item.at|date:"d.m.Y" }}, zurück bis {{ item.event.loan.end|date:"d.m.Y" }}
+  Kurzkontrolle: {{ item.event.quick_check|yesno:"ja,nein" }} · GAL bereitgestellt: {{ item.event.gal_provided|yesno:"ja,nein" }}{% for doc in item.gal %}
+  {{ doc.title }}: {{ doc.url }}{% endfor %}{% else %}zurückgenommen am {{ item.at|date:"d.m.Y" }} · Kurzprüfung: {{ item.event.quick_check|yesno:"ja,nein" }}{% if item.event.comment %}
+  Kommentar: {{ item.event.comment }}{% endif %}{% endif %}
+{% endfor %}{% if kind == "ausgabe" %}
+Bitte die Gebrauchsanleitung (GAL) beachten und die Teile bis zum genannten Tag zurückbringen.
+Besondere Vorkommnisse (z. B. harter Sturz, Kontakt mit Chemikalien) bitte bei der Rückgabe
+angeben.
+{% endif %}
+Bei Fragen einfach auf diese E-Mail antworten.
+
+{{ notice }}
+{% endautoescape %}

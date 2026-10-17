@@ -6,6 +6,7 @@ from django import forms
 
 from inventory.models import Component, normalize_ei
 from inventory.services import COMPONENT_FIELDS, PPE_COMPONENT_FIELDS
+from privacy.notice import NO_NAMES
 
 GAL_MAX_BYTES = 20 * 1024 * 1024
 
@@ -151,4 +152,4 @@ class PartEditForm(forms.Form):
 
 
 class CommentForm(forms.Form):
-    comment = forms.CharField(label="Kommentar", max_length=1000)
+    comment = forms.CharField(label="Kommentar", max_length=1000, help_text=NO_NAMES)

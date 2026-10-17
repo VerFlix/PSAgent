@@ -275,9 +275,7 @@ def test_events_signatures_and_bookings_are_append_only(
 
 
 def test_legacy_signature_is_marked(db: None) -> None:
-    signature = Signature.objects.create(
-        strokes=[[[1, 2]]], signer_name="Altbestand", origin=SignatureOrigin.LEGACY
-    )
+    signature = Signature.record([[[1, 2]]], "Altbestand", SignatureOrigin.LEGACY)
 
     assert signature.is_legacy is True
     assert signature.get_origin_display() == "Altbestand, ungesichert"

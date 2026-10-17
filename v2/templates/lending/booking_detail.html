@@ -13,6 +13,15 @@
 </p>
 {% endif %}
 
+{% if receipts and contact_known %}
+<form method="post" action="{% url 'lending:booking_receipt' booking.pk %}" class="inline">
+  {% csrf_token %}
+  {% for kind in receipts %}<button type="submit" name="art" value="{{ kind.value }}">Quittung erneut senden ({% if kind.value == "ausgabe" %}Ausgabe{% else %}Rückgabe{% endif %})</button> {% endfor %}
+</form>
+{% endif %}
+
+{% if may_hold %}{% include "privacy/_hold.html" %}{% endif %}
+
 {% for row in rows %}
 <section class="card">
   <h2>{{ row.loan.part.name }}</h2>
@@ -21,7 +30,7 @@
   <div class="table-scroll"><table class="list">
     <thead><tr><th>Vorgang</th><th>durch</th><th>Angaben</th><th>Unterschrift</th></tr></thead>
     <tbody>
-    {% for item in row.events %}{% with event=item.event sig=item.signature %}
+    {% for item in row.events %}{% with event=item.event sig=item.signature content=item.content %}
       <tr>
         <td>{{ event.get_kind_display }}<br><span class="hint">{{ event.at|date:"d.m.Y H:i" }}</span></td>
         <td>{% if event.actor %}{{ event.actor.get_full_name|default:event.actor.username }}{% else %}{{ event.actor_name|default:"Altsystem" }}{% endif %}</td>
