@@ -30,6 +30,7 @@ from lending.forms import BorrowerForm, CancelForm, CheckoutForm, PeriodForm, Re
 from lending.models import Booking, Borrower, BorrowerContact, Loan, LoanEvent, LoanStatus
 from lending.services import LendingError
 from lending.signatures import svg
+from privacy.models import Erasure, ErasureHold
 
 
 def _actor(request: HttpRequest) -> User:
@@ -293,7 +294,7 @@ def _booking(pk: int) -> Booking:
 
 
 def _loans(booking: Booking) -> list[Loan]:
-    events = LoanEvent.objects.select_related("actor", "signature").order_by("at", "id")
+    events = LoanEvent.objects.select_related("actor", "signature__content").order_by("at", "id")
     return list(
         Loan.objects.filter(booking=booking)
         .select_related("part")
@@ -307,6 +308,16 @@ def _selected(request: HttpRequest, loans: list[Loan], status: LoanStatus) -> li
     return [loan for loan in loans if loan.pk in ids and loan.status == status]
 
 
+def _event_row(event: LoanEvent) -> dict[str, Any]:
+    """Vorgang mit Unterschrift; Name und Striche fehlen, wenn sie gelöscht sind (#63)."""
+    content = event.signature.stored_content if event.signature else None
+    return {
+        "event": event,
+        "content": content,
+        "signature": svg(content.strokes) if content else None,
+    }
+
+
 @requires(Right.LEND)
 @require_GET
 def booking_detail(request: HttpRequest, pk: int) -> HttpResponse:
@@ -318,13 +329,7 @@ def booking_detail(request: HttpRequest, pk: int) -> HttpResponse:
         {
             "loan": loan,
             "overdue": loan.is_overdue(today),
-            "events": [
-                {
-                    "event": event,
-                    "signature": svg(event.signature.strokes) if event.signature else None,
-                }
-                for event in loan.events.all()
-            ],
+            "events": [_event_row(event) for event in loan.events.all()],
         }
         for loan in loans
     ]
@@ -338,6 +343,9 @@ def booking_detail(request: HttpRequest, pk: int) -> HttpResponse:
         "reserved": [loan for loan in loans if loan.status == LoanStatus.RESERVED],
         "lent": [loan for loan in loans if loan.status == LoanStatus.LENT],
         "may_cancel": has_right(request.user, Right.CHANGE_OTHERS_RESERVATIONS, booking),
+        "may_hold": has_right(request.user, Right.ERASURE_HOLD),
+        "hold": ErasureHold.current(booking.borrower_id),
+        "erased": Erasure.objects.filter(borrower=booking.borrower).exists(),
         "cancel_form": CancelForm(),
     }
     return render(request, "lending/booking_detail.html", context)

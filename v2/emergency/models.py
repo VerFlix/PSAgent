@@ -245,6 +245,31 @@ class LoanFormPart(AppendOnlyModel):
         )
 
 
+class LoanFormLoan(AppendOnlyModel):
+    """Ausleihe, die ein Formular ausgegeben oder zurückgenommen hat.
+
+    Verbindet auch eine reine Rückgabe mit dem Entleiher, damit der Scan (mit seiner
+    Unterschrift) beim Löschen des Entleihers gefunden wird (#63).
+    """
+
+    loan_form = models.ForeignKey(
+        LoanForm, on_delete=models.PROTECT, related_name="loans", verbose_name="Formular"
+    )
+    loan = models.ForeignKey(
+        "lending.Loan", on_delete=models.PROTECT, related_name="+", verbose_name="Ausleihe"
+    )
+
+    class Meta:
+        verbose_name = "Ausleihe aus dem Formular"
+        verbose_name_plural = "Ausleihen aus dem Formular"
+        constraints = (
+            models.UniqueConstraint(fields=["loan_form", "loan"], name="emergency_form_loan_once"),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.loan_form} – {self.loan}"
+
+
 class LoanFormResult(AppendOnlyModel):
     """Übernahme eines Formulars in den Verleih; bei Doppelbuchung erst nach der Klärung."""
 

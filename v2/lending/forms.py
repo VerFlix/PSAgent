@@ -7,6 +7,7 @@ from typing import Any
 from django import forms
 
 from lending import services
+from privacy.notice import NO_NAMES
 
 
 class PeriodForm(forms.Form):
@@ -88,13 +89,19 @@ class ReturnForm(forms.Form):
     """Rückgabe wie im Altsystem: Kommentar, Kurzprüfung, Unterschrift, optional sperren (17)."""
 
     comment = forms.CharField(
-        label="Kommentar", required=False, widget=forms.Textarea(attrs={"rows": 2})
+        label="Kommentar",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
+        help_text=NO_NAMES,
     )
     quick_check = forms.BooleanField(label="Kurzprüfung durchgeführt", required=False)
     signer_name = forms.CharField(label="Name der unterschreibenden Person", max_length=200)
     signature = forms.CharField(widget=forms.HiddenInput, required=False)
     lock_reason = forms.CharField(
-        label="Grund der Sperre (für markierte Teile)", max_length=1000, required=False
+        label="Grund der Sperre (für markierte Teile)",
+        max_length=1000,
+        required=False,
+        help_text=NO_NAMES,
     )
 
     clean_signature = CheckoutForm.clean_signature

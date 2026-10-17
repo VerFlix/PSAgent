@@ -24,6 +24,7 @@
   <label class="check">{{ checkout.quick_check }} {{ checkout.quick_check.label }}</label>
   <label class="check">{{ checkout.gal_provided }} {{ checkout.gal_provided.label }}</label>
   {% with field=checkout.signer_name %}{% include "inventory/_field.html" %}{% endwith %}
+  {% include "privacy/_notice.html" %}
   <p id="signature-label">Unterschrift</p>
   <canvas class="signature" width="600" height="200" aria-labelledby="signature-label" data-signature-for="id_signature"></canvas>
   {{ checkout.signature }}

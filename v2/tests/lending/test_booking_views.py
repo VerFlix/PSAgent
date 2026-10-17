@@ -10,8 +10,9 @@ from django.urls import reverse
 from accounts.models import Role, User
 from inventory.models import EventKind
 from lending.models import Booking, Borrower, BorrowerContact, Loan, LoanEventKind, LoanStatus
-from lending.services import create_borrower, erase_contact, lend, reserve, return_loans
+from lending.services import create_borrower, lend, reserve, return_loans
 from lending.signatures import svg
+from privacy.services import erase_borrower
 from tests.helpers import make_inspector
 from tests.lending.conftest import DAY, STROKES, TODAY, MakePart, checkout_kwargs, return_kwargs
 
@@ -170,8 +171,8 @@ def test_parity_15_borrower_of_other_booking_is_refused(
 def test_erased_contact_blocks_checkout(
     lender_client: Client, lender: User, make_part: MakePart, borrower: Borrower
 ) -> None:
+    erase_borrower(borrower, actor=None)
     booking = reserve(borrower, [make_part()], TODAY, TODAY + DAY, actor=lender)
-    erase_contact(borrower, actor=None)
 
     response = lender_client.get(
         reverse("lending:booking_checkout", args=[booking.pk]), follow=True
