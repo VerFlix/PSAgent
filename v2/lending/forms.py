@@ -66,6 +66,9 @@ class BorrowerForm(forms.Form):
         return data
 
 
+RECEIPT_LABEL = "Quittung per E-Mail an den Entleiher"
+
+
 class CheckoutForm(forms.Form):
     """Pflichtangaben der Ausgabe wie im Altsystem (Parität 14)."""
 
@@ -73,6 +76,7 @@ class CheckoutForm(forms.Form):
     gal_provided = forms.BooleanField(label="GAL bereitgestellt", required=False)
     signer_name = forms.CharField(label="Name der unterschreibenden Person", max_length=200)
     signature = forms.CharField(widget=forms.HiddenInput, required=False)
+    receipt = forms.BooleanField(label=RECEIPT_LABEL, required=False)
 
     def clean_signature(self) -> Any:
         raw = self.cleaned_data.get("signature") or ""
@@ -97,6 +101,7 @@ class ReturnForm(forms.Form):
     quick_check = forms.BooleanField(label="Kurzprüfung durchgeführt", required=False)
     signer_name = forms.CharField(label="Name der unterschreibenden Person", max_length=200)
     signature = forms.CharField(widget=forms.HiddenInput, required=False)
+    receipt = forms.BooleanField(label=RECEIPT_LABEL, required=False)
     lock_reason = forms.CharField(
         label="Grund der Sperre (für markierte Teile)",
         max_length=1000,

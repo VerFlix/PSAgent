@@ -7,6 +7,7 @@ startet die Anwendung nicht.
 from .base import *
 
 DEBUG = False
+MAILERS = {"default": {"BACKEND": env("PSAGENT_MAIL_BACKEND", "mailer.graph.GraphEmailBackend")}}
 SECRET_KEY = env("DJANGO_SECRET_KEY")
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS")
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")

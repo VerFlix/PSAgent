@@ -39,6 +39,8 @@ def test_prod_settings_are_hardened(prod_env: pytest.MonkeyPatch) -> None:
     assert prod.PASSWORD_HASHERS[0].endswith("Argon2PasswordHasher")
     assert prod.PSAGENT_WEBAUTHN_RP_ID == "psagent.example.ts.net"
     assert prod.PSAGENT_WEBAUTHN_ORIGINS == ["https://psagent.example.ts.net"]
+    # E-Mail im Betrieb über Microsoft 365 (#72), nicht in die Konsole.
+    assert prod.MAILERS["default"]["BACKEND"] == "mailer.graph.GraphEmailBackend"
 
 
 @pytest.mark.parametrize(

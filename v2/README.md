@@ -89,6 +89,9 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
   Ende des Jahres der letzten Ausleihe; im Betrieb täglich per Timer, zuerst mit `--probelauf`.
   Löschsperre für Schadensfälle in der Detailansicht des Ausleihvorgangs, Übersicht unter
   `/datenschutz/` (ab PSA-Sachkundig). Details: `docs/runbooks/loeschfristen.md`.
+- E-Mail (#72): Quittung nach Ausgabe und Rückgabe auf Wunsch (Häkchen), erneut sendbar in der
+  Detailansicht. Im Betrieb über Microsoft 365 (Graph, Zertifikat, nur ein Postfach, keine Kopie
+  in „Gesendete Elemente“), sonst in die Konsole. Einrichtung: `docs/runbooks/mail-m365.md`.
 
 Browser-Tests (Playwright, eigener CI-Job; bei Fehlern Screenshots und Traces als Artefakt):
 

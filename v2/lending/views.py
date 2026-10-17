@@ -25,9 +25,10 @@ from accounts.models import User
 from accounts.rights import Right, has_right, requires
 from inventory.models import Component, Part, PartStatus
 from inventory.services import search_parts
-from lending import services
+from lending import receipts, services
 from lending.forms import BorrowerForm, CancelForm, CheckoutForm, PeriodForm, ReturnForm
 from lending.models import Booking, Borrower, BorrowerContact, Loan, LoanEvent, LoanStatus
+from lending.receipts import ReceiptKind
 from lending.services import LendingError
 from lending.signatures import svg
 from privacy.models import Erasure, ErasureHold
@@ -116,11 +117,24 @@ def _borrower(form: BorrowerForm, actor: User, *, checkout: bool) -> Borrower:
     return borrower
 
 
-def _done(request: HttpRequest, booking: Booking, text: str) -> HttpResponse:
+def _done(
+    request: HttpRequest, booking: Booking, text: str, receipt: ReceiptKind | None = None
+) -> HttpResponse:
+    note = _send_receipt(booking, receipt) if receipt is not None else None
     if finish_operation(request):
         return redirect("accounts:login")
     messages.success(request, text)
+    if note is not None:
+        messages.add_message(request, *note)
     return redirect("lending:booking_detail", pk=booking.pk)
+
+
+def _send_receipt(booking: Booking, kind: ReceiptKind) -> tuple[int, str]:
+    """Quittung senden; ein Fehler wird gemeldet, der Vorgang bleibt gültig (#72)."""
+    try:
+        return messages.SUCCESS, receipts.send(booking, kind)
+    except receipts.ReceiptError as error:
+        return messages.WARNING, str(error)
 
 
 def _page(
@@ -264,7 +278,8 @@ def checkout_new(request: HttpRequest) -> HttpResponse:
     except LendingError as error:
         checkout.add_error(None, str(error))
         return render(request, "lending/checkout.html", context, status=400)
-    return _done(request, booking, f"Ausgegeben: {len(parts)} Teil(e).")
+    receipt = ReceiptKind.CHECKOUT if data["receipt"] else None
+    return _done(request, booking, f"Ausgegeben: {len(parts)} Teil(e).", receipt)
 
 
 @requires(Right.LEND)
@@ -344,8 +359,19 @@ def booking_detail(request: HttpRequest, pk: int) -> HttpResponse:
         "lent": [loan for loan in loans if loan.status == LoanStatus.LENT],
         "may_cancel": has_right(request.user, Right.CHANGE_OTHERS_RESERVATIONS, booking),
         "may_hold": has_right(request.user, Right.ERASURE_HOLD),
+        "receipts": sorted(
+            {
+                kind
+                for loan in loans
+                for event in loan.events.all()
+                for kind in ReceiptKind
+                if receipts.EVENT[kind] == event.kind
+            },
+            key=list(ReceiptKind).index,
+        ),
         "hold": ErasureHold.current(booking.borrower_id),
         "erased": Erasure.objects.filter(borrower=booking.borrower).exists(),
+        "contact_known": BorrowerContact.objects.filter(borrower=booking.borrower).exists(),
         "cancel_form": CancelForm(),
     }
     return render(request, "lending/booking_detail.html", context)
@@ -400,7 +426,8 @@ def booking_checkout(request: HttpRequest, pk: int) -> HttpResponse:
     except LendingError as error:
         checkout.add_error(None, str(error))
         return render(request, "lending/booking_checkout.html", context, status=400)
-    return _done(request, booking, f"Ausgegeben: {len(chosen)} Teil(e).")
+    receipt = ReceiptKind.CHECKOUT if checkout.cleaned_data["receipt"] else None
+    return _done(request, booking, f"Ausgegeben: {len(chosen)} Teil(e).", receipt)
 
 
 @requires(Right.LEND)
@@ -452,7 +479,22 @@ def booking_return(request: HttpRequest, pk: int) -> HttpResponse:
     text = f"Zurückgenommen: {len(chosen)} Teil(e)"
     if lock:
         text += f", davon {len(lock)} gesperrt"
-    return _done(request, booking, text + ".")
+    receipt = ReceiptKind.RETURN if form.cleaned_data["receipt"] else None
+    return _done(request, booking, text + ".", receipt)
+
+
+@requires(Right.LEND)
+@require_POST
+def booking_receipt(request: HttpRequest, pk: int) -> HttpResponse:
+    """Quittung (erneut) senden, z. B. wenn der Versand bei der Ausgabe fehlschlug (#72)."""
+    booking = _booking(pk)
+    try:
+        kind = ReceiptKind(request.POST.get("art", ""))
+    except ValueError:
+        messages.error(request, "Unbekannte Quittung.")
+    else:
+        messages.add_message(request, *_send_receipt(booking, kind))
+    return redirect("lending:booking_detail", pk=booking.pk)
 
 
 @requires(Right.LEND)
