@@ -1,5 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Notbetrieb{% endblock %}
+{% load static %}
+{% block title %}Notbetrieb{% if not offline_binder_auto %}<script src="{% static 'js/offline.js' %}" defer></script>{% endif %}
+{% endblock %}
 {% block content %}
 <h1>Notbetrieb</h1>
 <p>Fällt PSAgent aus, laufen Verleih und Prüfung mit der Notfallmappe auf Papier weiter.
@@ -16,6 +18,17 @@
   {% else %}
     <p>Noch keine Notfallmappe erzeugt.</p>
   {% endif %}
+</section>
+
+<section class="card">
+  <h2>Offline-Kopie</h2>
+  {% if not offline_binder_auto %}<span hidden data-offline-binder="manual" data-sw="{% url 'emergency:service_worker' %}" data-scope="{% url 'emergency:index' %}"></span>{% endif %}
+  <p>Auf Vereinsgeräten speichert PSAgent die neueste Mappe automatisch. Ohne Verbindung öffnet
+    sie sich unter <a class="break" href="{% url 'emergency:latest' %}">{{ request.scheme }}://{{ request.get_host }}{% url 'emergency:latest' %}</a>
+    (am besten als Lesezeichen anlegen).</p>
+  <p class="status" data-offline-status role="status" aria-live="polite">{% if offline_binder_auto %}Wird geprüft …{% endif %}</p>
+  <button type="button" data-offline-enable>Auf diesem Gerät offline bereithalten</button>
+  <p class="hint">Von Hand geht es auch: die PDF herunterladen und auf dem Gerät speichern.</p>
 </section>
 
 <section class="card">
@@ -41,4 +54,5 @@
     <button type="submit" class="primary">Erzeugen und herunterladen</button>
   </form>
 </section>
+{% if not offline_binder_auto %}<script src="{% static 'js/offline.js' %}" defer></script>{% endif %}
 {% endblock %}

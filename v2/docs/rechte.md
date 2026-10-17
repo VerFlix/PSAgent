@@ -46,7 +46,9 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   keines von beiden hat. htmx-Teilanfragen werden genauso geprüft; ohne Anmeldung antworten sie
   mit `401` und `HX-Redirect` zur Anmeldung.
 - **Öffentlich** sind nur Anmeldung (Passwort und Passkey), Abmeldung, der Einrichtungslink
-  (Passkey oder, außer für Admin und PSA-Sachkundige, eigenes Passwort) und `/healthz`.
+  (Passkey oder, außer für Admin und PSA-Sachkundige, eigenes Passwort), `/healthz` und das
+  Skript des Service Workers für die Offline-Kopie der Notfallmappe (`/notbetrieb/sw.js`, ohne
+  Daten).
 
 ## Festlegungen, die das Konzept offenlässt
 
@@ -77,6 +79,10 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 - Notfallmappe (#52): Sie nennt Entleiher (nur mit Namen) und gehört darum zu „Reservieren,
   ausgeben, zurücknehmen“ (ab Verleiher). Erzeugen vergibt neue Formularnummern; der
   Verwaltungsbefehl `notfallmappe` (wöchentlicher Timer) läuft ohne Konto.
+- Offline-Kopie der Notfallmappe (#52): Auf Vereinsgeräten lädt der Service Worker die neueste
+  Mappe, solange jemand ab Verleiher angemeldet ist, und zeigt sie ohne Verbindung auch ohne
+  Anmeldung an (Konzept: offline auf Vereins-Tablet und -PC). Auf anderen Geräten richtet man
+  die Kopie nur von Hand ein.
 - Nacherfassung (#52): Sperrungen erfasst nach, wer sperren darf (ab Verleiher); der Vorgang
   trägt die erfassende Person und das Datum vom Formular. Die Klärungsliste („Klärungsliste
   nach dem Notbetrieb bearbeiten“) sehen und bearbeiten nur PSA-Sachkundige und Admin, laut

@@ -70,6 +70,10 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
   Ausleihen (Entleiher nur mit Namen) und leeren Formularen mit fortlaufender Formularnummer.
   Für die wöchentliche Fassung im Betrieb einen Timer auf
   `uv run python manage.py notfallmappe` setzen. Gespeichert bleiben die letzten 5 Mappen.
+  Offline-Kopie: Auf Vereinsgeräten hält ein Service Worker die neueste Mappe bereit; ohne
+  Verbindung öffnet sie sich unter `/notbetrieb/mappe/neueste.pdf` (Lesezeichen anlegen). Andere
+  Geräte richten das auf der Seite „Notbetrieb“ von Hand ein. Service Worker brauchen HTTPS
+  (oder `localhost`).
   Nach dem Ausfall: Formulare mit Nummer, Scan (PDF oder Fotos) und Originaldatum nacherfassen
   (Sperrungen sowie Ausgaben und Rückgaben); fehlende Nummern, Doppelbuchungen und Ausgaben
   gegen die Regeln stehen auf der Klärungsliste für PSA-Sachkundige und Admin.
