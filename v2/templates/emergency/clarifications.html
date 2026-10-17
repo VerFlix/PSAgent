@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Klärungsliste{% endblock %}
+{% block content %}
+<h1>Klärungsliste</h1>
+<p>Was sich bei der Nacherfassung nicht sauber übernehmen ließ, und fehlende Formularnummern.
+  Jede Klärung braucht eine Begründung und wird nur angehängt.</p>
+
+<section class="card">
+  <h2>Offene Fälle ({{ cases|length }})</h2>
+  {% if cases %}
+    <ul class="plain">
+    {% for case in cases %}
+      <li class="case">
+        <strong>{{ case.title }}</strong>{% if case.form %} · <a href="{% url 'emergency:scan' case.form.pk %}" target="_blank" rel="noopener">Scan</a>{% endif %}
+        {% if case.detail %}<br><span class="hint">{{ case.detail }}</span>{% endif %}
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="key" value="{{ case.key }}">
+          <label for="note-{{ forloop.counter }}">Klärung</label>
+          <input id="note-{{ forloop.counter }}" name="note" maxlength="1000" required>
+          <button type="submit">Als geklärt vermerken</button>
+        </form>
+      </li>
+    {% endfor %}
+    </ul>
+  {% else %}
+    <p>Keine offenen Fälle.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Zuletzt geklärt</h2>
+  {% if resolved %}
+    <div class="table-scroll"><table class="list">
+      <thead><tr><th>Fall</th><th>Klärung</th><th>von</th><th>am</th></tr></thead>
+      <tbody>
+      {% for entry in resolved %}
+        <tr><td>{{ entry.key }}</td><td>{{ entry.note }}</td><td>{{ entry.resolved_by|default:"–" }}</td><td>{{ entry.resolved_at|date:"d.m.Y H:i" }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  {% else %}
+    <p>Noch nichts geklärt.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Nacherfasste Formulare</h2>
+  {% if forms %}
+    <ul class="plain">
+    {% for paper in forms %}
+      <li>{{ paper.sheet.label }} ({{ paper.sheet.get_kind_display }}) · nachgetragen von {{ paper.recorded_by|default:"Verwaltungsbefehl" }} am {{ paper.recorded_at|date:"d.m.Y" }} · <a href="{% url 'emergency:scan' paper.pk %}" target="_blank" rel="noopener">Scan</a></li>
+    {% endfor %}
+    </ul>
+  {% else %}
+    <p>Noch keine Formulare nacherfasst.</p>
+  {% endif %}
+</section>
+<p><a href="{% url 'emergency:index' %}">Zurück zum Notbetrieb</a></p>
+{% endblock %}

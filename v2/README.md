@@ -74,6 +74,9 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
   Verbindung öffnet sie sich unter `/notbetrieb/mappe/neueste.pdf` (Lesezeichen anlegen). Andere
   Geräte richten das auf der Seite „Notbetrieb“ von Hand ein. Service Worker brauchen HTTPS
   (oder `localhost`).
+  Nach dem Ausfall: Formulare mit Nummer, Scan (PDF oder Fotos) und Originaldatum nacherfassen
+  (zuerst Sperrungen); fehlende Nummern und nicht übernehmbare Zeilen stehen auf der
+  Klärungsliste für PSA-Sachkundige und Admin.
 - PDF-Dokumente je Teil (Teileseite, Kasten „Dokumente“): Einsatzdokumentation ab Trainer;
   PD und Haftungsausschluss nur mit gültiger Sachkunde, mit Name und Briefkopf/Stempel aus
   dem Konto der erzeugenden Person.

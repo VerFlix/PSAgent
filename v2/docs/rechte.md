@@ -20,6 +20,7 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 | PD und Haftungsausschluss erzeugen (mit eigenem Namen und Stempel) | ✓, nur mit Sachkunde | ✓, nur mit Sachkunde | – | – | – |
 | Export mit Personendaten | ✓ | ✓ | – | – | – |
 | Prüfungsrunde, entsperren, aussondern, nächste Prüfung setzen | ✓, nur mit Sachkunde | ✓, nur mit Sachkunde | – | – | – |
+| Klärungsliste nach dem Notbetrieb bearbeiten | ✓ | ✓ | – | – | – |
 | Nutzer, Rollen, Sachkunde-Zertifikate verwalten | ✓ | – | – | – | – |
 | Signierte Einträge ändern oder löschen | niemand | niemand | niemand | niemand | niemand |
 
@@ -82,3 +83,7 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   Mappe, solange jemand ab Verleiher angemeldet ist, und zeigt sie ohne Verbindung auch ohne
   Anmeldung an (Konzept: offline auf Vereins-Tablet und -PC). Auf anderen Geräten richtet man
   die Kopie nur von Hand ein.
+- Nacherfassung (#52): Sperrungen erfasst nach, wer sperren darf (ab Verleiher); der Vorgang
+  trägt die erfassende Person und das Datum vom Formular. Die Klärungsliste („Klärungsliste
+  nach dem Notbetrieb bearbeiten“) sehen und bearbeiten nur PSA-Sachkundige und Admin, laut
+  Konzept „für PSA-Prüfer oder Admin“, ohne Sachkunde-Pflicht.
