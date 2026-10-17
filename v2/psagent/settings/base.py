@@ -110,6 +110,8 @@ PSAGENT_CLUB_DEVICE_IDLE_SECONDS = 3 * 60
 PSAGENT_ENROLLMENT_HOURS = 24
 # Verein als Besitzer auf der Einsatzdokumentation (Parität 5); leer: Platz für einen Stempel.
 PSAGENT_CLUB_NAME = env("PSAGENT_CLUB_NAME", "")
+# Adresse der App für die Links in QR-Etiketten (#14), z. B. https://psagent.<tailnet>.ts.net.
+PSAGENT_BASE_URL = env("PSAGENT_BASE_URL", "http://localhost:8000")
 
 ROOT_URLCONF = "psagent.urls"
 

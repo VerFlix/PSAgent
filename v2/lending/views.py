@@ -160,7 +160,9 @@ def new_booking(request: HttpRequest) -> HttpResponse:
         period = PeriodForm(request.GET) if "start" in request.GET else None
         if period is None:
             period = PeriodForm(PeriodForm.initial_for_today())
-        return _page(request, period, BorrowerForm(), set())
+        # Vorauswahl über den Link „Reservieren oder ausgeben“ der Teileseite (QR-Scan, #14).
+        preselected = {int(value) for value in request.GET.getlist("teil") if value.isdigit()}
+        return _page(request, period, BorrowerForm(), preselected)
 
     period = PeriodForm(request.POST)
     borrower_form = BorrowerForm(request.POST)

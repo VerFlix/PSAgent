@@ -34,8 +34,12 @@
 <p class="actions">
   <button type="submit" name="format" value="csv">Markierte als CSV</button>
   <button type="submit" name="format" value="pdf">Markierte als PDF</button>
-  {% if may_create %}<button type="submit" formaction="{% url 'inventory:gal_assign' %}">GAL an markierte Teile</button>{% endif %}
+  {% if may_create %}<button type="submit" formaction="{% url 'inventory:gal_assign' %}">GAL an markierte Teile</button>
+  <button type="submit" formaction="{% url 'inventory:part_labels' %}">QR-Etiketten für markierte</button>{% endif %}
 </p>
+{% if may_create %}<p class="hint">QR-Etiketten: A4-Bogen mit 65 Etiketten 38 x 21,2 mm (z. B. Avery Zweckform 3666).
+  <label for="label-start">Erstes freies Etikett auf dem Bogen</label>
+  <input id="label-start" name="start" type="number" min="1" max="65" value="1" class="short"></p>{% endif %}
 </form>
 {% else %}
 <p>Keine Teile gefunden.</p>
@@ -45,6 +49,7 @@
   <label class="check"><input type="checkbox" name="ausgesondert" value="1" class="check"> mit ausgesonderten Teilen</label>
   <button type="submit" name="format" value="csv">CSV</button>
   <button type="submit" name="format" value="pdf">PDF</button>
-  <p class="hint">Ohne Personendaten. CSV mit Semikolon für Excel und LibreOffice.</p>
+  {% if may_create %}<button type="submit" formaction="{% url 'inventory:part_labels' %}">QR-Etiketten für alle</button>{% endif %}
+  <p class="hint">Ohne Personendaten. CSV mit Semikolon für Excel und LibreOffice. QR-Etiketten ohne ausgesonderte Teile.</p>
 </form>
 {% endblock %}

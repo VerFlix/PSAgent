@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}QR-Code{% endblock %}
+{% block content %}
+<h1>QR-Code</h1>
+{% if retired %}
+  <p class="error">{{ part }} (EI {{ ei }}) ist ausgesondert und darf nicht mehr verwendet werden.
+    Bitte das Teil aus dem Bestand nehmen und das Etikett entfernen.</p>
+  <p><a href="{% url 'inventory:part_detail' part.pk %}">Zum ausgesonderten Teil</a></p>
+{% else %}
+  <p class="error">Kein Teil mit der EI „{{ ei }}“. Das Etikett gehört nicht zu diesem Bestand
+    oder die EI wurde geändert.</p>
+{% endif %}
+<p><a href="{% url 'inventory:part_list' %}">Zur Teileliste</a></p>
+{% endblock %}

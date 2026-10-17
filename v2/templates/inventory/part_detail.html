@@ -5,7 +5,11 @@
 <p>{{ part.get_kind_display }} · <span class="status status-{{ status }}">{{ status.label }}</span>
   {% if no_ppe %} · keine PSA{% endif %}
   · nächste Prüfung {{ next_due|date:"d.m.Y"|default:"–" }}</p>
-{% if may_edit %}<p><a href="{% url 'inventory:part_edit' part.pk %}">Bearbeiten</a></p>{% endif %}
+{% if may_edit or may_lend or may_usage_log %}<p class="actions">
+  {% if may_lend %}<a href="{% url 'lending:new_booking' %}?teil={{ part.pk }}">Reservieren oder ausgeben</a>{% endif %}
+  {% if may_edit %}<a href="{% url 'inventory:part_edit' part.pk %}">Bearbeiten</a>{% endif %}
+  {% if may_usage_log and status != "retired" %}<a href="{% url 'inventory:part_labels' %}?teil={{ part.pk }}">QR-Etikett (PDF)</a>{% endif %}
+</p>{% endif %}
 
 <section class="card">
   <h2>{% if part.kind == "system" %}Bauteile{% else %}Angaben{% endif %}</h2>

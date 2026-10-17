@@ -22,7 +22,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from accounts.models import User
 from accounts.rights import Right, has_right, requires
 from inspections.services import next_inspection_due
-from inventory import documents, export
+from inventory import documents, export, labels
 from inventory.forms import (
     CommentForm,
     ComponentEditFormSet,
@@ -36,7 +36,7 @@ from inventory.forms import (
     SystemForm,
     lock_ppe_fields,
 )
-from inventory.models import Component, Document, EventKind, Part, PartStatus
+from inventory.models import Component, Document, EventKind, Part, PartStatus, normalize_ei
 from inventory.services import (
     InventoryError,
     attach_document,
@@ -105,6 +105,7 @@ def part_detail(request: HttpRequest, pk: int) -> HttpResponse:
         "may_edit": status != PartStatus.RETIRED and has_right(user, Right.MANAGE_PARTS),
         "may_usage_log": has_right(user, Right.MANAGE_PARTS),
         "may_ppe_documents": has_right(user, Right.PPE_DOCUMENTS),
+        "may_lend": status != PartStatus.RETIRED and has_right(user, Right.LEND),
         "comment_form": CommentForm(),
     }
     return render(request, "inventory/part_detail.html", context)
@@ -471,3 +472,42 @@ def part_data_sheet(request: HttpRequest, pk: int) -> FileResponse:
 def part_disclaimer(request: HttpRequest, pk: int) -> FileResponse:
     """Haftungsausschluss mit Name und Stempel der erzeugenden Person (nur mit Sachkunde)."""
     return _document(request, pk, documents.DocumentKind.DISCLAIMER)
+
+
+# --- QR-Etiketten (#14) ---
+
+
+@requires(Right.MANAGE_PARTS)
+@require_GET
+def part_labels(request: HttpRequest) -> HttpResponse:
+    """Etiketten für markierte Teile oder für alle (ohne ausgesonderte) als PDF."""
+    ids = [int(value) for value in request.GET.getlist("teil") if value.isdigit()]
+    parts = _parts()
+    if ids:
+        parts = parts.filter(pk__in=ids)
+    raw = request.GET.get("start", "1")
+    start = int(raw) if raw.isdigit() else 1
+    content = labels.render(labels.entries(parts), start=start)
+    response = HttpResponse(content, content_type="application/pdf")
+    stamp = timezone.localdate()
+    response["Content-Disposition"] = f'attachment; filename="qr-etiketten-{stamp:%Y-%m-%d}.pdf"'
+    return response
+
+
+@requires(Right.VIEW_AVAILABILITY)
+@require_GET
+def scan_target(request: HttpRequest, ei: str) -> HttpResponse:
+    """Ziel des QR-Codes: zur Teileseite; unbekannte und ausgesonderte EI werden abgewiesen."""
+    component = Component.objects.select_related("part").filter(ei_key=normalize_ei(ei)).first()
+    if component is None:
+        return render(
+            request, "inventory/scan_unknown.html", {"ei": ei, "retired": False}, status=404
+        )
+    if component.part.is_retired():
+        return render(
+            request,
+            "inventory/scan_unknown.html",
+            {"ei": ei, "retired": True, "part": component.part},
+            status=410,
+        )
+    return redirect("inventory:part_detail", component.part.pk)
