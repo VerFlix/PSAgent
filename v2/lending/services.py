@@ -33,6 +33,7 @@ from lending.models import (
     LoanEventKind,
     LoanStatus,
     Signature,
+    SignatureContent,
 )
 
 CONTACT_FIELDS = ("name", "address", "email", "phone")
@@ -130,10 +131,15 @@ def search_borrowers(query: str, *, actor: User | None) -> list[Borrower]:
     )
 
 
-def erase_contact(borrower: Borrower, *, actor: User | None) -> None:
-    """Löscht die Kontaktdaten nach Ablauf der Löschfrist; die Ausleihhistorie bleibt."""
+def erase_personal_data(borrower: Borrower, *, actor: User | None) -> None:
+    """Löscht Kontaktdaten sowie Name und Strichliste aller Unterschriften zu seinen Ausleihen.
+
+    Die Ausleihhistorie mit den Prüfsummen der Unterschriften bleibt. Aufruf über
+    `privacy.services.erase_borrower`, das auch die Scans aus dem Notbetrieb löscht.
+    """
     require(actor, Right.MANAGE_USERS)
     BorrowerContact.objects.filter(borrower=borrower).delete()
+    SignatureContent.objects.filter(signature__events__loan__booking__borrower=borrower).delete()
 
 
 # --- Verfügbarkeit ---
@@ -225,7 +231,7 @@ def _signature(strokes: Any, signer_name: str) -> Signature:
     )
     if not valid:
         raise LendingError("Unterschrift fehlt oder ist ungültig.")
-    return Signature.objects.create(strokes=strokes, signer_name=signer_name.strip())
+    return Signature.record(strokes, signer_name.strip())
 
 
 def _check_checkout(

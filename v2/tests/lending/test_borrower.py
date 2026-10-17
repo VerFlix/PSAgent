@@ -9,7 +9,8 @@ from django.db import IntegrityError, transaction
 
 from accounts.models import User
 from lending.models import Borrower, BorrowerContact, Loan
-from lending.services import create_borrower, erase_contact, lend, update_contact
+from lending.services import create_borrower, lend, update_contact
+from privacy.services import erase_borrower
 from tests.lending.conftest import DAY, TODAY, MakePart, checkout_kwargs
 
 
@@ -39,7 +40,7 @@ def test_erasing_contact_keeps_history(
 ) -> None:
     booking = lend(borrower, [make_part()], TODAY, TODAY + DAY, **checkout_kwargs(lender))
 
-    erase_contact(borrower, actor=None)
+    erase_borrower(borrower, actor=None)
 
     borrower = Borrower.objects.get(pk=borrower.pk)
     assert not BorrowerContact.objects.filter(borrower=borrower).exists()

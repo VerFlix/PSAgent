@@ -13,12 +13,12 @@ from lending.services import (
     cancel,
     check_out,
     create_borrower,
-    erase_contact,
     lend,
     reserve,
     return_loans,
     update_contact,
 )
+from privacy.services import erase_borrower
 from tests.helpers import make_inspector
 from tests.lending.conftest import DAY, TODAY, MakePart, checkout_kwargs, return_kwargs
 
@@ -191,12 +191,12 @@ def test_only_admin_erases_contacts(role: Role, borrower: Borrower) -> None:
     before = snapshot()
 
     with pytest.raises(PermissionDenied, match="ab der Rolle Admin"):
-        erase_contact(borrower, actor=user(role))
+        erase_borrower(borrower, actor=user(role))
 
     assert snapshot() == before
 
 
 def test_admin_erases_contacts(borrower: Borrower) -> None:
-    erase_contact(borrower, actor=user(Role.ADMIN))
+    erase_borrower(borrower, actor=user(Role.ADMIN))
 
     assert not BorrowerContact.objects.filter(borrower=borrower).exists()

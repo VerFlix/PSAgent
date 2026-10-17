@@ -293,7 +293,7 @@ def _booking(pk: int) -> Booking:
 
 
 def _loans(booking: Booking) -> list[Loan]:
-    events = LoanEvent.objects.select_related("actor", "signature").order_by("at", "id")
+    events = LoanEvent.objects.select_related("actor", "signature__content").order_by("at", "id")
     return list(
         Loan.objects.filter(booking=booking)
         .select_related("part")
@@ -307,6 +307,16 @@ def _selected(request: HttpRequest, loans: list[Loan], status: LoanStatus) -> li
     return [loan for loan in loans if loan.pk in ids and loan.status == status]
 
 
+def _event_row(event: LoanEvent) -> dict[str, Any]:
+    """Vorgang mit Unterschrift; Name und Striche fehlen, wenn sie gelöscht sind (#63)."""
+    content = event.signature.stored_content if event.signature else None
+    return {
+        "event": event,
+        "content": content,
+        "signature": svg(content.strokes) if content else None,
+    }
+
+
 @requires(Right.LEND)
 @require_GET
 def booking_detail(request: HttpRequest, pk: int) -> HttpResponse:
@@ -318,13 +328,7 @@ def booking_detail(request: HttpRequest, pk: int) -> HttpResponse:
         {
             "loan": loan,
             "overdue": loan.is_overdue(today),
-            "events": [
-                {
-                    "event": event,
-                    "signature": svg(event.signature.strokes) if event.signature else None,
-                }
-                for event in loan.events.all()
-            ],
+            "events": [_event_row(event) for event in loan.events.all()],
         }
         for loan in loans
     ]

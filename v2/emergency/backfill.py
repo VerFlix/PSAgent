@@ -218,6 +218,31 @@ def scan_path(form: PaperForm) -> Path:
     return scan_path_for(form.scan_sha256)
 
 
+def erase_scans(borrower: Borrower, *, actor: User | None) -> None:
+    """Löscht die Scans der Ausleihformulare eines Entleihers; die Prüfsummen bleiben (#63).
+
+    Eine Datei mit gleichem Inhalt kann zu mehreren Formularen gehören; sie bleibt, solange ein
+    Formular eines anderen Entleihers sie braucht. Gelöscht wird erst nach dem Commit, damit ein
+    abgebrochener Vorgang keine Scans verliert.
+    """
+    require(actor, Right.MANAGE_USERS)
+    digests = set(
+        PaperForm.objects.filter(loan_form__borrower=borrower).values_list("scan_sha256", flat=True)
+    )
+    shared = set(
+        PaperForm.objects.filter(scan_sha256__in=digests)
+        .exclude(loan_form__borrower=borrower)
+        .values_list("scan_sha256", flat=True)
+    )
+    paths = [scan_path_for(digest) for digest in sorted(digests - shared)]
+
+    def delete() -> None:
+        for path in paths:
+            path.unlink(missing_ok=True)
+
+    transaction.on_commit(delete)
+
+
 def _store_scan(pdf: bytes) -> str:
     digest = hashlib.sha256(pdf).hexdigest()
     path = scan_path_for(digest)
@@ -532,7 +557,7 @@ def _conflicts(form: LoanForm) -> list[Loan]:
 
 
 def _paper_signature(name: str) -> Signature:
-    return Signature.objects.create(strokes=[], signer_name=name, origin=SignatureOrigin.PAPER)
+    return Signature.record([], name, SignatureOrigin.PAPER)
 
 
 def _return(loan: Loan, form: LoanForm, note: str, actor: User | None) -> None:
