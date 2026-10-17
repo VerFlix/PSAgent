@@ -5,6 +5,7 @@ from typing import Any
 from django import forms
 
 from emergency import backfill
+from privacy.notice import NO_NAMES
 
 DATE = forms.DateInput(attrs={"type": "date"})
 
@@ -78,6 +79,7 @@ class LoanFormForm(forms.Form):
         required=False,
         max_length=2000,
         widget=forms.Textarea(attrs={"rows": 2}),
+        help_text=NO_NAMES,
     )
     lock_reason = forms.CharField(
         label="Sperrung nötig: Grund (leer, wenn nicht angekreuzt)", required=False, max_length=1000

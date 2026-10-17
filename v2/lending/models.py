@@ -11,15 +11,20 @@ eingeschlossen. Mehrere Teile eines Entleihers gehören zu einem Ausleihvorgang 
   unveränderlich, Löschen ist verboten.
 - **Vorgänge und Unterschriften werden nur angehängt.** Sie halten fest, wer wann ausgegeben,
   zurückgenommen oder storniert hat, mit Kurzkontrolle, „GAL bereitgestellt“ und Unterschrift.
+  Name und Strichliste der Unterschrift stehen löschbar daneben (`SignatureContent`, #63).
 - **Kontaktdaten stehen getrennt** vom Entleiher, damit sie nach der Löschfrist gelöscht werden
   können, ohne die Historie zu zerstören (Konzept, Abschnitte 4 und 7).
 """
 
+import hashlib
+import json
+import secrets
 from datetime import date, datetime, timedelta
+from typing import Any
 
 from django.contrib.postgres.constraints import ExclusionConstraint
 from django.contrib.postgres.fields import DateRangeField, RangeOperators
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -212,14 +217,30 @@ class SignatureOrigin(models.TextChoices):
     PAPER = "paper", "auf dem Papierformular (Notbetrieb)"
 
 
-class Signature(AppendOnlyModel):
-    """Gezeichnete Unterschrift als Strichliste [[[x, y], …], …]. Wird nur angehängt.
+def signature_digest(salt: str, signer_name: str, strokes: Any) -> str:
+    """SHA-256 über Salt, Name und Strichliste in fester JSON-Form.
 
+    Der zufällige Salt steht nur in der löschbaren Zeile. Ohne ihn lässt sich ein gelöschter
+    Name nicht durch Ausprobieren aus der Prüfsumme zurückgewinnen.
+    """
+    canonical = json.dumps(
+        {"salt": salt, "signer_name": signer_name, "strokes": strokes},
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+class Signature(AppendOnlyModel):
+    """Unterschrift zu einem Vorgang. Wird nur angehängt, enthält aber keine Personendaten.
+
+    Name und Strichliste stehen in `SignatureContent` und werden mit dem Entleiher gelöscht
+    (#63). Hier bleibt die Prüfsumme des Inhalts; sie belegt, dass der Vorgang unverändert ist.
     Die Bindung an den Hash des Ausleihdatensatzes folgt mit der Hash-Kette (#15).
     """
 
-    strokes = models.JSONField("Striche")
-    signer_name = models.CharField("Name der unterschreibenden Person", max_length=200)
+    content_sha256 = models.CharField("SHA-256 von Name und Unterschrift", max_length=64)
     origin = models.CharField(
         "Herkunft", max_length=10, choices=SignatureOrigin.choices, default=SignatureOrigin.APP
     )
@@ -233,10 +254,44 @@ class Signature(AppendOnlyModel):
                 condition=Q(origin__in=SignatureOrigin.values),
                 name="lending_signature_origin_valid",
             ),
+            models.CheckConstraint(
+                condition=Q(content_sha256__regex=r"^[0-9a-f]{64}$"),
+                name="lending_signature_sha256",
+            ),
         )
 
     def __str__(self) -> str:
-        return f"Unterschrift {self.signer_name} ({self.created_at:%d.%m.%Y})"
+        return f"Unterschrift vom {self.created_at:%d.%m.%Y}"
+
+    @classmethod
+    def record(
+        cls, strokes: Any, signer_name: str, origin: str = SignatureOrigin.APP
+    ) -> "Signature":
+        """Legt Unterschrift und löschbaren Inhalt gemeinsam an."""
+        salt = secrets.token_hex(16)
+        with transaction.atomic():
+            signature = cls.objects.create(
+                content_sha256=signature_digest(salt, signer_name, strokes), origin=origin
+            )
+            SignatureContent.objects.create(
+                signature=signature, salt=salt, signer_name=signer_name, strokes=strokes
+            )
+        return signature
+
+    @property
+    def stored_content(self) -> "SignatureContent | None":
+        """Name und Strichliste; `None`, wenn sie nach der Löschfrist gelöscht sind."""
+        try:
+            return self.content
+        except SignatureContent.DoesNotExist:
+            return None
+
+    def verify(self) -> bool | None:
+        """Passt der Inhalt zur Prüfsumme? `None`, wenn der Inhalt gelöscht ist."""
+        content = self.stored_content
+        if content is None:
+            return None
+        return content.digest() == self.content_sha256
 
     @property
     def is_legacy(self) -> bool:
@@ -245,6 +300,35 @@ class Signature(AppendOnlyModel):
     @property
     def is_paper(self) -> bool:
         return self.origin == SignatureOrigin.PAPER
+
+
+class SignatureContent(models.Model):
+    """Name und Strichliste [[[x, y], …], …] einer Unterschrift. Wird mit dem Entleiher gelöscht.
+
+    Nur hier stehen Personendaten der Unterschrift; die Tabelle ist darum nicht „nur anhängen“.
+    Eine Änderung fiele auf, weil der Inhalt dann nicht mehr zur Prüfsumme passt.
+    """
+
+    signature = models.OneToOneField(
+        Signature,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name="content",
+        verbose_name="Unterschrift",
+    )
+    salt = models.CharField("Salt", max_length=32)
+    signer_name = models.CharField("Name der unterschreibenden Person", max_length=200)
+    strokes = models.JSONField("Striche")
+
+    class Meta:
+        verbose_name = "Inhalt einer Unterschrift"
+        verbose_name_plural = "Inhalte von Unterschriften"
+
+    def __str__(self) -> str:
+        return self.signer_name
+
+    def digest(self) -> str:
+        return signature_digest(self.salt, self.signer_name, self.strokes)
 
 
 class LoanEventKind(models.TextChoices):
@@ -302,3 +386,63 @@ class LoanEvent(AppendOnlyModel):
 
     def __str__(self) -> str:
         return f"{self.get_kind_display()}: {self.loan}"
+
+
+class Reminder(AppendOnlyModel):
+    """Erinnerung bei Überfälligkeit, die per E-Mail rausging (#72). Kein Inhalt, keine Adresse."""
+
+    loan = models.ForeignKey(
+        Loan, on_delete=models.PROTECT, related_name="reminders", verbose_name="Ausleihe"
+    )
+    number = models.PositiveSmallIntegerField("Nummer")
+    sent_at = models.DateTimeField("gesendet am", default=timezone.now)
+
+    class Meta:
+        verbose_name = "Erinnerung"
+        verbose_name_plural = "Erinnerungen"
+        ordering = ("sent_at", "id")
+        constraints = (
+            models.UniqueConstraint(fields=["loan", "number"], name="lending_reminder_once"),
+            models.CheckConstraint(
+                condition=Q(number__gte=1, number__lte=3), name="lending_reminder_number"
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.number}. Erinnerung zu {self.loan}"
+
+
+class ReminderSwitch(AppendOnlyModel):
+    """Erinnerungen ein- oder ausschalten, für alle (`booking` leer) oder je Vorgang.
+
+    Es gilt der jüngste Eintrag; ohne Eintrag sind Erinnerungen an.
+    """
+
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.PROTECT,
+        related_name="reminder_switches",
+        null=True,
+        blank=True,
+        verbose_name="Ausleihvorgang",
+        help_text="Leer: gilt für alle.",
+    )
+    enabled = models.BooleanField("Erinnerungen an")
+    at = models.DateTimeField("Zeitpunkt", default=timezone.now)
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="durch",
+    )
+
+    class Meta:
+        verbose_name = "Schalter für Erinnerungen"
+        verbose_name_plural = "Schalter für Erinnerungen"
+        ordering = ("-at", "-id")
+
+    def __str__(self) -> str:
+        scope = f"Vorgang #{self.booking_id}" if self.booking_id else "alle"
+        return f"Erinnerungen {'an' if self.enabled else 'aus'} ({scope})"

@@ -27,6 +27,7 @@ from typing import Any
 import typst
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from accounts.models import User
@@ -37,6 +38,7 @@ from emergency.models import (
     FormKind,
     FormSheet,
     LoanForm,
+    LoanFormLoan,
     LoanFormPart,
     LoanFormResult,
     LockEntry,
@@ -216,6 +218,48 @@ def scan_path_for(digest: str) -> Path:
 
 def scan_path(form: PaperForm) -> Path:
     return scan_path_for(form.scan_sha256)
+
+
+def borrowers_of(paper: PaperForm) -> set[int]:
+    """Entleiher auf einem Formular: aus der Ausgabe und aus den zurückgenommenen Ausleihen."""
+    form = getattr(paper, "loan_form", None)
+    if form is None:
+        return set()
+    linked = LoanFormLoan.objects.filter(loan_form=form).values_list(
+        "loan__booking__borrower_id", flat=True
+    )
+    return {*linked, *([form.borrower_id] if form.borrower_id else [])}
+
+
+def erase_scans(borrower: Borrower, *, actor: User | None) -> None:
+    """Löscht die Scans der Ausleihformulare eines Entleihers; die Prüfsummen bleiben (#63).
+
+    Ein Scan kann mehrere Entleiher zeigen (Rückgabe für mehrere), und eine Datei mit gleichem
+    Inhalt kann zu mehreren Formularen gehören. Die Datei geht erst, wenn alle Entleiher darauf
+    gelöscht sind. Gelöscht wird nach dem Commit, damit ein abgebrochener Vorgang keine Scans
+    verliert.
+    """
+    require(actor, Right.MANAGE_USERS)
+    forms = PaperForm.objects.filter(
+        Q(loan_form__borrower=borrower) | Q(loan_form__loans__loan__booking__borrower=borrower)
+    )
+    digests = set(forms.values_list("scan_sha256", flat=True))
+    papers = PaperForm.objects.filter(scan_sha256__in=digests).select_related("loan_form")
+    on_forms = [(paper.scan_sha256, borrowers_of(paper)) for paper in papers]
+    others = set().union(*(ids for _, ids in on_forms)) - {borrower.pk}
+    remaining = set(
+        BorrowerContact.objects.filter(borrower_id__in=others).values_list("borrower_id", flat=True)
+    )
+    # Ein Formular ohne Entleiher (Sperrformular) oder mit noch vorhandenen Entleihern behält
+    # die Datei.
+    keep = {digest for digest, ids in on_forms if not ids or ids & remaining}
+    paths = [scan_path_for(digest) for digest in sorted(digests - keep)]
+
+    def delete() -> None:
+        for path in paths:
+            path.unlink(missing_ok=True)
+
+    transaction.on_commit(delete)
 
 
 def _store_scan(pdf: bytes) -> str:
@@ -532,7 +576,7 @@ def _conflicts(form: LoanForm) -> list[Loan]:
 
 
 def _paper_signature(name: str) -> Signature:
-    return Signature.objects.create(strokes=[], signer_name=name, origin=SignatureOrigin.PAPER)
+    return Signature.record([], name, SignatureOrigin.PAPER)
 
 
 def _return(loan: Loan, form: LoanForm, note: str, actor: User | None) -> None:
@@ -634,6 +678,7 @@ def _apply(form: LoanForm, actor: User | None, *, applied_by: User | None) -> Lo
                     comment=f"{form.lock_reason} – gesperrt bei der Rückgabe; {note}",
                     at=_moment(form.returned_on),
                 )
+    LoanFormLoan.objects.bulk_create(LoanFormLoan(loan_form=form, loan=loan) for loan in loans)
     return LoanFormResult.objects.create(loan_form=form, booking=booking, applied_by=applied_by)
 
 

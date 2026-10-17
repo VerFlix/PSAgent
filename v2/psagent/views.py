@@ -23,6 +23,7 @@ def home(request: HttpRequest) -> HttpResponse:
         {
             "may_manage_users": has_right(request.user, Right.MANAGE_USERS),
             "may_lend": has_right(request.user, Right.LEND),
+            "may_hold": has_right(request.user, Right.ERASURE_HOLD),
         },
     )
 

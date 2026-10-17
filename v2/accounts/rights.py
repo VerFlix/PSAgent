@@ -47,6 +47,8 @@ class Right(StrEnum):
     EXPORT_PERSONAL = "export_personal"
     INSPECT = "inspect"
     CLARIFY = "clarify"
+    ERASURE_HOLD = "erasure_hold"
+    REMINDERS = "reminders"
     MANAGE_USERS = "manage_users"
     MODIFY_SIGNED = "modify_signed"
 
@@ -146,6 +148,12 @@ RIGHTS: dict[Right, Rule] = {
         qualification=True,
     ),
     Right.CLARIFY: Rule("Klärungsliste nach dem Notbetrieb bearbeiten", Role.PPE_EXPERT),
+    Right.ERASURE_HOLD: Rule(
+        "Löschsperre für Entleiherdaten setzen und aufheben (mit Pflichtgrund)", Role.PPE_EXPERT
+    ),
+    Right.REMINDERS: Rule(
+        "E-Mail-Erinnerungen bei Überfälligkeit für alle ein- und ausschalten", Role.ADMIN
+    ),
     Right.MANAGE_USERS: Rule("Nutzer, Rollen, Sachkunde-Zertifikate verwalten", Role.ADMIN),
     Right.MODIFY_SIGNED: Rule("Signierte Einträge ändern oder löschen", None),
 }

@@ -21,6 +21,8 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 | Export mit Personendaten | ✓ | ✓ | – | – | – |
 | Prüfungsrunde, entsperren, aussondern, nächste Prüfung setzen | ✓, nur mit Sachkunde | ✓, nur mit Sachkunde | – | – | – |
 | Klärungsliste nach dem Notbetrieb bearbeiten | ✓ | ✓ | – | – | – |
+| Löschsperre für Entleiherdaten setzen und aufheben (mit Pflichtgrund) | ✓ | ✓ | – | – | – |
+| E-Mail-Erinnerungen bei Überfälligkeit für alle ein- und ausschalten | ✓ | – | – | – | – |
 | Nutzer, Rollen, Sachkunde-Zertifikate verwalten | ✓ | – | – | – | – |
 | Signierte Einträge ändern oder löschen | niemand | niemand | niemand | niemand | niemand |
 
@@ -62,7 +64,15 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 - Export der Teileliste (CSV/PDF) enthält keine Personendaten und ist für jede Rolle erlaubt.
   Die vollständige Sicherung (ZIP mit allen Daten) nur für Admin (Felix, 16.10.2026), ohne
   Zugangsdaten; jeder Abruf wird protokolliert.
-- Kontaktdaten nach Ablauf der Löschfrist löschen: nur Admin (oder ein Verwaltungsbefehl).
+- Personendaten eines Entleihers nach Ablauf der Löschfrist löschen (Kontaktdaten, Name und
+  Unterschrift, Scans seiner Ausleihformulare, #63): nur Admin (oder ein Verwaltungsbefehl).
+  Nie bei offener Ausleihe, offenem Klärungsfall oder Löschsperre.
+- E-Mail (#72, Felix, 17.10.2026): Quittungen sendet bei Ausgabe und Rückgabe, wer den Vorgang
+  erfasst. Nachsenden darf, wer die Kontaktdaten des Vorgangs sehen darf, oder wer den Vorgang
+  selbst erfasst hat, innerhalb von 24 Stunden. Erinnerungen für einen Vorgang schaltet ab
+  Verleiher ab; für alle nur Admin.
+- Löschsperre (Felix, 17.10.2026): Admin und PSA-Sachkundige, für einen konkreten Schadensfall
+  oder Rechtsstreit, mit Pflichtgrund; Setzen und Aufheben werden nur angehängt.
 - Eine Reservierung ausgeben, die jemand anderes angelegt hat, ist Verleihen, kein Ändern.
 - Teile übernommener Altdaten (ohne `angelegt von`) gelten für Verleiher nicht als eigene.
 - Vereinsgeräte festlegen und widerrufen gehört zu „Nutzer verwalten“ (nur Admin).

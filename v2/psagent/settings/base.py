@@ -60,6 +60,8 @@ INSTALLED_APPS = [
     "lending",
     "emergency",
     "legacy",
+    "privacy",
+    "mailer",
 ]
 
 # Eigenes Benutzermodell mit Rolle; muss vor der ersten Migration feststehen.
@@ -112,6 +114,26 @@ PSAGENT_ENROLLMENT_HOURS = 24
 PSAGENT_CLUB_NAME = env("PSAGENT_CLUB_NAME", "")
 # Adresse der App für die Links in QR-Etiketten (#14), z. B. https://psagent.<tailnet>.ts.net.
 PSAGENT_BASE_URL = env("PSAGENT_BASE_URL", "http://localhost:8000")
+# Löschfrist für Personendaten der Entleiher in Jahren nach Ende des Jahres der letzten
+# Aktivität (#63). Den Wert legt der Vorstand fest.
+# E-Mail (#72): im Betrieb über Microsoft 365 (mailer.graph), sonst in die Konsole. Absender ist
+# ein freigegebenes Postfach; Antworten gehen an PSAGENT_MAIL_REPLY_TO (z. B. Materialwart).
+MAILERS = {
+    "default": {
+        "BACKEND": env("PSAGENT_MAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+    }
+}
+DEFAULT_FROM_EMAIL = env("PSAGENT_MAIL_FROM", "psagent@example.org")
+PSAGENT_MAIL_REPLY_TO = env_list("PSAGENT_MAIL_REPLY_TO")
+PSAGENT_GRAPH_TENANT_ID = env("PSAGENT_GRAPH_TENANT_ID", "")
+PSAGENT_GRAPH_CLIENT_ID = env("PSAGENT_GRAPH_CLIENT_ID", "")
+# Datei mit dem privaten Schlüssel (PEM), außerhalb des Repos; dazu der SHA-1-Fingerabdruck des
+# Zertifikats, wie ihn Entra anzeigt.
+PSAGENT_GRAPH_CERT_PATH = env("PSAGENT_GRAPH_CERT_PATH", "")
+PSAGENT_GRAPH_CERT_THUMBPRINT = env("PSAGENT_GRAPH_CERT_THUMBPRINT", "")
+PSAGENT_RETENTION_YEARS = int(env("PSAGENT_RETENTION_YEARS", "3"))
+if PSAGENT_RETENTION_YEARS < 1:
+    raise ImproperlyConfigured("PSAGENT_RETENTION_YEARS muss mindestens 1 sein.")
 
 ROOT_URLCONF = "psagent.urls"
 
@@ -127,6 +149,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "emergency.context.offline_binder",
+                "privacy.context.retention",
             ],
         },
     },

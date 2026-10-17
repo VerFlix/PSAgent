@@ -8,7 +8,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.contrib import messages
-from django.http import FileResponse, HttpRequest, HttpResponse, HttpResponseNotModified
+from django.http import FileResponse, Http404, HttpRequest, HttpResponse, HttpResponseNotModified
 from django.http.response import HttpResponseBase
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -202,8 +202,11 @@ def clarifications(request: HttpRequest) -> HttpResponse:
 def scan(request: HttpRequest, pk: int) -> FileResponse:
     """Scan eines nacherfassten Formulars, im Browser angezeigt."""
     paper = get_object_or_404(PaperForm.objects.select_related("sheet"), pk=pk)
+    path = backfill.scan_path(paper)
+    if not path.exists():
+        raise Http404("Der Scan wurde nach Ablauf der Löschfrist gelöscht.")
     response = FileResponse(
-        backfill.scan_path(paper).open("rb"),
+        path.open("rb"),
         content_type="application/pdf",
         as_attachment=False,
         filename=f"formular-{paper.sheet.label}.pdf",

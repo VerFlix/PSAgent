@@ -1,3 +1,4 @@
-{% if event.signature.is_paper %}<span class="hint">Unterschrift auf dem Papierformular · {{ event.signature.signer_name }}</span>
-{% elif sig %}<svg class="signature-view" viewBox="{{ sig.viewbox }}" role="img" aria-label="Unterschrift {{ event.signature.signer_name }}">{% for path in sig.paths %}<path d="{{ path }}"/>{% endfor %}</svg>
-<span class="hint">{{ event.signature.signer_name }}{% if event.signature.is_legacy %} · {{ event.signature.get_origin_display }}{% endif %}</span>{% endif %}
+{% if event.signature and not content %}<span class="hint">Name und Unterschrift nach Ablauf der Löschfrist gelöscht · Prüfsumme {{ event.signature.content_sha256|truncatechars:13 }}</span>
+{% elif event.signature.is_paper %}<span class="hint">Unterschrift auf dem Papierformular · {{ content.signer_name }}</span>
+{% elif sig %}<svg class="signature-view" viewBox="{{ sig.viewbox }}" role="img" aria-label="Unterschrift {{ content.signer_name }}">{% for path in sig.paths %}<path d="{{ path }}"/>{% endfor %}</svg>
+<span class="hint">{{ content.signer_name }}{% if event.signature.is_legacy %} · {{ event.signature.get_origin_display }}{% endif %}</span>{% endif %}
