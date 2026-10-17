@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Ausgaben und Rückgaben nacherfassen{% endblock %}
+{% block content %}
+<h1>Ausgaben und Rückgaben nacherfassen</h1>
+<p>Formular „Ausgabe und Rückgabe“ aus dem Notbetrieb: Nummer, Scan und die Angaben vom Papier
+  mit den Daten vom Formular. Was auf Papier ausgegeben wurde, wird eingetragen, auch wenn laut
+  Stand etwas dagegen sprach; solche Fälle prüft ein PSA-Prüfer auf der Klärungsliste. Für Teile,
+  die schon vor dem Ausfall verliehen waren, nur den Rückgabe-Teil ausfüllen.</p>
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  <section class="card">
+    <h2>Formular und Scan</h2>
+    <label for="capture-number">Formularnummer (z. B. A-00007)</label>
+    <input id="capture-number" name="number" maxlength="20" required autocomplete="off"
+           value="{{ form.number.value|default:'' }}">
+    <label for="capture-file">Scan als PDF oder Fotos (JPEG, PNG)</label>
+    <input id="capture-file" type="file" name="scan" multiple accept="application/pdf,image/jpeg,image/png">
+    <label for="capture-camera">oder mit der Kamera aufnehmen</label>
+    <input id="capture-camera" type="file" name="scan" multiple accept="image/jpeg,image/png" capture="environment">
+  </section>
+  <section class="card">
+    <h2>Teile</h2>
+    {% include "emergency/_field.html" with field=fields.eis %}
+  </section>
+  <section class="card">
+    <h2>Ausgabe</h2>
+    {% include "emergency/_field.html" with field=fields.quick_check %}
+    {% include "emergency/_field.html" with field=fields.gal_provided %}
+    {% include "emergency/_field.html" with field=fields.issued_on %}
+    {% include "emergency/_field.html" with field=fields.planned_return %}
+    {% include "emergency/_field.html" with field=fields.borrower_name %}
+    {% include "emergency/_field.html" with field=fields.address %}
+    {% include "emergency/_field.html" with field=fields.phone %}
+    {% include "emergency/_field.html" with field=fields.email %}
+    {% include "emergency/_field.html" with field=fields.issued_by_name %}
+    <p class="hint">Den Entleiher erkennt PSAgent am genauen Namen; sonst wird er neu angelegt.</p>
+  </section>
+  <section class="card">
+    <h2>Rückgabe</h2>
+    {% include "emergency/_field.html" with field=fields.returned_on %}
+    {% include "emergency/_field.html" with field=fields.return_quick_check %}
+    {% include "emergency/_field.html" with field=fields.return_comment %}
+    {% include "emergency/_field.html" with field=fields.lock_reason %}
+    {% include "emergency/_field.html" with field=fields.received_by_name %}
+  </section>
+  <button type="submit" class="primary">Nacherfassen</button>
+</form>
+<p><a href="{% url 'emergency:index' %}">Zurück zum Notbetrieb</a></p>
+{% endblock %}

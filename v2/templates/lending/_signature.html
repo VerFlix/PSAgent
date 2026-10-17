@@ -1,2 +1,3 @@
-{% if sig %}<svg class="signature-view" viewBox="{{ sig.viewbox }}" role="img" aria-label="Unterschrift {{ event.signature.signer_name }}">{% for path in sig.paths %}<path d="{{ path }}"/>{% endfor %}</svg>
+{% if event.signature.is_paper %}<span class="hint">Unterschrift auf dem Papierformular · {{ event.signature.signer_name }}</span>
+{% elif sig %}<svg class="signature-view" viewBox="{{ sig.viewbox }}" role="img" aria-label="Unterschrift {{ event.signature.signer_name }}">{% for path in sig.paths %}<path d="{{ path }}"/>{% endfor %}</svg>
 <span class="hint">{{ event.signature.signer_name }}{% if event.signature.is_legacy %} · {{ event.signature.get_origin_display }}{% endif %}</span>{% endif %}

@@ -87,3 +87,10 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   trägt die erfassende Person und das Datum vom Formular. Die Klärungsliste („Klärungsliste
   nach dem Notbetrieb bearbeiten“) sehen und bearbeiten nur PSA-Sachkundige und Admin, laut
   Konzept „für PSA-Prüfer oder Admin“, ohne Sachkunde-Pflicht.
+- Ausgaben und Rückgaben nacherfassen (#52): ab Verleiher, wie Verleihen. Die Unterschriften
+  stehen auf dem Papier (Herkunft „auf dem Papierformular“, Scan am Formular). Eine
+  Doppelbuchung übernimmt nur, wer die Klärungsliste bearbeiten darf; dabei werden die
+  überschneidenden Reservierungen storniert (Recht „Reservierungen anderer ändern“).
+  Einen bekannten Entleiher (gleicher Name) verknüpft die Nacherfassung nur für Personen, die
+  Kontaktdaten ohnehin sehen dürfen; Verleiher legen immer einen neuen Entleiher an. Sonst gäbe
+  eine erfundene Ausgabe Einblick in fremde Kontaktdaten (wie bei Reservierungen ausgeschlossen).

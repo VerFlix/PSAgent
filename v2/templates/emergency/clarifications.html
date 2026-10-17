@@ -13,12 +13,20 @@
       <li class="case">
         <strong>{{ case.title }}</strong>{% if case.form %} · <a href="{% url 'emergency:scan' case.form.pk %}" target="_blank" rel="noopener">Scan</a>{% endif %}
         {% if case.detail %}<br><span class="hint">{{ case.detail }}</span>{% endif %}
+        {% if case.can_apply %}
+        <form method="post" action="{% url 'emergency:apply_loan_form' case.loan_form.pk %}">
+          {% csrf_token %}
+          <label for="apply-{{ forloop.counter }}">Begründung</label>
+          <input id="apply-{{ forloop.counter }}" name="note" maxlength="1000" required>
+          <button type="submit">Reservierung stornieren und Ausleihe übernehmen</button>
+        </form>
+        {% endif %}
         <form method="post">
           {% csrf_token %}
           <input type="hidden" name="key" value="{{ case.key }}">
           <label for="note-{{ forloop.counter }}">Klärung</label>
           <input id="note-{{ forloop.counter }}" name="note" maxlength="1000" required>
-          <button type="submit">Als geklärt vermerken</button>
+          <button type="submit">{% if case.key|slice:":8" == "ausgabe:" %}Ausgabe verwerfen und als geklärt vermerken{% else %}Als geklärt vermerken{% endif %}</button>
         </form>
       </li>
     {% endfor %}

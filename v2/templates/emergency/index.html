@@ -36,7 +36,7 @@
   <p>Ausgefüllte Formulare mit Scan und Originaldatum nacherfassen, möglichst innerhalb von 7 Tagen.</p>
   <ul class="plain">
     <li><a href="{% url 'emergency:backfill_locks' %}">Sperrungen nacherfassen</a></li>
-    <li>Ausgaben und Rückgaben nacherfassen: folgt in Kürze</li>
+    <li><a href="{% url 'emergency:backfill_loans' %}">Ausgaben und Rückgaben nacherfassen</a></li>
     <li>Prüfprotokolle: erfasst der PSA-Prüfer ab Phase 3</li>
     {% if may_clarify %}<li><a href="{% url 'emergency:clarifications' %}">Klärungsliste</a></li>{% endif %}
   </ul>
