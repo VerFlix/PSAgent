@@ -14,10 +14,21 @@ from django.urls import reverse
 from accounts.models import User
 from emergency import backfill
 from emergency.models import PaperForm
+from lending.models import Borrower
+from lending.services import create_borrower, lend
 from privacy.services import erase_borrower
-from tests.emergency.test_backfill_loans import SCAN, checkout, ei, make_part, printed, real_today
+from tests.emergency.test_backfill_loans import (
+    SCAN,
+    checkout,
+    days,
+    ei,
+    make_part,
+    printed,
+    real_today,
+    with_return,
+)
 from tests.helpers import make_inspector
-from tests.lending.conftest import MakePart
+from tests.lending.conftest import MakePart, checkout_kwargs
 
 __all__ = ["make_part", "real_today"]
 pytestmark = pytest.mark.django_db
@@ -74,3 +85,47 @@ def test_deleted_scan_is_not_found(
     response = client.get(reverse("emergency:scan", args=[form.pk]))
 
     assert response.status_code == 404
+
+
+def lent_before_outage(part: Any, name: str, lender: User) -> Borrower:
+    borrower = create_borrower(name, address="Teststraße 3", phone="0000 3")
+    lend(borrower, [part], days(-8), days(2), **checkout_kwargs(lender))
+    return borrower
+
+
+def return_only(number: str, parts: list[Any], actor: User) -> PaperForm:
+    data = with_return({"eis": [ei(part) for part in parts], "issued_on": None})
+    return backfill.capture_loan_form(number, [(SCAN, "scan.pdf")], data, actor=actor)
+
+
+def test_scan_of_return_only_form_is_deleted(
+    make_part: MakePart, lender: User, django_capture_on_commit_callbacks: Any
+) -> None:
+    """Auf einer reinen Rückgabe steht kein Entleiher im Formular, aber seine Unterschrift."""
+    printed()
+    part = make_part()
+    borrower = lent_before_outage(part, "Kim Vorher", lender)
+    form = return_only("A-00001", [part], lender)
+
+    with django_capture_on_commit_callbacks(execute=True):
+        erase_borrower(borrower, actor=None)
+
+    assert not backfill.scan_path(form).exists()
+
+
+def test_scan_with_two_borrowers_goes_with_the_last(
+    make_part: MakePart, lender: User, django_capture_on_commit_callbacks: Any
+) -> None:
+    printed()
+    first, second = make_part(), make_part()
+    kim = lent_before_outage(first, "Kim Vorher", lender)
+    kai = lent_before_outage(second, "Kai Vorher", lender)
+    form = return_only("A-00001", [first, second], lender)
+
+    with django_capture_on_commit_callbacks(execute=True):
+        erase_borrower(kim, actor=None)
+    assert backfill.scan_path(form).exists()
+
+    with django_capture_on_commit_callbacks(execute=True):
+        erase_borrower(kai, actor=None)
+    assert not backfill.scan_path(form).exists()
