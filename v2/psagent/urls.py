@@ -2,12 +2,15 @@
 
 from django.urls import include, path
 
+from inventory import views as inventory_views
 from psagent import views
 
 urlpatterns = [
     path("", views.home, name="home"),
     path("", include("accounts.urls")),
     path("teile/", include("inventory.urls")),
+    # Ziel der QR-Etiketten (#14); kurz, damit der QR-Code klein bleibt.
+    path("q/<path:ei>", inventory_views.scan_target, name="scan_target"),
     path("verleih/", include("lending.urls")),
     path("pruefung/", include("inspections.urls")),
     path("notbetrieb/", include("emergency.urls")),
