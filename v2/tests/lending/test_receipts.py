@@ -223,3 +223,77 @@ def test_viewer_cannot_send_receipts(
     )
 
     assert response.status_code == 403 and mail.outbox == []
+
+
+# --- Wer nachsenden darf ---
+
+
+def returned_by(actor: User, make_part: MakePart, borrower: Borrower) -> Booking:
+    from lending.services import return_loans
+    from tests.lending.conftest import return_kwargs
+
+    booking = lend(borrower, [make_part()], TODAY, TODAY + DAY, **checkout_kwargs(actor))
+    return_loans(list(booking.loans.all()), **return_kwargs(actor))
+    return booking
+
+
+def test_own_return_receipt_within_a_day(
+    lender_client: Client, make_part: MakePart, borrower: Borrower, lender: User
+) -> None:
+    booking = returned_by(lender, make_part, borrower)
+
+    page = lender_client.get(reverse("lending:booking_detail", args=[booking.pk])).content.decode()
+    lender_client.post(reverse("lending:booking_receipt", args=[booking.pk]), {"art": "rueckgabe"})
+
+    assert "Quittung erneut senden (Rückgabe)" in page
+    assert len(mail.outbox) == 1
+
+
+def test_other_lender_cannot_resend_after_return(
+    client: Client, make_part: MakePart, borrower: Borrower, lender: User
+) -> None:
+    """Verbotener Fall: Ohne Sicht auf die Kontaktdaten keine Mails an fremde Entleiher."""
+    from tests.helpers import make_inspector
+
+    booking = returned_by(lender, make_part, borrower)
+    client.force_login(make_inspector(role=Role.LENDER, qualified=False))
+
+    page = client.get(reverse("lending:booking_detail", args=[booking.pk])).content.decode()
+    response = client.post(
+        reverse("lending:booking_receipt", args=[booking.pk]), {"art": "rueckgabe"}
+    )
+
+    assert "Quittung erneut senden" not in page
+    assert response.status_code == 403 and mail.outbox == []
+
+
+def test_own_receipt_window_ends(
+    lender_client: Client,
+    make_part: MakePart,
+    borrower: Borrower,
+    lender: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datetime import timedelta
+
+    booking = returned_by(lender, make_part, borrower)
+    monkeypatch.setattr("lending.receipts.RESEND_WINDOW", timedelta(0))  # Frist abgelaufen
+
+    response = lender_client.post(
+        reverse("lending:booking_receipt", args=[booking.pk]), {"art": "rueckgabe"}
+    )
+
+    assert response.status_code == 403 and mail.outbox == []
+
+
+def test_ppe_expert_may_always_resend(
+    client: Client, make_part: MakePart, borrower: Borrower, lender: User
+) -> None:
+    from tests.helpers import make_inspector
+
+    booking = returned_by(lender, make_part, borrower)
+    client.force_login(make_inspector())
+
+    client.post(reverse("lending:booking_receipt", args=[booking.pk]), {"art": "rueckgabe"})
+
+    assert len(mail.outbox) == 1

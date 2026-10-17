@@ -14,6 +14,7 @@ from datetime import date
 from typing import Any
 
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Prefetch
 from django.http import HttpRequest, HttpResponse
@@ -359,16 +360,14 @@ def booking_detail(request: HttpRequest, pk: int) -> HttpResponse:
         "lent": [loan for loan in loans if loan.status == LoanStatus.LENT],
         "may_cancel": has_right(request.user, Right.CHANGE_OTHERS_RESERVATIONS, booking),
         "may_hold": has_right(request.user, Right.ERASURE_HOLD),
-        "receipts": sorted(
-            {
-                kind
-                for loan in loans
-                for event in loan.events.all()
-                for kind in ReceiptKind
-                if receipts.EVENT[kind] == event.kind
-            },
-            key=list(ReceiptKind).index,
-        ),
+        "receipts": [
+            kind
+            for kind in ReceiptKind
+            if any(
+                event.kind == receipts.EVENT[kind] for loan in loans for event in loan.events.all()
+            )
+            and receipts.may_resend(_actor(request), booking, kind)
+        ],
         "hold": ErasureHold.current(booking.borrower_id),
         "erased": Erasure.objects.filter(borrower=booking.borrower).exists(),
         "contact_known": BorrowerContact.objects.filter(borrower=booking.borrower).exists(),
@@ -492,8 +491,13 @@ def booking_receipt(request: HttpRequest, pk: int) -> HttpResponse:
         kind = ReceiptKind(request.POST.get("art", ""))
     except ValueError:
         messages.error(request, "Unbekannte Quittung.")
-    else:
-        messages.add_message(request, *_send_receipt(booking, kind))
+        return redirect("lending:booking_detail", pk=booking.pk)
+    if not receipts.may_resend(_actor(request), booking, kind):
+        raise PermissionDenied(
+            "Quittungen sendet nach, wer die Kontaktdaten sehen darf oder den Vorgang selbst "
+            "erfasst hat (24 Stunden)."
+        )
+    messages.add_message(request, *_send_receipt(booking, kind))
     return redirect("lending:booking_detail", pk=booking.pk)
 
 

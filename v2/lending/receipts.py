@@ -5,6 +5,7 @@ Unterschrift. Die Mail wird nicht gespeichert; fehlt sie, lässt sie sich erneut
 """
 
 import logging
+from datetime import timedelta
 from enum import StrEnum
 
 from django.conf import settings
@@ -12,6 +13,8 @@ from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 from django.utils import timezone
 
+from accounts.models import User
+from accounts.rights import Right, has_right
 from lending.models import Booking, BorrowerContact, LoanEvent, LoanEventKind
 from privacy.notice import retention_notice
 
@@ -28,6 +31,11 @@ EVENT = {
     ReceiptKind.RETURN: LoanEventKind.RETURNED,
 }
 TITLE = {ReceiptKind.CHECKOUT: "Ausgabe", ReceiptKind.RETURN: "Rückgabe"}
+
+
+# Wer die Kontaktdaten nicht (mehr) sehen darf, sendet nur die Quittung zu einem eigenen Vorgang
+# nach, und nur so lange.
+RESEND_WINDOW = timedelta(hours=24)
 
 
 class ReceiptError(RuntimeError):
@@ -77,6 +85,20 @@ def build(booking: Booking, kind: ReceiptKind) -> EmailMessage | None:
         body=render_to_string("mail/quittung.txt", context),
         to=[contact.email.strip()],
     )
+
+
+def may_resend(user: User, booking: Booking, kind: ReceiptKind) -> bool:
+    """Erneut senden darf, wer die Kontaktdaten des Vorgangs sehen darf, oder wer die Ausgabe
+    bzw. Rückgabe selbst erfasst hat, innerhalb von `RESEND_WINDOW`. Sonst ließen sich Mails an
+    beliebige Entleiher auslösen."""
+    if has_right(user, Right.VIEW_CONTACTS, booking):
+        return True
+    return LoanEvent.objects.filter(
+        loan__booking=booking,
+        kind=EVENT[kind],
+        actor=user,
+        at__gte=timezone.now() - RESEND_WINDOW,
+    ).exists()
 
 
 def send(booking: Booking, kind: ReceiptKind) -> str:
