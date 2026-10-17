@@ -21,6 +21,7 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 | Export mit Personendaten | ✓ | ✓ | – | – | – |
 | Prüfungsrunde, entsperren, aussondern, nächste Prüfung setzen | ✓, nur mit Sachkunde | ✓, nur mit Sachkunde | – | – | – |
 | Klärungsliste nach dem Notbetrieb bearbeiten | ✓ | ✓ | – | – | – |
+| Löschsperre für Entleiherdaten setzen und aufheben (mit Pflichtgrund) | ✓ | ✓ | – | – | – |
 | Nutzer, Rollen, Sachkunde-Zertifikate verwalten | ✓ | – | – | – | – |
 | Signierte Einträge ändern oder löschen | niemand | niemand | niemand | niemand | niemand |
 
@@ -64,6 +65,9 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   Zugangsdaten; jeder Abruf wird protokolliert.
 - Personendaten eines Entleihers nach Ablauf der Löschfrist löschen (Kontaktdaten, Name und
   Unterschrift, Scans seiner Ausleihformulare, #63): nur Admin (oder ein Verwaltungsbefehl).
+  Nie bei offener Ausleihe, offenem Klärungsfall oder Löschsperre.
+- Löschsperre (Felix, 17.10.2026): Admin und PSA-Sachkundige, für einen konkreten Schadensfall
+  oder Rechtsstreit, mit Pflichtgrund; Setzen und Aufheben werden nur angehängt.
 - Eine Reservierung ausgeben, die jemand anderes angelegt hat, ist Verleihen, kein Ändern.
 - Teile übernommener Altdaten (ohne `angelegt von`) gelten für Verleiher nicht als eigene.
 - Vereinsgeräte festlegen und widerrufen gehört zu „Nutzer verwalten“ (nur Admin).

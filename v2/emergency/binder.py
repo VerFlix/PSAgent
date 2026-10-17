@@ -31,6 +31,7 @@ from inventory.export import as_text
 from inventory.models import Component, Part, PartStatus
 from lending import services as lending
 from lending.models import Loan, LoanStatus
+from privacy.notice import retention_notice
 
 TEMPLATE = Path(settings.BASE_DIR) / "templates" / "typst" / "notfallmappe.typ"
 SHEETS_PER_BINDER = {FormKind.LOAN: 10, FormKind.LOCK: 5, FormKind.INSPECTION: 5}
@@ -141,6 +142,7 @@ def _create(actor: User | None) -> Binder:
     payload = {
         "stand": f"{timezone.localtime(created_at):%d.%m.%Y %H:%M}",
         "club": settings.PSAGENT_CLUB_NAME,
+        "notice": retention_notice(),
         "ranges": [
             [kind.label, f"{kind.value}-{values[0]:05d} bis {kind.value}-{values[-1]:05d}"]
             for kind, values in numbers.items()

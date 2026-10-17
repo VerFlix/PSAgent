@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Datenschutz und Löschfristen{% endblock %}
+{% block content %}
+<h1>Datenschutz und Löschfristen</h1>
+<p>Name, Kontaktdaten und Unterschrift eines Entleihers löscht der tägliche Lauf
+  {{ retention_years }} Jahre nach Ende des Jahres seiner letzten Ausleihe. Die Ausleihen bleiben
+  ohne Namen erhalten. Nie gelöscht wird bei offener Ausleihe, offenem Klärungsfall oder
+  Löschsperre.</p>
+
+<section class="card">
+  <h2>Löschsperren ({{ holds|length }})</h2>
+  <p class="hint">Nur für einen konkreten Schadensfall oder Rechtsstreit. Setzen in der
+    Detailansicht eines Ausleihvorgangs.</p>
+  {% if holds %}
+  <ul class="plain">
+    {% for hold in holds %}
+    <li class="case">
+      <strong>{{ hold.borrower.display_name }}</strong> (Entleiher #{{ hold.borrower_id }})
+      · seit {{ hold.at|date:"d.m.Y" }}{% if hold.actor %} · {{ hold.actor.get_full_name|default:hold.actor.username }}{% endif %}
+      <br><span class="hint">{{ hold.reason }}</span>
+      <form method="post" action="{% url 'privacy:release' hold.borrower_id %}">
+        {% csrf_token %}
+        <label for="release-{{ forloop.counter }}">Grund für das Aufheben</label>
+        <input id="release-{{ forloop.counter }}" name="reason" maxlength="1000" required>
+        <button type="submit">Löschsperre aufheben</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p>Keine Löschsperren.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Beim nächsten Lauf gelöscht ({{ due|length }})</h2>
+  {% if due %}
+  <ul class="plain">
+    {% for entry in due %}<li>{{ entry.borrower.display_name }} (Entleiher #{{ entry.borrower.pk }}) · letzte Aktivität {{ entry.last_activity|date:"Y" }}</li>{% endfor %}
+  </ul>
+  {% else %}<p>Niemand.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Zuletzt gelöscht</h2>
+  {% if erasures %}
+  <ul class="plain">
+    {% for erasure in erasures %}<li>Entleiher #{{ erasure.borrower_id }} · {{ erasure.at|date:"d.m.Y" }} · {% if erasure.by_deadline %}Löschfrist{% else %}von Hand{% if erasure.actor %} ({{ erasure.actor.get_full_name|default:erasure.actor.username }}){% endif %}{% endif %}</li>{% endfor %}
+  </ul>
+  {% else %}<p>Noch keine Löschungen.</p>{% endif %}
+</section>
+{% endblock %}

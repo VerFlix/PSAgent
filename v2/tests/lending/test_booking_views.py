@@ -171,8 +171,8 @@ def test_parity_15_borrower_of_other_booking_is_refused(
 def test_erased_contact_blocks_checkout(
     lender_client: Client, lender: User, make_part: MakePart, borrower: Borrower
 ) -> None:
-    booking = reserve(borrower, [make_part()], TODAY, TODAY + DAY, actor=lender)
     erase_borrower(borrower, actor=None)
+    booking = reserve(borrower, [make_part()], TODAY, TODAY + DAY, actor=lender)
 
     response = lender_client.get(
         reverse("lending:booking_checkout", args=[booking.pk]), follow=True

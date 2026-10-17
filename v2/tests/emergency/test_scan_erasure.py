@@ -5,17 +5,20 @@ der Prüfsumme des Scans erhalten; das Papieroriginal vernichtet der Verein (Run
 """
 
 import hashlib
+from datetime import date
 from typing import Any
 
 import pytest
 from django.test import Client
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import User
 from emergency import backfill
 from emergency.models import PaperForm
 from lending.models import Borrower
 from lending.services import create_borrower, lend
+from privacy import services
 from privacy.services import erase_borrower
 from tests.emergency.test_backfill_loans import (
     SCAN,
@@ -37,7 +40,7 @@ OTHER_SCAN = b"%PDF-1.4\n% anderer Scan, kuenstliche Testdaten\n%%EOF\n"
 
 def capture(number: str, scan: bytes, part: Any, actor: User, **extra: Any) -> PaperForm:
     return backfill.capture_loan_form(
-        number, [(scan, "scan.pdf")], checkout(ei(part), **extra), actor=actor
+        number, [(scan, "scan.pdf")], with_return(checkout(ei(part), **extra)), actor=actor
     )
 
 
@@ -129,3 +132,21 @@ def test_scan_with_two_borrowers_goes_with_the_last(
     with django_capture_on_commit_callbacks(execute=True):
         erase_borrower(kai, actor=None)
     assert not backfill.scan_path(form).exists()
+
+
+def test_open_clarification_blocks_erasure(make_part: MakePart, lender: User) -> None:
+    """Solange ein Formular auf der Klärungsliste steht, bleiben die Daten dafür erhalten."""
+    printed()
+    data = with_return(checkout(ei(make_part()), quick_check=False))
+    form = backfill.capture_loan_form("A-00001", [(SCAN, "scan.pdf")], data, actor=lender)
+    borrower = form.loan_form.borrower
+    assert borrower is not None
+    later = date(timezone.localdate().year + 4, 1, 1)
+
+    assert services.due_borrowers(later) == []
+    with pytest.raises(services.PrivacyError, match="Klärungsliste"):
+        erase_borrower(borrower, actor=None)
+
+    [case] = backfill.open_cases()
+    backfill.resolve(case.key, note="Kurzkontrolle mündlich bestätigt", actor=make_inspector())
+    assert [entry.borrower for entry in services.due_borrowers(later)] == [borrower]
