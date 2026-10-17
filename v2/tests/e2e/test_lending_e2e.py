@@ -67,7 +67,7 @@ def test_lend_with_signature_on_devices(device_page: Page, site: str) -> None:
     assert loan.status == LoanStatus.LENT
     signature = loan.events.get().signature
     assert signature is not None
-    strokes = signature.strokes
+    strokes = signature.content.strokes
     assert len(strokes) == 1 and len(strokes[0]) >= 10
 
 

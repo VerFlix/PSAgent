@@ -908,9 +908,7 @@ class LegacyImporter:
         if strokes is None:
             self.report.warnings.append(f"Ausleihe #{legacy_id}: Unterschrift nicht lesbar")
             return None
-        return Signature.objects.create(
-            strokes=strokes, signer_name=signer, origin=SignatureOrigin.LEGACY
-        )
+        return Signature.record(strokes, signer, SignatureOrigin.LEGACY)
 
     # --- Altberichte ---
 

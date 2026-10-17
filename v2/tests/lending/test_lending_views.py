@@ -210,7 +210,7 @@ def test_parity_14_checkout_lends_with_signature(
     assert loan.status == LoanStatus.LENT
     event = loan.events.get(kind=LoanEventKind.CHECKED_OUT)
     assert (event.actor, event.quick_check, event.gal_provided) == (lender, True, True)
-    assert event.signature is not None and event.signature.strokes == STROKES
+    assert event.signature is not None and event.signature.content.strokes == STROKES
     assert BorrowerContact.objects.get().email == "robin@example.org"
 
 
