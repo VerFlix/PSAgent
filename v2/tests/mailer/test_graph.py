@@ -53,7 +53,7 @@ class FakeResponse:
 @pytest.fixture
 def sent(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Iterator[list[tuple[Request, float]]]:
     key = tmp_path / "graph.pem"
-    key.write_text("-----BEGIN PRIVATE KEY-----\nkuenstlich\n-----END PRIVATE KEY-----\n")
+    key.write_text("Platzhalter statt Schlüssel")
     requests: list[tuple[Request, float]] = []
     app = FakeApp({"access_token": "token-kuenstlich"})
     monkeypatch.setattr(graph, "_application", lambda: app)
