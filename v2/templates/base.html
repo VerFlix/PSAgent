@@ -10,8 +10,10 @@
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   <script src="{% static 'vendor/htmx-2.0.4.min.js' %}" defer></script>
   <script src="{% static 'js/passkey.js' %}" defer></script>
+  {% if offline_binder_auto %}<script src="{% static 'js/offline.js' %}" defer></script>{% endif %}
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  {% if offline_binder_auto %}<span hidden data-offline-binder="auto" data-sw="{% url 'emergency:service_worker' %}" data-scope="{% url 'emergency:index' %}"></span>{% endif %}
   <header class="topbar">
     <a class="brand" href="{% url 'home' %}">PSAgent</a>
     {% if request.club_device %}<span class="badge" title="Kurze Sitzung, Abmelden nach jedem Vorgang">Vereinsgerät</span>{% endif %}

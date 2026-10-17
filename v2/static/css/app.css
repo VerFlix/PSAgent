@@ -125,3 +125,4 @@ ol.timeline li { padding: 0.25rem 0 0.75rem 0.75rem; overflow-wrap: anywhere; }
 ol.timeline li.timeline-pruefung { border-left: 3px solid #2b6cb0; margin-left: -3px; }
 ol.timeline li.timeline-verleih { border-left: 3px solid #b7791f; margin-left: -3px; }
 .pre-line { display: block; white-space: pre-line; }
+.break { overflow-wrap: anywhere; }
