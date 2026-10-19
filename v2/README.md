@@ -102,6 +102,10 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
   ein früher festgehaltener Kopf noch passt (Kürzen, Neuberechnen). Spalten dürfen zu solchen
   Tabellen hinzukommen; entfernen oder umbenennen bricht die Kette und braucht eine eigene
   Entscheidung.
+- Zeuge (#16, #17): `uv run python manage.py kettenkopf` hält täglich den Kettenkopf mit
+  Zeitstempel nach RFC 3161 fest, schreibt ihn als Datei für Unraid und mailt ihn an das
+  Zeugen-Postfach des Vorstands; `kette_pruefen` prüft die festgehaltenen Köpfe und Stempel mit.
+  Einrichtung: `docs/runbooks/kettenkopf.md`.
 
 Browser-Tests (Playwright, eigener CI-Job; bei Fehlern Screenshots und Traces als Artefakt):
 

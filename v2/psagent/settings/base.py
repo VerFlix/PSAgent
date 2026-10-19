@@ -131,6 +131,12 @@ PSAGENT_GRAPH_CLIENT_ID = env("PSAGENT_GRAPH_CLIENT_ID", "")
 # Zertifikats, wie ihn Entra anzeigt.
 PSAGENT_GRAPH_CERT_PATH = env("PSAGENT_GRAPH_CERT_PATH", "")
 PSAGENT_GRAPH_CERT_THUMBPRINT = env("PSAGENT_GRAPH_CERT_THUMBPRINT", "")
+# Zeuge der Hash-Kette (#16, #17): Zeitstempeldienst nach RFC 3161, seine Zertifizierungsstelle
+# (PEM-Datei; nur ihr wird vertraut), Zeugen-Postfach des Vorstands und Ablageordner für Unraid.
+PSAGENT_TSA_URL = env("PSAGENT_TSA_URL", "")
+PSAGENT_TSA_CA_PATH = env("PSAGENT_TSA_CA_PATH", "")
+PSAGENT_WITNESS_TO = env_list("PSAGENT_WITNESS_TO")
+PSAGENT_WITNESS_DIR = env("PSAGENT_WITNESS_DIR", "")
 PSAGENT_RETENTION_YEARS = int(env("PSAGENT_RETENTION_YEARS", "3"))
 if PSAGENT_RETENTION_YEARS < 1:
     raise ImproperlyConfigured("PSAGENT_RETENTION_YEARS muss mindestens 1 sein.")
