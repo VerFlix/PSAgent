@@ -240,3 +240,31 @@ class RoundEvent(AppendOnlyModel):
 
     def __str__(self) -> str:
         return f"{self.round}: {self.get_kind_display()}"
+
+
+class RoundPart(models.Model):
+    """Teil auf der Liste einer offenen Runde, noch ohne Ergebnis (Prüfmodus, Parität 7).
+
+    Arbeitsliste, kein Protokoll: Sie darf sich ändern (ein falsch gescanntes Teil fliegt wieder
+    raus). Was gilt, steht in den Ergebnissen; nur sie gehören zum Inhalt der Runde.
+    """
+
+    round = models.ForeignKey(
+        InspectionRound,
+        on_delete=models.CASCADE,
+        related_name="collected",
+        verbose_name="Prüfungsrunde",
+    )
+    part = models.ForeignKey(Part, on_delete=models.CASCADE, related_name="+", verbose_name="Teil")
+    added_at = models.DateTimeField("hinzugefügt am", default=timezone.now)
+
+    class Meta:
+        verbose_name = "Teil in der Runde"
+        verbose_name_plural = "Teile in der Runde"
+        ordering = ("added_at", "id")
+        constraints = (
+            models.UniqueConstraint(fields=["round", "part"], name="inspections_collected_once"),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.part} in {self.round}"

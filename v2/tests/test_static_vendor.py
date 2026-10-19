@@ -8,6 +8,7 @@ import pytest
 VENDOR = Path(__file__).resolve().parents[1] / "static" / "vendor"
 EXPECTED = {
     "htmx-2.0.4.min.js": "e209dda5c8235479f3166defc7750e1dbcd5a5c1808b7792fc2e6733768fb447",
+    "jsQR-1.4.0.js": "bc40c8a15196236b2314db0856f72ca0b49980cd5413b8c852a7349f5fee0859",
 }
 
 

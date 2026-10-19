@@ -102,6 +102,7 @@ def part_detail(request: HttpRequest, pk: int) -> HttpResponse:
         "may_lock": status not in (PartStatus.LOCKED, PartStatus.RETIRED)
         and has_right(user, Right.LOCK),
         "may_unlock": status == PartStatus.LOCKED and has_right(user, Right.INSPECT),
+        "may_inspect": status != PartStatus.RETIRED and has_right(user, Right.INSPECT),
         "may_edit": status != PartStatus.RETIRED and has_right(user, Right.MANAGE_PARTS),
         "may_usage_log": has_right(user, Right.MANAGE_PARTS),
         "may_ppe_documents": has_right(user, Right.PPE_DOCUMENTS),

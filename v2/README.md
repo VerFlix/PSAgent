@@ -106,6 +106,11 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
   Zeitstempel nach RFC 3161 fest, schreibt ihn als Datei für Unraid und mailt ihn an das
   Zeugen-Postfach des Vorstands; `kette_pruefen` prüft die festgehaltenen Köpfe und Stempel mit.
   Einrichtung: `docs/runbooks/kettenkopf.md`.
+- Prüfmodus (Parität 7, `/pruefung/runde/`, nur mit gültiger Sachkunde): Prüfungsrunde beginnen,
+  Teile per QR-Kamera (eingebauter `BarcodeDetector`, sonst jsQR lokal), Handscanner oder EI-Feld
+  sammeln, Ergebnis je Teil oder „alle übrigen in Ordnung“, abschließen. Je Person eine offene
+  Runde; die Teileseite bietet „Zur Prüfungsrunde hinzufügen“. Die Kamera braucht HTTPS. Auf die
+  Teile wirkt eine Runde erst mit der Signatur (#38).
 
 Browser-Tests (Playwright, eigener CI-Job; bei Fehlern Screenshots und Traces als Artefakt):
 

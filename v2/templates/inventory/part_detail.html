@@ -86,6 +86,17 @@
 </section>
 {% endif %}
 
+{% if may_inspect %}
+<section class="card">
+  <h2>Prüfung</h2>
+  <form method="post" action="{% url 'inspections:part_to_round' part.pk %}">
+    {% csrf_token %}
+    <button type="submit">Zur Prüfungsrunde hinzufügen</button>
+  </form>
+  <p class="hint">Setzt das Teil auf die Liste der eigenen offenen Prüfungsrunde; ohne offene Runde beginnt eine neue.</p>
+</section>
+{% endif %}
+
 <section class="card" id="zeitleiste">
   <h2>Zeitleiste</h2>
   {% if timeline %}
