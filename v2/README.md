@@ -95,6 +95,13 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
   Erinnerung bei Überfälligkeit: `uv run python manage.py erinnerungen` täglich per Timer (am Tag
   nach der geplanten Rückgabe, dann nach 7 und 14 Tagen, höchstens 3); abschaltbar für alle
   (Admin, Seite „Anstehende Ausleihen“) und je Vorgang (Detailansicht).
+- Hash-Kette (#15): Jede neue Zeile einer Tabelle, die nur angehängt wird, bekommt in derselben
+  Transaktion ein Kettenglied mit ihrer Prüfsumme und dem Hash des Vorgängers (`core/chain.py`).
+  `uv run python manage.py kette_pruefen` zeigt den Kettenkopf und meldet geänderte, gelöschte,
+  eingefügte oder vertauschte Vorgänge; mit `--kopf <Nummer>:<Hash>` (mehrfach) zusätzlich, ob
+  ein früher festgehaltener Kopf noch passt (Kürzen, Neuberechnen). Spalten dürfen zu solchen
+  Tabellen hinzukommen; entfernen oder umbenennen bricht die Kette und braucht eine eigene
+  Entscheidung.
 
 Browser-Tests (Playwright, eigener CI-Job; bei Fehlern Screenshots und Traces als Artefakt):
 
