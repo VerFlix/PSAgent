@@ -20,6 +20,20 @@
 </form>
 {% endif %}
 
+{% if lent or sent_reminders %}
+<section class="card">
+  <h2>Erinnerungen</h2>
+  {% for reminder in sent_reminders %}<p class="hint">{{ reminder.number }}. Erinnerung gesendet am {{ reminder.sent_at|date:"d.m.Y" }} · {{ reminder.loan.part.name }}</p>{% endfor %}
+  {% if lent %}
+  <form method="post" action="{% url 'lending:booking_reminders' booking.pk %}">
+    {% csrf_token %}
+    <input type="hidden" name="an" value="{{ reminders_on|yesno:"0,1" }}">
+    <button type="submit">{% if reminders_on %}Keine Erinnerungen für diesen Vorgang{% else %}Erinnerungen für diesen Vorgang wieder einschalten{% endif %}</button>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
+
 {% if may_hold %}{% include "privacy/_hold.html" %}{% endif %}
 
 {% for row in rows %}

@@ -92,6 +92,9 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
 - E-Mail (#72): Quittung nach Ausgabe und Rückgabe auf Wunsch (Häkchen), erneut sendbar in der
   Detailansicht. Im Betrieb über Microsoft 365 (Graph, Zertifikat, nur ein Postfach, keine Kopie
   in „Gesendete Elemente“), sonst in die Konsole. Einrichtung: `docs/runbooks/mail-m365.md`.
+  Erinnerung bei Überfälligkeit: `uv run python manage.py erinnerungen` täglich per Timer (am Tag
+  nach der geplanten Rückgabe, dann nach 7 und 14 Tagen, höchstens 3); abschaltbar für alle
+  (Admin, Seite „Anstehende Ausleihen“) und je Vorgang (Detailansicht).
 
 Browser-Tests (Playwright, eigener CI-Job; bei Fehlern Screenshots und Traces als Artefakt):
 

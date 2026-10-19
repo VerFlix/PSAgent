@@ -3,6 +3,11 @@
 {% block content %}
 <h1>Anstehende Ausleihen</h1>
 <p><a href="{% url 'lending:new_booking' %}">Reservieren oder ausgeben</a> · <a href="{% url 'lending:calendar' %}">Kalender</a></p>
+<p class="hint">E-Mail-Erinnerungen bei Überfälligkeit: {{ reminders_on|yesno:"an,aus" }}{% if may_switch_reminders %}
+  <form method="post" action="{% url 'lending:reminder_switch' %}" class="inline">{% csrf_token %}
+    <input type="hidden" name="an" value="{{ reminders_on|yesno:"0,1" }}">
+    <button type="submit" class="link">{% if reminders_on %}Erinnerungen für alle ausschalten{% else %}Erinnerungen für alle einschalten{% endif %}</button>
+  </form>{% endif %}</p>
 <section class="card">
   <h2>Überfällig ({{ overdue|length }})</h2>
   {% include "lending/_loan_rows.html" with loans=overdue empty="Nichts überfällig." %}

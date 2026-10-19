@@ -1,0 +1,14 @@
+{% autoescape off %}Hallo {{ name }},
+
+die Rückgabe aus dem Ausleihvorgang #{{ booking.pk }} ist überfällig:
+{% for item in loans %}
+- {{ item.loan.part.name }}{% if item.eis %} (EI {{ item.eis }}){% endif %}, zurück bis {{ item.loan.end|date:"d.m.Y" }}{% endfor %}
+
+Bitte die Teile so bald wie möglich zurückbringen{% if club %} ({{ club }}){% endif %}. Andere warten
+vielleicht darauf, und vor dem nächsten Verleih steht ggf. die PSA-Prüfung an. Hat sich etwas
+geändert oder sind die Teile schon zurück? Dann einfach auf diese E-Mail antworten.
+
+Das ist die {{ number }}. Erinnerung (von höchstens {{ maximum }}).
+
+{{ notice }}
+{% endautoescape %}

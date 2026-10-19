@@ -386,3 +386,63 @@ class LoanEvent(AppendOnlyModel):
 
     def __str__(self) -> str:
         return f"{self.get_kind_display()}: {self.loan}"
+
+
+class Reminder(AppendOnlyModel):
+    """Erinnerung bei Überfälligkeit, die per E-Mail rausging (#72). Kein Inhalt, keine Adresse."""
+
+    loan = models.ForeignKey(
+        Loan, on_delete=models.PROTECT, related_name="reminders", verbose_name="Ausleihe"
+    )
+    number = models.PositiveSmallIntegerField("Nummer")
+    sent_at = models.DateTimeField("gesendet am", default=timezone.now)
+
+    class Meta:
+        verbose_name = "Erinnerung"
+        verbose_name_plural = "Erinnerungen"
+        ordering = ("sent_at", "id")
+        constraints = (
+            models.UniqueConstraint(fields=["loan", "number"], name="lending_reminder_once"),
+            models.CheckConstraint(
+                condition=Q(number__gte=1, number__lte=3), name="lending_reminder_number"
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.number}. Erinnerung zu {self.loan}"
+
+
+class ReminderSwitch(AppendOnlyModel):
+    """Erinnerungen ein- oder ausschalten, für alle (`booking` leer) oder je Vorgang.
+
+    Es gilt der jüngste Eintrag; ohne Eintrag sind Erinnerungen an.
+    """
+
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.PROTECT,
+        related_name="reminder_switches",
+        null=True,
+        blank=True,
+        verbose_name="Ausleihvorgang",
+        help_text="Leer: gilt für alle.",
+    )
+    enabled = models.BooleanField("Erinnerungen an")
+    at = models.DateTimeField("Zeitpunkt", default=timezone.now)
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="durch",
+    )
+
+    class Meta:
+        verbose_name = "Schalter für Erinnerungen"
+        verbose_name_plural = "Schalter für Erinnerungen"
+        ordering = ("-at", "-id")
+
+    def __str__(self) -> str:
+        scope = f"Vorgang #{self.booking_id}" if self.booking_id else "alle"
+        return f"Erinnerungen {'an' if self.enabled else 'aus'} ({scope})"
