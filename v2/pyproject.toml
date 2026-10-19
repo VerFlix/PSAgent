@@ -13,6 +13,7 @@ dependencies = [
     "typst>=0.13",
     "segno>=1.6",
     "msal>=1.31",
+    "pyhanko>=0.25",
 ]
 
 [dependency-groups]
@@ -68,7 +69,7 @@ exclude = ["migrations/"]
 
 [[tool.mypy.overrides]]
 # django-axes liefert keine Typinformationen.
-module = ["axes.*", "msal.*"]
+module = ["axes.*", "msal.*", "asn1crypto.*"]
 ignore_missing_imports = true
 
 [tool.django-stubs]

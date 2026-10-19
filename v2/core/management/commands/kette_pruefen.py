@@ -1,4 +1,7 @@
-"""Verwaltungsbefehl: Hash-Kette prüfen (#15), optional gegen früher verschickte Kettenköpfe.
+"""Verwaltungsbefehl: Hash-Kette prüfen (#15), auch gegen festgehaltene und verschickte Köpfe.
+
+Die täglich festgehaltenen Köpfe (`WitnessHead`) und ihre Zeitstempel prüft der Befehl immer
+mit; Köpfe aus den Zeugen-Mails lassen sich mit `--kopf` zusätzlich angeben.
 
 Die Meldungen nennen nur Tabellen und Nummern, keine Inhalte.
 """
@@ -7,7 +10,7 @@ from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 
-from core import chain
+from core import chain, witness
 
 
 class Command(BaseCommand):
@@ -29,7 +32,7 @@ class Command(BaseCommand):
             raise CommandError(str(error)) from error
         current = chain.head()
         self.stdout.write(f"Kettenkopf: {current}" if current else "Die Kette ist leer.")
-        problems = chain.verify(known)
+        problems = chain.verify([*known, *witness.known_heads()]) + witness.verify()
         if problems:
             for problem in problems:
                 self.stderr.write(f"  {problem}")
