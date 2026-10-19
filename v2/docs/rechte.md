@@ -62,7 +62,8 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 - Export der Teileliste (CSV/PDF) enthält keine Personendaten und ist für jede Rolle erlaubt.
   Die vollständige Sicherung (ZIP mit allen Daten) nur für Admin (Felix, 16.10.2026), ohne
   Zugangsdaten; jeder Abruf wird protokolliert.
-- Kontaktdaten nach Ablauf der Löschfrist löschen: nur Admin (oder ein Verwaltungsbefehl).
+- Personendaten eines Entleihers nach Ablauf der Löschfrist löschen (Kontaktdaten, Name und
+  Unterschrift, Scans seiner Ausleihformulare, #63): nur Admin (oder ein Verwaltungsbefehl).
 - Eine Reservierung ausgeben, die jemand anderes angelegt hat, ist Verleihen, kein Ändern.
 - Teile übernommener Altdaten (ohne `angelegt von`) gelten für Verleiher nicht als eigene.
 - Vereinsgeräte festlegen und widerrufen gehört zu „Nutzer verwalten“ (nur Admin).

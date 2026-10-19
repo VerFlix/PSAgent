@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "lending",
     "emergency",
     "legacy",
+    "privacy",
 ]
 
 # Eigenes Benutzermodell mit Rolle; muss vor der ersten Migration feststehen.
