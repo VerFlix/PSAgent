@@ -1,0 +1,40 @@
+<section id="runde" class="card">
+  <h2>{{ round }}</h2>
+  {% if messages %}<ul class="messages" role="status">{% for message in messages %}<li class="message {{ message.tags }}">{{ message }}</li>{% endfor %}</ul>{% endif %}
+
+  <h3>Noch ohne Ergebnis ({{ pending|length }})</h3>
+  {% for part in pending %}
+  <article class="round-part">
+    <p><strong>{{ part.name }}</strong> <span class="hint">EI {% for component in part.components.all %}{{ component.ei }}{% if not forloop.last %}, {% endif %}{% endfor %}</span></p>
+    {% include "inspections/_result_form.html" with result=None %}
+    <form method="post" action="{% url 'inspections:round_drop' round.pk part.pk %}" hx-post="{% url 'inspections:round_drop' round.pk part.pk %}" hx-target="#runde" hx-swap="outerHTML">
+      {% csrf_token %}
+      <button type="submit" class="link">Von der Liste nehmen</button>
+    </form>
+  </article>
+  {% empty %}
+  <p class="hint">Keine Teile ohne Ergebnis. Weitere Teile scannen oder die EI eingeben.</p>
+  {% endfor %}
+
+
+  <h3>Erfasst ({{ results|length }})</h3>
+  {% if results %}
+  <div class="table-scroll"><table class="list">
+    <thead><tr><th>Teil</th><th>Ergebnis</th><th>Nächste Prüfung</th><th>Kommentar</th></tr></thead>
+    <tbody>
+    {% for result in results %}
+      <tr>
+        <td>{{ result.part.name }}</td>
+        <td><span class="status status-{{ result.outcome }}">{{ result.get_outcome_display }}</span>{% if result.corrects %} <span class="hint">(geändert)</span>{% endif %}</td>
+        <td>{{ result.next_due|date:"d.m.Y"|default:"–" }}</td>
+        <td>{{ result.comment|default:"–" }}
+          <details><summary>Ändern</summary>{% include "inspections/_result_form.html" with part=result.part %}</details>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <p class="hint">Noch keine Ergebnisse.</p>
+  {% endif %}
+</section>

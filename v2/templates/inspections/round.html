@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Prüfmodus{% endblock %}
+{% block content %}
+<h1>Prüfmodus</h1>
+{% if round %}
+<section class="card">
+  <h2>Teil hinzufügen</h2>
+  <form id="scan-form" method="post" action="{% url 'inspections:round_scan' round.pk %}" hx-post="{% url 'inspections:round_scan' round.pk %}" hx-target="#runde" hx-swap="outerHTML">
+    {% csrf_token %}
+    <label for="scan-ei">EI (tippen, Handscanner oder Kamera)</label>
+    <input id="scan-ei" name="ei" autocomplete="off" autofocus required>
+    <button type="submit" class="primary">Hinzufügen</button>
+  </form>
+  <p>
+    <button type="button" id="camera-start">Kamera starten</button>
+    <button type="button" id="camera-stop" hidden>Kamera beenden</button>
+  </p>
+  <p id="camera-status" class="hint" role="status"></p>
+  <video id="camera" class="camera" hidden muted playsinline></video>
+</section>
+
+{% include "inspections/_round.html" %}
+
+<section class="card">
+  <h2>Abschließen</h2>
+  <p class="hint">Nach dem Abschluss ändert sich die Runde nicht mehr. Auf die Teile (Freigabe, Sperre, Aussonderung, nächste Prüfung) wirkt sie erst mit der Signatur.</p>
+  <form method="post" action="{% url 'inspections:round_close' round.pk %}">
+    {% csrf_token %}
+    <button type="submit" class="primary">Runde abschließen</button>
+  </form>
+  <details>
+    <summary>Runde abbrechen</summary>
+    <form method="post" action="{% url 'inspections:round_cancel' round.pk %}">
+      {% csrf_token %}
+      <label for="cancel-comment">Grund</label>
+      <input id="cancel-comment" name="comment" maxlength="1000" required>
+      <button type="submit" class="danger">Abbrechen</button>
+    </form>
+  </details>
+</section>
+<script src="{% static 'vendor/jsQR-1.4.0.js' %}" defer></script>
+<script src="{% static 'js/pruefmodus.js' %}" defer></script>
+{% else %}
+<section class="card">
+  <p>Keine offene Prüfungsrunde.</p>
+  <form method="post" action="{% url 'inspections:round_start' %}">
+    {% csrf_token %}
+    <button type="submit" class="primary">Prüfungsrunde beginnen</button>
+  </form>
+</section>
+{% if unsigned %}
+<section class="card">
+  <h2>Abgeschlossen, noch nicht signiert</h2>
+  <p class="hint">Diese Runden wirken erst mit der Signatur auf die Teile.</p>
+  <ul class="plain">{% for closed in unsigned %}<li>{{ closed }} · {{ closed.results.count }} Ergebnis(se)</li>{% endfor %}</ul>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

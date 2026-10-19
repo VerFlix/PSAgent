@@ -15,7 +15,7 @@ from inspections.services import (
     start_round,
 )
 from inventory.models import PartStatus
-from tests.helpers import signed_inspection
+from tests.helpers import make_inspector, signed_inspection
 from tests.inspections.conftest import MakePart, in_days
 
 
@@ -116,7 +116,8 @@ def test_correction_of_open_round_stays_in_it(make_part: MakePart, inspector: Us
             Outcome.PASSED,
             actor=inspector,
             next_due=in_days(30),
-            round_=start_round(actor=inspector),
+            # je Person nur eine offene Runde; die zweite gehört jemand anderem
+            round_=start_round(actor=make_inspector()),
         )
 
 

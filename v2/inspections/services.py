@@ -34,9 +34,10 @@ from inspections.models import (
     Outcome,
     RoundEvent,
     RoundEventKind,
+    RoundPart,
     RoundState,
 )
-from inventory.models import EventKind, Part
+from inventory.models import Component, EventKind, Part, normalize_ei
 from inventory.services import record_event
 
 
@@ -124,7 +125,90 @@ def start_round(
     require(actor, Right.INSPECT)
     if legacy_report_id is not None:
         raise InspectionError("Ein Prüfbericht des Altsystems wird nur übernommen.")
-    return InspectionRound.objects.create(inspector=actor, started_at=at or timezone.now())
+    with transaction.atomic():
+        # Je Sachkundigem eine offene Runde; die Sperre reiht gleichzeitige Starts ein.
+        User.objects.select_for_update().filter(pk=actor.pk).first()
+        if open_round(actor) is not None:
+            raise InspectionError(
+                "Es gibt bereits eine offene Prüfungsrunde; bitte abschließen oder abbrechen."
+            )
+        return InspectionRound.objects.create(inspector=actor, started_at=at or timezone.now())
+
+
+def open_round(actor: User) -> InspectionRound | None:
+    """Die offene Runde der sachkundigen Person (ohne Abschluss, Signatur oder Abbruch)."""
+    return (
+        InspectionRound.objects.filter(inspector=actor, events__isnull=True)
+        .order_by("-started_at", "-id")
+        .first()
+    )
+
+
+# --- Prüfmodus: Teile sammeln (Parität 7) ---
+
+
+def find_part(ei: str) -> Part:
+    """Teil zur EI (ohne Groß-/Kleinschreibung und Leerzeichen); wie das Ziel des QR-Codes."""
+    component = Component.objects.select_related("part").filter(ei_key=normalize_ei(ei)).first()
+    if component is None:
+        raise InspectionError(f"EI „{ei.strip()}“ ist unbekannt.")
+    if component.part.is_retired():
+        raise InspectionError(f"{component.part} ist ausgesondert.")
+    return component.part
+
+
+@transaction.atomic
+def collect(round_: InspectionRound, part: Part, *, actor: User | None) -> RoundPart:
+    """Setzt ein Teil auf die Liste der offenen Runde; doppelt gescannt bleibt es einmal."""
+    round_ = _lock(round_)
+    _require_inspector(round_, actor)
+    _require_state(round_, RoundState.OPEN)
+    if part.is_retired():
+        raise InspectionError(f"{part} ist ausgesondert.")
+    entry, _ = RoundPart.objects.get_or_create(round=round_, part=part)
+    return entry
+
+
+def collect_by_ei(round_: InspectionRound, ei: str, *, actor: User | None) -> Part:
+    part = find_part(ei)
+    collect(round_, part, actor=actor)
+    return part
+
+
+@transaction.atomic
+def drop(round_: InspectionRound, part: Part, *, actor: User | None) -> None:
+    """Nimmt ein falsch gescanntes Teil wieder von der Liste, solange es kein Ergebnis hat."""
+    round_ = _lock(round_)
+    _require_inspector(round_, actor)
+    _require_state(round_, RoundState.OPEN)
+    if round_.results.filter(part=part).exists():
+        raise InspectionError(f"{part} hat schon ein Ergebnis; bitte das Ergebnis ändern.")
+    RoundPart.objects.filter(round=round_, part=part).delete()
+
+
+def pending_parts(round_: InspectionRound) -> list[Part]:
+    """Teile auf der Liste, die noch kein Ergebnis haben, in der Reihenfolge des Scans."""
+    done = round_.results.values("part_id")
+    return [
+        entry.part for entry in round_.collected.exclude(part_id__in=done).select_related("part")
+    ]
+
+
+@transaction.atomic
+def set_result(
+    round_: InspectionRound,
+    part: Part,
+    outcome: str,
+    *,
+    actor: User | None,
+    comment: str = "",
+    next_due: date | None = None,
+) -> InspectionResult:
+    """Ergebnis im Prüfmodus: erstmals erfassen oder, falls schon vorhanden, korrigieren."""
+    current = round_.current_results().filter(part=part).first()
+    if current is None:
+        return record_result(round_, part, outcome, actor=actor, comment=comment, next_due=next_due)
+    return correct_result(current, outcome, actor=actor, comment=comment, next_due=next_due)
 
 
 @transaction.atomic
@@ -146,6 +230,7 @@ def record_result(
             f"{part} ist in {round_} bereits erfasst; Änderungen sind Korrekturen."
         )
     checked = _validate(part, outcome, comment, next_due, actor=actor)
+    RoundPart.objects.get_or_create(round=round_, part=part)
     return InspectionResult.objects.create(
         round=round_,
         part=part,
@@ -254,6 +339,10 @@ def close_round(round_: InspectionRound, *, actor: User | None) -> RoundEvent:
     _require_state(round_, RoundState.OPEN)
     if not round_.results.exists():
         raise InspectionError(f"{round_} enthält keine Ergebnisse.")
+    if pending := pending_parts(round_):
+        raise InspectionError(
+            f"{len(pending)} Teil(e) ohne Ergebnis: bitte erfassen oder von der Liste nehmen."
+        )
     return RoundEvent.objects.create(
         round=round_,
         kind=RoundEventKind.CLOSED,

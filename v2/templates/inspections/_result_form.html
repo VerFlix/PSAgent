@@ -1,0 +1,17 @@
+<form method="post" action="{% url 'inspections:round_result' round.pk part.pk %}" hx-post="{% url 'inspections:round_result' round.pk part.pk %}" hx-target="#runde" hx-swap="outerHTML" class="result-form">
+  {% csrf_token %}
+  <fieldset>
+    <legend>Ergebnis für {{ part.name }}</legend>
+    {% for value, label in outcomes %}
+    <label class="check"><input type="radio" name="outcome" value="{{ value }}" required{% if result and result.outcome == value %} checked{% endif %}> {{ label }}</label>
+    {% endfor %}
+  </fieldset>
+  <label for="due-{{ part.pk }}{% if result %}-c{% endif %}">Nächste Prüfung (nicht bei „aussondern“)</label>
+  <input id="due-{{ part.pk }}{% if result %}-c{% endif %}" type="date" name="next_due" value="{% if result and result.next_due %}{{ result.next_due|date:'Y-m-d' }}{% else %}{{ suggestion|date:'Y-m-d' }}{% endif %}">
+  <button type="button" data-set-date="{{ suggestion_short|date:'Y-m-d' }}">+6 Monate</button>
+  <button type="button" data-set-date="{{ suggestion|date:'Y-m-d' }}">+1 Jahr</button>
+  <label for="comment-{{ part.pk }}{% if result %}-c{% endif %}">Kommentar (Pflicht bei Mangel und Aussondern)</label>
+  <input id="comment-{{ part.pk }}{% if result %}-c{% endif %}" name="comment" maxlength="2000" value="{{ result.comment|default:'' }}">
+  <p class="hint">{{ no_names }}</p>
+  <button type="submit" class="primary">Speichern</button>
+</form>
