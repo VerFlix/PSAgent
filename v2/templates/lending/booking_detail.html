@@ -13,6 +13,13 @@
 </p>
 {% endif %}
 
+{% if receipts and contact_known %}
+<form method="post" action="{% url 'lending:booking_receipt' booking.pk %}" class="inline">
+  {% csrf_token %}
+  {% for kind in receipts %}<button type="submit" name="art" value="{{ kind.value }}">Quittung erneut senden ({% if kind.value == "ausgabe" %}Ausgabe{% else %}Rückgabe{% endif %})</button> {% endfor %}
+</form>
+{% endif %}
+
 {% if may_hold %}{% include "privacy/_hold.html" %}{% endif %}
 
 {% for row in rows %}

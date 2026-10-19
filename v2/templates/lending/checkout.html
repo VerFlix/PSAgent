@@ -22,6 +22,7 @@
   {% for error in checkout.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
   <label class="check">{{ checkout.quick_check }} {{ checkout.quick_check.label }}</label>
   <label class="check">{{ checkout.gal_provided }} {{ checkout.gal_provided.label }}</label>
+  <label class="check">{{ checkout.receipt }} {{ checkout.receipt.label }}</label>
   {% with field=checkout.signer_name %}{% include "inventory/_field.html" %}{% endwith %}
   {% include "privacy/_notice.html" %}
   <p id="signature-label">Unterschrift</p>
