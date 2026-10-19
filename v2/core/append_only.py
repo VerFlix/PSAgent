@@ -7,14 +7,16 @@ Zwei Schichten:
   Migrationsoperation `AppendOnly` hängt sie an die Tabelle eines Modells.
 - In Django geben `AppendOnlyModel` und sein QuerySet schon vorher eine klare Fehlermeldung.
 
-Korrekturen sind neue Einträge mit Verweis auf den alten. TRUNCATE blockiert der Trigger
+Korrekturen sind neue Einträge mit Verweis auf den alten. Jede neue Zeile bekommt in derselben
+Transaktion ein Glied der Hash-Kette (`core/chain.py`, #15). TRUNCATE blockiert der Trigger
 nicht, weil die Testumgebung Tabellen damit leert. Im Betrieb entzieht die Rechtevergabe des
 Datenbanknutzers TRUNCATE (Einrichtung des Pi, Phase 4).
 """
 
+from collections.abc import Iterable
 from typing import Any, ClassVar, TypeVar
 
-from django.db import IntegrityError, models
+from django.db import IntegrityError, models, transaction
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.db.migrations.operations.base import Operation
 from django.db.migrations.state import ProjectState
@@ -36,7 +38,19 @@ def _message(model: type[models.Model], action: str) -> str:
 
 
 class AppendOnlyQuerySet(models.QuerySet[_M]):
-    """QuerySet ohne update() und delete()."""
+    """QuerySet ohne update() und delete(); bulk_create() verkettet jede Zeile (#15)."""
+
+    def bulk_create(self, objs: Iterable[_M], *args: Any, **kwargs: Any) -> list[_M]:
+        if kwargs.get("ignore_conflicts") or kwargs.get("update_conflicts"):
+            raise AppendOnlyError(_message(self.model, "Einfügen mit Konfliktregel"))
+        with transaction.atomic(savepoint=False):
+            created = super().bulk_create(objs, *args, **kwargs)
+            if getattr(self.model, "chained", True):
+                from core import chain
+
+                for obj in created:
+                    chain.link(obj)
+        return created
 
     def update(self, **kwargs: Any) -> int:
         raise AppendOnlyError(_message(self.model, "Ändern"))
@@ -53,6 +67,8 @@ class AppendOnlyModel(models.Model):
     """
 
     objects: ClassVar[models.Manager[Any]] = AppendOnlyQuerySet.as_manager()
+    # Jede neue Zeile bekommt ein Glied der Hash-Kette (core/chain.py).
+    chained: ClassVar[bool] = True
 
     class Meta:
         abstract = True
@@ -60,7 +76,13 @@ class AppendOnlyModel(models.Model):
     def save(self, *args: Any, **kwargs: Any) -> None:
         if not self._state.adding:
             raise AppendOnlyError(_message(type(self), "Ändern"))
-        super().save(*args, **kwargs)
+        # Ohne eigenen Savepoint: Scheitert das Kettenglied, scheitert der ganze Vorgang.
+        with transaction.atomic(savepoint=False):
+            super().save(*args, **kwargs)
+            if self.chained:
+                from core import chain
+
+                chain.link(self)
 
     def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
         raise AppendOnlyError(_message(type(self), "Löschen"))
