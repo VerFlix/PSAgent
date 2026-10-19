@@ -82,8 +82,8 @@ def test_parity_7_results_and_close(
     expert_client: Client, inspector: User, make_part: MakePart
 ) -> None:
     round_ = services.start_round(actor=inspector)
-    defect, *rest = make_part(), make_part(), make_part()
-    for part in (defect, *rest):
+    defect, ok = make_part(), make_part()
+    for part in (defect, ok):
         services.collect(round_, part, actor=inspector)
 
     expert_client.post(
@@ -92,17 +92,39 @@ def test_parity_7_results_and_close(
         headers=HTMX,
     )
     response = expert_client.post(
-        reverse("inspections:round_pass_remaining", args=[round_.pk]),
-        {"next_due": in_days(365).isoformat()},
+        reverse("inspections:round_result", args=[round_.pk, ok.pk]),
+        {"outcome": Outcome.PASSED, "next_due": in_days(365).isoformat()},
         headers=HTMX,
     )
-    assert "2 Teil(e) in Ordnung." in response.content.decode()
+    assert "Erfasst (2)" in response.content.decode()
 
     response = expert_client.post(reverse("inspections:round_close", args=[round_.pk]), follow=True)
 
     assert round_.state() == RoundState.CLOSED
     page = response.content.decode()
     assert "sobald sie signiert ist" in page and "Abgeschlossen, noch nicht signiert" in page
+
+
+def test_parity_7_each_part_needs_its_own_choice(
+    expert_client: Client, inspector: User, make_part: MakePart
+) -> None:
+    """Festlegung: kein Sammelknopf und kein vorausgewähltes Ergebnis; ohne Wahl kein Ergebnis."""
+    round_ = services.start_round(actor=inspector)
+    first, second = make_part(), make_part()
+    for part in (first, second):
+        services.collect(round_, part, actor=inspector)
+
+    page = expert_client.get(reverse("inspections:round_mode")).content.decode()
+    response = expert_client.post(
+        reverse("inspections:round_result", args=[round_.pk, first.pk]),
+        {"next_due": in_days(365).isoformat()},
+        headers=HTMX,
+    )
+
+    assert "übrigen" not in page and " checked" not in page
+    assert page.count('name="outcome"') == 2 * len(Outcome.choices)
+    assert "Bitte Ergebnis und gültiges Datum angeben" in response.content.decode()
+    assert not round_.results.exists()
 
 
 def test_retire_ignores_next_due(

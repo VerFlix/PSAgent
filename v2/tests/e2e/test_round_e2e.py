@@ -52,8 +52,12 @@ def test_parity_7_round_on_devices(device_page: Page, site: str) -> None:
     first.get_by_role("button", name="Speichern").click()
     expect(page.get_by_role("heading", name="Erfasst (1)")).to_be_visible()
 
-    page.locator("article.round-part").first.get_by_role("button", name="+6 Monate").click()
-    page.locator("article.round-part").first.get_by_role("button", name="Speichern").click()
+    second = page.locator("article.round-part").first
+    second.get_by_role("button", name="Speichern").click()  # ohne Wahl: Browser hält an
+    expect(page.get_by_role("heading", name="Erfasst (1)")).to_be_visible()
+    second.get_by_label("in Ordnung").check()
+    second.get_by_role("button", name="+6 Monate").click()
+    second.get_by_role("button", name="Speichern").click()
     expect(page.get_by_role("heading", name="Erfasst (2)")).to_be_visible()
     assert_fits_width(page)
 

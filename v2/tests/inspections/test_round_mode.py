@@ -3,8 +3,8 @@
 Festlegungen (Felix, 19.10.2026):
 
 - Je Sachkundigem höchstens eine offene Runde; der Prüfmodus setzt sie fort.
-- Gescannte Teile kommen zuerst in die Liste der Runde; Ergebnisse folgen je Teil oder für
-  alle übrigen auf einmal („in Ordnung“, nächste Prüfung).
+- Gescannte Teile kommen zuerst in die Liste der Runde. Jedes Teil wird einzeln geprüft und
+  einzeln bestätigt; eine Sammelbestätigung („alle übrigen in Ordnung“) gibt es nicht.
 - Abgeschlossene Runden wirken erst mit der Signatur (#38).
 """
 
@@ -124,20 +124,19 @@ def test_parity_7_result_moves_part_out_of_pending(inspector: User, make_part: M
     assert list(services.pending_parts(round_)) == [second]
 
 
-def test_parity_7_all_remaining_passed(inspector: User, make_part: MakePart) -> None:
+def test_parity_7_no_bulk_approval(inspector: User, make_part: MakePart) -> None:
+    """Festlegung: Jedes Teil bekommt sein eigenes Ergebnis; es gibt keine Sammelbestätigung."""
     round_ = services.start_round(actor=inspector)
-    defect, *rest = make_part(), make_part(), make_part()
-    for part in (defect, *rest):
-        services.collect(round_, part, actor=inspector)
-    services.record_result(round_, defect, Outcome.DEFECT, actor=inspector, comment="Riss")
+    first, second = make_part(), make_part()
+    services.collect(round_, first, actor=inspector)
+    services.collect(round_, second, actor=inspector)
 
-    count = services.pass_remaining(round_, actor=inspector, next_due=in_days(365))
+    services.record_result(round_, first, Outcome.PASSED, actor=inspector, next_due=in_days(365))
 
-    assert count == 2
-    results = {r.part: r for r in round_.current_results()}
-    assert results[defect].outcome == Outcome.DEFECT
-    assert all(results[p].outcome == Outcome.PASSED for p in rest)
-    assert all(results[p].next_due == in_days(365) for p in rest)
+    assert not hasattr(services, "pass_remaining")
+    assert list(services.pending_parts(round_)) == [second]
+    with pytest.raises(InspectionError, match="ohne Ergebnis"):
+        services.close_round(round_, actor=inspector)
 
 
 def test_result_in_open_round_is_changed_by_correction(
@@ -207,7 +206,9 @@ def test_other_inspector_cannot_touch_the_round(inspector: User, make_part: Make
     for action in (
         lambda: services.collect(round_, make_part(), actor=other),
         lambda: services.drop(round_, part, actor=other),
-        lambda: services.pass_remaining(round_, actor=other, next_due=in_days(365)),
+        lambda: services.record_result(
+            round_, part, Outcome.PASSED, actor=other, next_due=in_days(365)
+        ),
     ):
         with pytest.raises(InspectionError, match="handelt nur"):
             action()

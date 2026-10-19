@@ -3,7 +3,7 @@
   <fieldset>
     <legend>Ergebnis für {{ part.name }}</legend>
     {% for value, label in outcomes %}
-    <label class="check"><input type="radio" name="outcome" value="{{ value }}"{% if result and result.outcome == value or not result and value == "passed" %} checked{% endif %}> {{ label }}</label>
+    <label class="check"><input type="radio" name="outcome" value="{{ value }}" required{% if result and result.outcome == value %} checked{% endif %}> {{ label }}</label>
     {% endfor %}
   </fieldset>
   <label for="due-{{ part.pk }}{% if result %}-c{% endif %}">Nächste Prüfung (nicht bei „aussondern“)</label>

@@ -212,18 +212,6 @@ def set_result(
 
 
 @transaction.atomic
-def pass_remaining(round_: InspectionRound, *, actor: User | None, next_due: date) -> int:
-    """Alle Teile der Liste ohne Ergebnis: „in Ordnung“ mit derselben nächsten Prüfung."""
-    round_ = _lock(round_)
-    _require_inspector(round_, actor)
-    _require_state(round_, RoundState.OPEN)
-    parts = pending_parts(round_)
-    for part in parts:
-        record_result(round_, part, Outcome.PASSED, actor=actor, next_due=next_due)
-    return len(parts)
-
-
-@transaction.atomic
 def record_result(
     round_: InspectionRound,
     part: Part,

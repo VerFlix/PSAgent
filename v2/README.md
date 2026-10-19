@@ -108,7 +108,8 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
   Einrichtung: `docs/runbooks/kettenkopf.md`.
 - Prüfmodus (Parität 7, `/pruefung/runde/`, nur mit gültiger Sachkunde): Prüfungsrunde beginnen,
   Teile per QR-Kamera (eingebauter `BarcodeDetector`, sonst jsQR lokal), Handscanner oder EI-Feld
-  sammeln, Ergebnis je Teil oder „alle übrigen in Ordnung“, abschließen. Je Person eine offene
+  sammeln, jedes Teil einzeln bewerten (ohne Sammelbestätigung, ohne vorausgewähltes Ergebnis),
+  abschließen. Je Person eine offene
   Runde; die Teileseite bietet „Zur Prüfungsrunde hinzufügen“. Die Kamera braucht HTTPS. Auf die
   Teile wirkt eine Runde erst mit der Signatur (#38).
 

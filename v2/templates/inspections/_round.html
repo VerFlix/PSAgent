@@ -16,16 +16,6 @@
   <p class="hint">Keine Teile ohne Ergebnis. Weitere Teile scannen oder die EI eingeben.</p>
   {% endfor %}
 
-  {% if pending|length > 1 %}
-  <form method="post" action="{% url 'inspections:round_pass_remaining' round.pk %}" hx-post="{% url 'inspections:round_pass_remaining' round.pk %}" hx-target="#runde" hx-swap="outerHTML" class="pass-remaining">
-    {% csrf_token %}
-    <label for="rest-due">Alle {{ pending|length }} übrigen in Ordnung, nächste Prüfung</label>
-    <input id="rest-due" type="date" name="next_due" value="{{ suggestion|date:'Y-m-d' }}" required>
-    <button type="button" data-set-date="{{ suggestion_short|date:'Y-m-d' }}">+6 Monate</button>
-    <button type="button" data-set-date="{{ suggestion|date:'Y-m-d' }}">+1 Jahr</button>
-    <button type="submit" class="primary">Alle übrigen in Ordnung</button>
-  </form>
-  {% endif %}
 
   <h3>Erfasst ({{ results|length }})</h3>
   {% if results %}

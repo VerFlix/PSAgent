@@ -1,7 +1,8 @@
 """Prüfmodus im Browser (Parität 7): Runde beginnen, Teile scannen, Ergebnisse, abschließen.
 
 Festlegungen (Felix, 19.10.2026): je Sachkundigem eine offene Runde, die der Prüfmodus fortsetzt;
-gescannte Teile kommen zuerst auf die Liste, Ergebnisse folgen je Teil oder für alle übrigen;
+gescannte Teile kommen zuerst auf die Liste; jedes Teil wird einzeln geprüft und einzeln mit
+eigenem Ergebnis bestätigt, ohne Sammelbestätigung und ohne vorausgewähltes Ergebnis;
 gescannt wird mit der Kamera (`static/js/pruefmodus.js`) oder über das Eingabefeld (auch für
 Handscanner). Abgeschlossene Runden wirken erst mit der Signatur (#38).
 
@@ -32,10 +33,6 @@ class ResultForm(forms.Form):
     outcome = forms.ChoiceField(label="Ergebnis", choices=Outcome.choices, widget=forms.RadioSelect)
     comment = forms.CharField(label="Kommentar", required=False, max_length=2000)
     next_due = forms.DateField(label="Nächste Prüfung", required=False, widget=DATE)
-
-
-class DueForm(forms.Form):
-    next_due = forms.DateField(label="Nächste Prüfung", widget=DATE)
 
 
 def _actor(request: HttpRequest) -> User:
@@ -164,24 +161,6 @@ def round_result(request: HttpRequest, pk: int, part_pk: int) -> HttpResponse:
             round_, part, outcome, actor=_actor(request), comment=data["comment"], next_due=next_due
         ),
         f"{part}: {Outcome(outcome).label}.",
-    )
-    return _answer(request, round_)
-
-
-@requires(Right.INSPECT)
-@require_POST
-def round_pass_remaining(request: HttpRequest, pk: int) -> HttpResponse:
-    round_ = _own_round(request, pk)
-    form = DueForm(request.POST)
-    if not form.is_valid():
-        messages.error(request, "Bitte das Datum der nächsten Prüfung angeben.")
-        return _answer(request, round_)
-    _run(
-        request,
-        lambda: services.pass_remaining(
-            round_, actor=_actor(request), next_due=form.cleaned_data["next_due"]
-        ),
-        "{result} Teil(e) in Ordnung.",
     )
     return _answer(request, round_)
 
