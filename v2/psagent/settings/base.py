@@ -113,6 +113,11 @@ PSAGENT_ENROLLMENT_HOURS = 24
 PSAGENT_CLUB_NAME = env("PSAGENT_CLUB_NAME", "")
 # Adresse der App für die Links in QR-Etiketten (#14), z. B. https://psagent.<tailnet>.ts.net.
 PSAGENT_BASE_URL = env("PSAGENT_BASE_URL", "http://localhost:8000")
+# Löschfrist für Personendaten der Entleiher in Jahren nach Ende des Jahres der letzten
+# Aktivität (#63). Den Wert legt der Vorstand fest.
+PSAGENT_RETENTION_YEARS = int(env("PSAGENT_RETENTION_YEARS", "3"))
+if PSAGENT_RETENTION_YEARS < 1:
+    raise ImproperlyConfigured("PSAGENT_RETENTION_YEARS muss mindestens 1 sein.")
 
 ROOT_URLCONF = "psagent.urls"
 
@@ -128,6 +133,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "emergency.context.offline_binder",
+                "privacy.context.retention",
             ],
         },
     },

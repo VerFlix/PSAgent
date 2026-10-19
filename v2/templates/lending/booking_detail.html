@@ -13,6 +13,8 @@
 </p>
 {% endif %}
 
+{% if may_hold %}{% include "privacy/_hold.html" %}{% endif %}
+
 {% for row in rows %}
 <section class="card">
   <h2>{{ row.loan.part.name }}</h2>

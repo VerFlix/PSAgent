@@ -1,0 +1,16 @@
+<section class="card">
+  <h2>Löschsperre</h2>
+  {% if hold %}
+    <p>Gilt seit {{ hold.at|date:"d.m.Y" }}: {{ hold.reason }} · <a href="{% url 'privacy:index' %}">Aufheben unter Datenschutz</a></p>
+  {% elif erased %}
+    <p class="hint">Personendaten dieses Entleihers sind gelöscht.</p>
+  {% else %}
+    <p class="hint">Hält Name, Kontaktdaten und Unterschrift über die Löschfrist hinaus, nur für einen konkreten Schadensfall oder Rechtsstreit.</p>
+    <form method="post" action="{% url 'privacy:hold' booking.borrower_id %}">
+      {% csrf_token %}
+      <label for="hold-reason">Grund</label>
+      <input id="hold-reason" name="reason" maxlength="1000" required>
+      <button type="submit">Löschsperre setzen</button>
+    </form>
+  {% endif %}
+</section>

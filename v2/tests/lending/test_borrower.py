@@ -9,9 +9,9 @@ from django.db import IntegrityError, transaction
 
 from accounts.models import User
 from lending.models import Borrower, BorrowerContact, Loan
-from lending.services import create_borrower, lend, update_contact
+from lending.services import create_borrower, lend, return_loans, update_contact
 from privacy.services import erase_borrower
-from tests.lending.conftest import DAY, TODAY, MakePart, checkout_kwargs
+from tests.lending.conftest import DAY, TODAY, MakePart, checkout_kwargs, return_kwargs
 
 
 def test_borrower_is_reused_across_bookings(
@@ -39,6 +39,7 @@ def test_erasing_contact_keeps_history(
     make_part: MakePart, borrower: Borrower, lender: User
 ) -> None:
     booking = lend(borrower, [make_part()], TODAY, TODAY + DAY, **checkout_kwargs(lender))
+    return_loans(list(booking.loans.all()), **return_kwargs(lender))
 
     erase_borrower(borrower, actor=None)
 

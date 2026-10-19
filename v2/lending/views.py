@@ -30,6 +30,7 @@ from lending.forms import BorrowerForm, CancelForm, CheckoutForm, PeriodForm, Re
 from lending.models import Booking, Borrower, BorrowerContact, Loan, LoanEvent, LoanStatus
 from lending.services import LendingError
 from lending.signatures import svg
+from privacy.models import Erasure, ErasureHold
 
 
 def _actor(request: HttpRequest) -> User:
@@ -342,6 +343,9 @@ def booking_detail(request: HttpRequest, pk: int) -> HttpResponse:
         "reserved": [loan for loan in loans if loan.status == LoanStatus.RESERVED],
         "lent": [loan for loan in loans if loan.status == LoanStatus.LENT],
         "may_cancel": has_right(request.user, Right.CHANGE_OTHERS_RESERVATIONS, booking),
+        "may_hold": has_right(request.user, Right.ERASURE_HOLD),
+        "hold": ErasureHold.current(booking.borrower_id),
+        "erased": Erasure.objects.filter(borrower=booking.borrower).exists(),
         "cancel_form": CancelForm(),
     }
     return render(request, "lending/booking_detail.html", context)

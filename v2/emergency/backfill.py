@@ -220,7 +220,7 @@ def scan_path(form: PaperForm) -> Path:
     return scan_path_for(form.scan_sha256)
 
 
-def _borrowers_of(paper: PaperForm) -> set[int]:
+def borrowers_of(paper: PaperForm) -> set[int]:
     """Entleiher auf einem Formular: aus der Ausgabe und aus den zurückgenommenen Ausleihen."""
     form = getattr(paper, "loan_form", None)
     if form is None:
@@ -245,7 +245,7 @@ def erase_scans(borrower: Borrower, *, actor: User | None) -> None:
     )
     digests = set(forms.values_list("scan_sha256", flat=True))
     papers = PaperForm.objects.filter(scan_sha256__in=digests).select_related("loan_form")
-    on_forms = [(paper.scan_sha256, _borrowers_of(paper)) for paper in papers]
+    on_forms = [(paper.scan_sha256, borrowers_of(paper)) for paper in papers]
     others = set().union(*(ids for _, ids in on_forms)) - {borrower.pk}
     remaining = set(
         BorrowerContact.objects.filter(borrower_id__in=others).values_list("borrower_id", flat=True)
