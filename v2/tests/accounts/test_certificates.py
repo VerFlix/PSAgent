@@ -13,6 +13,8 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import pytest
+from asn1crypto import core as asn1
+from cryptography import x509
 from django.core.exceptions import PermissionDenied
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import models
@@ -21,7 +23,13 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts import certificates
-from accounts.certificates import TOUCH_ALWAYS, CertificateError
+from accounts.certificates import (
+    OID_POLICY,
+    OID_SERIAL,
+    PIN_ALWAYS,
+    TOUCH_ALWAYS,
+    CertificateError,
+)
 from accounts.models import (
     QualificationRevocation,
     Role,
@@ -33,7 +41,7 @@ from core import chain, witness
 from core.append_only import AppendOnlyError
 from core.models import ChainLink, WitnessHead
 from tests.accounts.conftest import SERIALS, MakeUser
-from tests.accounts.yubikey import FakeYubico, FakeYubiKey, der, pem
+from tests.accounts.yubikey import FakeYubico, FakeYubiKey, der, issue, name, new_key, pem
 from tests.helpers import make_inspector, tamper
 
 pytestmark = pytest.mark.django_db
@@ -134,6 +142,69 @@ def test_certificate_without_valid_attestation_is_refused(
         certificates.register(inspector, **upload, name="YubiKey 1", actor=admin)
 
     assert not SigningCertificate.objects.exists()
+
+
+def test_slot_attestation_cannot_vouch_for_another_key(
+    admin: User, inspector: User, yubico: FakeYubico
+) -> None:
+    """Angriff: Mit dem Schlüssel aus Slot 9a des eigenen YubiKeys eine „Bescheinigung 9c“
+    mit fremder, zugelassener Seriennummer für einen Schlüssel außerhalb des YubiKeys signieren."""
+    own = yubico.yubikey(4711, slot="9a")
+    software_key = new_key()
+    forged = issue(
+        name("YubiKey PIV Attestation 9c"),
+        software_key.public_key(),
+        own.attestation.subject,
+        own.key,
+        extensions=(
+            x509.UnrecognizedExtension(OID_SERIAL, asn1.Integer(SERIAL).dump()),
+            x509.UnrecognizedExtension(OID_POLICY, bytes([PIN_ALWAYS, TOUCH_ALWAYS])),
+        ),
+    )
+    certificate = issue(
+        name("Angreifer"), software_key.public_key(), name("Angreifer"), software_key
+    )
+
+    with pytest.raises(CertificateError, match="nicht bis zum Wurzelzertifikat von Yubico"):
+        certificates.register(
+            inspector,
+            certificate=der(certificate),
+            attestation=pem(forged),
+            intermediates=pem(own.attestation, own.intermediate),
+            name="untergeschoben",
+            actor=admin,
+        )
+
+
+def test_end_entity_certificate_cannot_be_an_intermediate(
+    admin: User, inspector: User, yubico: FakeYubico
+) -> None:
+    key = yubico.yubikey(SERIAL)
+    device_key = new_key()
+    end_entity = issue(
+        name("Yubico PIV Attestation"),
+        device_key.public_key(),
+        yubico.root.subject,
+        yubico.key,
+        extensions=(x509.BasicConstraints(ca=False, path_length=None),),
+    )
+    attestation = issue(
+        key.attestation.subject,
+        key.key.public_key(),
+        end_entity.subject,
+        device_key,
+        extensions=tuple(e.value for e in key.attestation.extensions),
+    )
+
+    with pytest.raises(CertificateError, match="nicht bis zum Wurzelzertifikat von Yubico"):
+        certificates.register(
+            inspector,
+            certificate=der(key.certificate),
+            attestation=pem(attestation),
+            intermediates=pem(end_entity),
+            name="YubiKey 1",
+            actor=admin,
+        )
 
 
 def test_unreadable_upload_is_refused(admin: User, inspector: User, yubikey: FakeYubiKey) -> None:
@@ -344,6 +415,51 @@ def test_deleted_revocation_in_database_is_detected(
 
     assert any("Vorgang wurde gelöscht" in p for p in certificates.list_problems())
     assert any("Vorgang wurde gelöscht" in p for p in chain.verify())
+    with pytest.raises(CertificateError, match="an der App vorbei geändert"):
+        certificates.signer_at(yubikey.certificate, soon())
+
+
+def _rewrite(entry: SigningCertificate, owner: User) -> None:
+    """Ändert die Zeile und rechnet ihr Glied passend neu, wie ein Angreifer mit Datenbankzugang."""
+    tamper(
+        "accounts_signingcertificate",
+        "UPDATE accounts_signingcertificate SET user_id = %s WHERE id = %s",
+        [owner.pk, entry.pk],
+    )
+    link = ChainLink.objects.get(table="accounts.SigningCertificate", row_pk=str(entry.pk))
+    row = SigningCertificate.objects.filter(pk=entry.pk).values(*link.fields).get()
+    payload = chain.payload_digest(link.table, link.row_pk, row)
+    digest = chain.link_digest(
+        seq=link.seq,
+        prev=link.prev_hash,
+        table=link.table,
+        pk=link.row_pk,
+        fields=list(link.fields),
+        payload=payload,
+        at=link.at,
+    )
+    tamper(
+        "core_chainlink",
+        "UPDATE core_chainlink SET payload_sha256 = %s, hash = %s WHERE id = %s",
+        [payload, digest, link.pk],
+    )
+
+
+@pytest.mark.parametrize("later", ["weitere Vorgänge", "nur Kettenkopf"])
+def test_recomputed_link_is_detected(
+    later: str, admin: User, inspector: User, yubikey: FakeYubiKey
+) -> None:
+    """Auch ein passend neu berechnetes Glied fällt auf: am Nachfolger oder am Kettenkopf."""
+    entry = register(inspector, yubikey, admin)
+    if later == "weitere Vorgänge":
+        make_inspector()  # legt Sachkunde an, also ein neues Glied hinter dem Zertifikat
+    else:
+        head = chain.head()
+        assert head is not None
+        WitnessHead.objects.create(seq=head.seq, head_hash=head.hash)
+    _rewrite(entry, make_inspector())
+
+    assert certificates.list_problems()
     with pytest.raises(CertificateError, match="an der App vorbei geändert"):
         certificates.signer_at(yubikey.certificate, soon())
 

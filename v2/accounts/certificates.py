@@ -45,6 +45,7 @@ _YUBICO = "1.3.6.1.4.1.41482.3"
 OID_SERIAL = x509.ObjectIdentifier(f"{_YUBICO}.7")
 OID_POLICY = x509.ObjectIdentifier(f"{_YUBICO}.8")
 SLOT = "9c"  # „Digital Signature“
+ATTESTATION_NAME = "YubiKey PIV Attestation"
 PIN_ALWAYS = 3
 TOUCH_ALWAYS = 2
 # Höchstens so viele Zwischenzertifikate zwischen Bescheinigung und Wurzel.
@@ -127,12 +128,31 @@ def _issued_by(certificate: x509.Certificate, issuer: x509.Certificate) -> bool:
     return True
 
 
+def _may_issue(certificate: x509.Certificate) -> bool:
+    """Darf als Zwischenzertifikat über einer Bescheinigung stehen?
+
+    Nie eine Slot-Bescheinigung: Sonst könnte jemand mit dem Schlüssel aus Slot 9a seines
+    eigenen YubiKeys eine „Bescheinigung 9c“ mit fremder Seriennummer für einen Schlüssel
+    außerhalb des YubiKeys signieren. Ebenso nie ein Zertifikat, das ausdrücklich keine
+    Zertifizierungsstelle ist.
+    """
+    names = certificate.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+    if any(str(name.value).startswith(ATTESTATION_NAME) for name in names):
+        return False
+    try:
+        constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints)
+    except x509.ExtensionNotFound:
+        return True  # Ältere Gerätezertifikate (Slot f9) tragen die Erweiterung nicht immer.
+    return constraints.value.ca
+
+
 def _check_path(attestation: x509.Certificate, intermediates: list[x509.Certificate]) -> None:
     roots, current = _roots(), attestation
+    issuers = [c for c in intermediates if _may_issue(c)]
     for _ in range(MAX_CHAIN + 1):
         if any(_issued_by(current, root) for root in roots):
             return
-        issuer = next((c for c in intermediates if _issued_by(current, c)), None)
+        issuer = next((c for c in issuers if _issued_by(current, c)), None)
         if issuer is None:
             break
         current = issuer
@@ -158,7 +178,7 @@ def check_attestation(
 ) -> int:
     """Prüft die Bescheinigung zum Zertifikat; gibt die Seriennummer des YubiKeys zurück."""
     names = attestation.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
-    if [name.value for name in names] != [f"YubiKey PIV Attestation {SLOT}"]:
+    if [name.value for name in names] != [f"{ATTESTATION_NAME} {SLOT}"]:
         raise CertificateError(f"Die Herstellerbescheinigung gilt nicht für Slot {SLOT}.")
     if key_fingerprint(attestation) != key_fingerprint(certificate):
         raise CertificateError("Die Herstellerbescheinigung gehört zu einem anderen Schlüssel.")
@@ -271,8 +291,20 @@ def revoke(
 
 
 def list_problems() -> list[str]:
-    """Abweichungen der Zertifikatsliste von ihren Kettengliedern; leer = unverändert."""
-    return chain.verify_table(SigningCertificate) + chain.verify_table(SigningCertificateRevocation)
+    """Abweichungen der Zertifikatsliste von der Hash-Kette; leer = unverändert.
+
+    Prüft die Zeilen der Liste gegen ihre Glieder und alle Glieder gegen ihre Vorgänger und
+    die festgehaltenen Kettenköpfe. Wer mit Datenbankzugang die Kette ab einer Zeile der Liste
+    vollständig neu berechnet und auch die festgehaltenen Köpfe entfernt, fällt erst mit den
+    Köpfen aus der Zeugen-Mail auf (`kette_pruefen --kopf`).
+    """
+    from core import witness
+
+    return (
+        chain.verify_links(witness.known_heads())
+        + chain.verify_table(SigningCertificate)
+        + chain.verify_table(SigningCertificateRevocation)
+    )
 
 
 def signer_at(certificate: bytes | x509.Certificate, at: datetime) -> SigningCertificate:

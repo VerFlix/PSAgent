@@ -213,13 +213,45 @@ def verify_table(model: type[models.Model]) -> list[str]:
 
     Für Stellen, die vor einer Entscheidung schnell wissen müssen, ob eine Tabelle an der App
     vorbei geändert wurde (z. B. die Zertifikatsliste beim Prüfen einer Signatur, #18). Ob die
-    Glieder selbst lückenlos verkettet sind, prüft nur `verify()`.
+    Glieder selbst lückenlos verkettet sind, prüft `verify_links()`.
     """
     from core.models import ChainLink
 
     entries = list(ChainLink.objects.filter(table=model._meta.label).order_by("seq"))
     problems = [problem for entry in entries for problem in _check(entry, model)]
     return problems + _unlinked(model, {entry.row_pk for entry in entries})
+
+
+def verify_links(known_heads: Iterable[Head] = ()) -> list[str]:
+    """Prüft nur die Glieder: lückenlos, richtig verkettet, unverändert, bekannte Köpfe enthalten.
+
+    Schneller als `verify()`, weil keine Zeile gelesen wird. Zusammen mit `verify_table`
+    erkennt das auch ein Glied, das jemand passend zu einer geänderten Zeile neu berechnet hat.
+    """
+    from core.models import ChainLink
+
+    problems: list[str] = []
+    hashes: dict[int, str] = {}
+    prev, expected_seq = GENESIS, 1
+    for entry in ChainLink.objects.order_by("seq").iterator():
+        if entry.seq != expected_seq:
+            problems.append(f"Glied {expected_seq} fehlt (nächstes vorhandenes: {entry.seq}).")
+        if entry.prev_hash != prev or _recomputed(entry) != entry.hash:
+            problems.append(f"Glied {entry.seq}: passt nicht in die Kette.")
+        hashes[entry.seq] = entry.hash
+        prev, expected_seq = entry.hash, entry.seq + 1
+    return problems + _known(hashes, known_heads)
+
+
+def _known(hashes: dict[int, str], known_heads: Iterable[Head]) -> list[str]:
+    """Jeder früher festgehaltene Kopf muss noch in der Kette stehen."""
+    problems = []
+    for known in known_heads:
+        if known.seq not in hashes:
+            problems.append(f"Kettenkopf {known.seq} fehlt: Die Kette wurde gekürzt.")
+        elif hashes[known.seq] != known.hash:
+            problems.append(f"Kettenkopf {known.seq} weicht ab: Die Kette wurde neu berechnet.")
+    return problems
 
 
 def verify(known_heads: Iterable[Head] = ()) -> list[str]:
@@ -253,9 +285,4 @@ def verify(known_heads: Iterable[Head] = ()) -> list[str]:
         prev, expected_seq = entry.hash, entry.seq + 1
     for label, model in models_by_label.items():
         problems.extend(_unlinked(model, linked[label]))
-    for known in known_heads:
-        if known.seq not in hashes:
-            problems.append(f"Kettenkopf {known.seq} fehlt: Die Kette wurde gekürzt.")
-        elif hashes[known.seq] != known.hash:
-            problems.append(f"Kettenkopf {known.seq} weicht ab: Die Kette wurde neu berechnet.")
-    return problems
+    return problems + _known(hashes, known_heads)
