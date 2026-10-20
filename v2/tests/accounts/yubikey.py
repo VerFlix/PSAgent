@@ -104,14 +104,20 @@ class FakeYubico:
         key: Key | None = None,
         valid_from: datetime | None = None,
         days: int = 365,
+        device_ca: bool = True,
+        device_serial: int | None = None,
     ) -> FakeYubiKey:
+        """`device_ca=False`: Gerätezertifikat ohne BasicConstraints (wie bei älteren Geräten)."""
         device_key, slot_key = new_key(), key or new_key()
         intermediate = issue(
             name("Yubico PIV Attestation"),
             device_key.public_key(),
             self.root.subject,
             self.key,
-            ca=True,
+            ca=device_ca,
+            extensions=()
+            if device_serial is None
+            else (x509.UnrecognizedExtension(OID_SERIAL, asn1.Integer(device_serial).dump()),),
             days=3650,
         )
         attestation = issue(

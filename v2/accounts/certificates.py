@@ -128,27 +128,48 @@ def _issued_by(certificate: x509.Certificate, issuer: x509.Certificate) -> bool:
     return True
 
 
-def _may_issue(certificate: x509.Certificate) -> bool:
-    """Darf als Zwischenzertifikat über einer Bescheinigung stehen?
+def _is_ca(certificate: x509.Certificate) -> bool:
+    try:
+        constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints)
+    except x509.ExtensionNotFound:
+        return False
+    return constraints.value.ca
+
+
+def _may_issue(certificate: x509.Certificate, attestation: x509.Certificate) -> bool:
+    """Darf `certificate` in der Kette über der Bescheinigung stehen? (Erlaubnisliste)
+
+    - Ausdrücklich als Zertifizierungsstelle gekennzeichnet (`BasicConstraints ca=True`), oder
+    - das Gerätezertifikat (Slot f9), das die Bescheinigung direkt ausgestellt hat. Ältere
+      tragen keine `BasicConstraints`; trägt es eine Seriennummer, muss sie passen.
 
     Nie eine Slot-Bescheinigung: Sonst könnte jemand mit dem Schlüssel aus Slot 9a seines
     eigenen YubiKeys eine „Bescheinigung 9c“ mit fremder Seriennummer für einen Schlüssel
-    außerhalb des YubiKeys signieren. Ebenso nie ein Zertifikat, das ausdrücklich keine
-    Zertifizierungsstelle ist.
+    außerhalb des YubiKeys signieren.
     """
     names = certificate.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
     if any(str(name.value).startswith(ATTESTATION_NAME) for name in names):
         return False
+    if _is_ca(certificate):
+        return True
     try:
-        constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints)
+        certificate.extensions.get_extension_for_class(x509.BasicConstraints)
     except x509.ExtensionNotFound:
-        return True  # Ältere Gerätezertifikate (Slot f9) tragen die Erweiterung nicht immer.
-    return constraints.value.ca
+        pass
+    else:
+        return False  # ausdrücklich keine Zertifizierungsstelle
+    if not _issued_by(attestation, certificate):
+        return False
+    try:
+        device_serial = _extension(certificate, OID_SERIAL)
+    except CertificateError:
+        return True
+    return device_serial == _extension(attestation, OID_SERIAL)
 
 
 def _check_path(attestation: x509.Certificate, intermediates: list[x509.Certificate]) -> None:
     roots, current = _roots(), attestation
-    issuers = [c for c in intermediates if _may_issue(c)]
+    issuers = [c for c in intermediates if _may_issue(c, attestation)]
     for _ in range(MAX_CHAIN + 1):
         if any(_issued_by(current, root) for root in roots):
             return

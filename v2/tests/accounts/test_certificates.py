@@ -207,6 +207,60 @@ def test_end_entity_certificate_cannot_be_an_intermediate(
         )
 
 
+def test_device_certificate_without_basic_constraints_is_accepted(
+    admin: User, inspector: User, yubico: FakeYubico
+) -> None:
+    """Ältere Gerätezertifikate (Slot f9) tragen keine BasicConstraints; als direkter
+    Aussteller der Bescheinigung gelten sie trotzdem."""
+    entry = register(
+        inspector, yubico.yubikey(SERIAL, device_ca=False, device_serial=SERIAL), admin
+    )
+
+    assert entry.yubikey_serial == SERIAL
+
+
+def test_device_certificate_of_another_yubikey_is_refused(
+    admin: User, inspector: User, yubico: FakeYubico
+) -> None:
+    key = yubico.yubikey(SERIAL, device_ca=False, device_serial=OTHER_SERIAL)
+
+    with pytest.raises(CertificateError, match="nicht bis zum Wurzelzertifikat von Yubico"):
+        register(inspector, key, admin)
+
+
+def test_non_ca_certificate_higher_up_is_refused(
+    admin: User, inspector: User, yubico: FakeYubico
+) -> None:
+    """Über dem Gerätezertifikat zählt nur, was ausdrücklich Zertifizierungsstelle ist."""
+    middle_key, device_key, key = new_key(), new_key(), yubico.yubikey(SERIAL)
+    middle = issue(
+        name("Zwischenstelle ohne Kennzeichnung"),
+        middle_key.public_key(),
+        yubico.root.subject,
+        yubico.key,
+    )
+    device = issue(
+        name("Yubico PIV Attestation"), device_key.public_key(), middle.subject, middle_key, ca=True
+    )
+    attestation = issue(
+        key.attestation.subject,
+        key.key.public_key(),
+        device.subject,
+        device_key,
+        extensions=tuple(e.value for e in key.attestation.extensions),
+    )
+
+    with pytest.raises(CertificateError, match="nicht bis zum Wurzelzertifikat von Yubico"):
+        certificates.register(
+            inspector,
+            certificate=der(key.certificate),
+            attestation=pem(attestation),
+            intermediates=pem(device, middle),
+            name="YubiKey 1",
+            actor=admin,
+        )
+
+
 def test_unreadable_upload_is_refused(admin: User, inspector: User, yubikey: FakeYubiKey) -> None:
     upload = yubikey.upload() | {"certificate": b"kein Zertifikat"}
 
