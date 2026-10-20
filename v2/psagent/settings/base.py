@@ -137,6 +137,10 @@ PSAGENT_TSA_URL = env("PSAGENT_TSA_URL", "")
 PSAGENT_TSA_CA_PATH = env("PSAGENT_TSA_CA_PATH", "")
 PSAGENT_WITNESS_TO = env_list("PSAGENT_WITNESS_TO")
 PSAGENT_WITNESS_DIR = env("PSAGENT_WITNESS_DIR", "")
+# Zertifikatsliste (#18): Wurzelzertifikat(e) von Yubico für die PIV-Herstellerbescheinigung
+# (PEM-Datei, von Yubico veröffentlicht) und die Seriennummern der zugelassenen YubiKeys.
+PSAGENT_YUBICO_CA_PATH = env("PSAGENT_YUBICO_CA_PATH", "")
+PSAGENT_YUBIKEY_SERIALS = env_list("PSAGENT_YUBIKEY_SERIALS")
 PSAGENT_RETENTION_YEARS = int(env("PSAGENT_RETENTION_YEARS", "3"))
 if PSAGENT_RETENTION_YEARS < 1:
     raise ImproperlyConfigured("PSAGENT_RETENTION_YEARS muss mindestens 1 sein.")

@@ -107,3 +107,9 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 - QR-Etiketten (#14): drucken gehört zu „Teile anlegen, Beschreibung und GAL pflegen …“ (ab
   Trainer). Der QR-Code enthält nur den Link `/q/<EI>`, keine Personendaten; der Link führt nach
   der Anmeldung zur Teileseite und ist für jede Rolle mit „Verfügbarkeit sehen“ erreichbar.
+- Signaturzertifikate (#18): aufnehmen und widerrufen gehört zu „Nutzer, Rollen,
+  Sachkunde-Zertifikate verwalten“ (nur Admin, ohne Sachkunde-Pflicht). Zertifikate gibt es nur
+  für Konten ab PSA-Sachkundig. Ob eine Signatur gilt, entscheidet nicht die Rolle allein:
+  Zertifikat zum Signaturzeitpunkt hinterlegt und nicht widerrufen, Rolle ab PSA-Sachkundig und
+  gültige Sachkunde zu diesem Zeitpunkt. Ein Widerruf darf zurückdatiert werden (verloren seit),
+  nicht vorausdatiert.

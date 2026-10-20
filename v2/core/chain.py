@@ -173,6 +173,55 @@ def chained_models() -> list[type[models.Model]]:
     ]
 
 
+def _recomputed(entry: "ChainLink") -> str:
+    return link_digest(
+        seq=entry.seq,
+        prev=entry.prev_hash,
+        table=entry.table,
+        pk=entry.row_pk,
+        fields=list(entry.fields),
+        payload=entry.payload_sha256,
+        at=entry.at,
+    )
+
+
+def _check(entry: "ChainLink", model: type[models.Model]) -> list[str]:
+    """Glied in sich und gegen seine Zeile prüfen."""
+    where = f"Glied {entry.seq} ({entry.table} #{entry.row_pk})"
+    problems = []
+    if _recomputed(entry) != entry.hash:
+        problems.append(f"{where}: Glied wurde verändert.")
+    row = _row(model, entry.row_pk, list(entry.fields))
+    if row is None:
+        problems.append(f"{where}: Vorgang wurde gelöscht.")
+    elif payload_digest(entry.table, entry.row_pk, row) != entry.payload_sha256:
+        problems.append(f"{where}: Vorgang wurde geändert.")
+    return problems
+
+
+def _unlinked(model: type[models.Model], linked: set[str]) -> list[str]:
+    label = model._meta.label
+    stored = {str(pk) for pk in model._base_manager.values_list("pk", flat=True)}
+    return [
+        f"{label} #{pk}: Vorgang ohne Kettenglied (an der App vorbei eingefügt)."
+        for pk in sorted(stored - linked)
+    ]
+
+
+def verify_table(model: type[models.Model]) -> list[str]:
+    """Prüft nur die Zeilen einer kleinen Tabelle gegen ihre Glieder; leer = unverändert.
+
+    Für Stellen, die vor einer Entscheidung schnell wissen müssen, ob eine Tabelle an der App
+    vorbei geändert wurde (z. B. die Zertifikatsliste beim Prüfen einer Signatur, #18). Ob die
+    Glieder selbst lückenlos verkettet sind, prüft nur `verify()`.
+    """
+    from core.models import ChainLink
+
+    entries = list(ChainLink.objects.filter(table=model._meta.label).order_by("seq"))
+    problems = [problem for entry in entries for problem in _check(entry, model)]
+    return problems + _unlinked(model, {entry.row_pk for entry in entries})
+
+
 def verify(known_heads: Iterable[Head] = ()) -> list[str]:
     """Prüft die ganze Kette; leer = unverändert. Meldungen nennen Tabelle und Nummer.
 
@@ -192,35 +241,18 @@ def verify(known_heads: Iterable[Head] = ()) -> list[str]:
             problems.append(f"Glied {expected_seq} fehlt (nächstes vorhandenes: {entry.seq}).")
         if entry.prev_hash != prev:
             problems.append(f"{where}: Verweis auf den Vorgänger passt nicht.")
-        recomputed = link_digest(
-            seq=entry.seq,
-            prev=entry.prev_hash,
-            table=entry.table,
-            pk=entry.row_pk,
-            fields=list(entry.fields),
-            payload=entry.payload_sha256,
-            at=entry.at,
-        )
-        if recomputed != entry.hash:
-            problems.append(f"{where}: Glied wurde verändert.")
         model = models_by_label.get(entry.table)
         if model is None:
+            if _recomputed(entry) != entry.hash:
+                problems.append(f"{where}: Glied wurde verändert.")
             problems.append(f"{where}: unbekannte Tabelle.")
         else:
             linked[entry.table].add(entry.row_pk)
-            row = _row(model, entry.row_pk, list(entry.fields))
-            if row is None:
-                problems.append(f"{where}: Vorgang wurde gelöscht.")
-            elif payload_digest(entry.table, entry.row_pk, row) != entry.payload_sha256:
-                problems.append(f"{where}: Vorgang wurde geändert.")
+            problems.extend(_check(entry, model))
         hashes[entry.seq] = entry.hash
         prev, expected_seq = entry.hash, entry.seq + 1
     for label, model in models_by_label.items():
-        stored = {str(pk) for pk in model._base_manager.values_list("pk", flat=True)}
-        for pk in sorted(stored - linked[label]):
-            problems.append(
-                f"{label} #{pk}: Vorgang ohne Kettenglied (an der App vorbei eingefügt)."
-            )
+        problems.extend(_unlinked(model, linked[label]))
     for known in known_heads:
         if known.seq not in hashes:
             problems.append(f"Kettenkopf {known.seq} fehlt: Die Kette wurde gekürzt.")

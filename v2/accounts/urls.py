@@ -66,4 +66,14 @@ urlpatterns = [
         manage_views.qualification_revoke,
         name="qualification_revoke",
     ),
+    path(
+        "verwaltung/nutzer/<int:pk>/zertifikat/",
+        manage_views.certificate_register,
+        name="certificate_register",
+    ),
+    path(
+        "verwaltung/nutzer/<int:pk>/zertifikat/<int:certificate>/widerrufen/",
+        manage_views.certificate_revoke,
+        name="certificate_revoke",
+    ),
 ]

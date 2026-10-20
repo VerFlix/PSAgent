@@ -101,6 +101,61 @@
 </section>
 
 <section class="card">
+  <h2>Signaturzertifikate</h2>
+  <p>Mit diesen YubiKeys signiert die Person Prüfprotokolle. Eine Signatur gilt nur, wenn das Zertifikat
+    zum Signaturzeitpunkt hier stand, nicht widerrufen war und die Person gültige Sachkunde hatte.
+    Aufnahme und Widerruf stehen in der Hash-Kette; die Fingerabdrücke gehen täglich an den Vorstand.</p>
+  {% if certificates %}
+    <div class="table-scroll"><table class="list">
+      <thead><tr><th>Bezeichnung</th><th>YubiKey</th><th>Fingerabdruck (SHA-256)</th><th>gültig bis</th><th>Stand</th></tr></thead>
+      <tbody>
+      {% for entry in certificates %}
+        <tr>
+          <td>{{ entry.name }}</td>
+          <td>{{ entry.yubikey_serial }}</td>
+          <td><code>{{ entry.sha256 }}</code></td>
+          <td>{{ entry.not_valid_after|date:"d.m.Y" }}</td>
+          <td>
+            {% if entry.revocation %}
+              widerrufen ab {{ entry.revocation.revoked_at|date:"d.m.Y H:i" }}: {{ entry.revocation.reason }}
+            {% else %}
+              aufgenommen {{ entry.created_at|date:"d.m.Y" }}
+              <form method="post" action="{% url 'accounts:certificate_revoke' account.pk entry.pk %}">{% csrf_token %}
+                <label for="certificate-reason-{{ entry.pk }}">Begründung</label>
+                <input id="certificate-reason-{{ entry.pk }}" name="reason" maxlength="500" required>
+                <label for="certificate-at-{{ entry.pk }}">widerrufen ab (leer: jetzt; z. B. seit wann verloren)</label>
+                <input id="certificate-at-{{ entry.pk }}" name="revoked_at" type="datetime-local">
+                <button type="submit" class="danger">Widerrufen</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  {% endif %}
+  {% if may_hold_certificate %}
+  <form method="post" enctype="multipart/form-data" action="{% url 'accounts:certificate_register' account.pk %}">
+    {% csrf_token %}
+    <h3>Zertifikat aufnehmen</h3>
+    <label for="certificate-name">Bezeichnung (z. B. YubiKey 1, Reserve)</label>
+    <input id="certificate-name" name="name" maxlength="100" required>
+    <label for="certificate-file">Zertifikat aus Slot 9c (<code>ykman piv certificates export 9c</code>)</label>
+    <input id="certificate-file" name="certificate" type="file" required>
+    <label for="certificate-attestation">Herstellerbescheinigung (<code>ykman piv keys attest 9c</code>)</label>
+    <input id="certificate-attestation" name="attestation" type="file" required>
+    <label for="certificate-intermediates">Zwischenzertifikat(e) bis zu Yubico (<code>ykman piv certificates export f9</code>)</label>
+    <input id="certificate-intermediates" name="intermediates" type="file" required>
+    <p>Angenommen werden nur zugelassene YubiKeys mit „PIN und Berührung bei jeder Signatur“.
+      Einträge werden nicht geändert; ein verlorener YubiKey wird widerrufen.</p>
+    <button type="submit">Aufnehmen</button>
+  </form>
+  {% else %}
+    <p>Signaturzertifikate gibt es nur für PSA-Sachkundige und Admins.</p>
+  {% endif %}
+</section>
+
+<section class="card">
   <h2>Briefkopf/Stempel</h2>
   <p>Steht auf Produktdatenblatt (PD) und Haftungsausschluss, die diese Person mit gültiger Sachkunde erzeugt.
     Leer: der vollständige Name. Höchstens 5 Zeilen.</p>
