@@ -53,7 +53,8 @@
 <section class="card">
   <h2>Abgeschlossen, noch nicht signiert</h2>
   <p class="hint">Diese Runden wirken erst mit der Signatur auf die Teile.</p>
-  <ul class="plain">{% for closed in unsigned %}<li>{{ closed }} · {{ closed.results.count }} Ergebnis(se)</li>{% endfor %}</ul>
+  <ul class="plain">{% for closed in unsigned %}<li>{{ closed }} · {{ closed.results.count }} Ergebnis(se)
+    {% if closed.has_protocol %} · <a href="{% url 'inspections:round_protocol' closed.pk %}">Prüfprotokoll zum Signieren (PDF)</a>{% endif %}</li>{% endfor %}</ul>
 </section>
 {% endif %}
 {% endif %}

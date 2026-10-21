@@ -26,6 +26,8 @@ from django.utils import timezone
 
 from accounts.models import User
 from accounts.rights import Right, require
+from core import chain
+from inspections import protocol
 from inspections.models import (
     EFFECTIVE_KINDS,
     OUTCOMES_WITH_COMMENT,
@@ -35,6 +37,7 @@ from inspections.models import (
     RoundEvent,
     RoundEventKind,
     RoundPart,
+    RoundProtocol,
     RoundState,
 )
 from inventory.models import Component, EventKind, Part, normalize_ei
@@ -343,11 +346,32 @@ def close_round(round_: InspectionRound, *, actor: User | None) -> RoundEvent:
         raise InspectionError(
             f"{len(pending)} Teil(e) ohne Ergebnis: bitte erfassen oder von der Liste nehmen."
         )
-    return RoundEvent.objects.create(
+    digest = content_sha256(round_)
+    event = RoundEvent.objects.create(
+        round=round_, kind=RoundEventKind.CLOSED, actor=actor, content_sha256=digest
+    )
+    if round_.inspector_id is not None:
+        _create_protocol(round_, closed_at=event.at, content_sha256=digest)
+    return event
+
+
+def _create_protocol(
+    round_: InspectionRound, *, closed_at: datetime, content_sha256: str
+) -> RoundProtocol:
+    """Prüfprotokoll zum Signieren, mit dem Kettenkopf nach dem Abschluss (#38).
+
+    Übernahmen aus dem Altsystem (ohne Konto) werden nie signiert und bekommen keins.
+    """
+    head = chain.head()
+    assert head is not None  # noqa: S101 – der Abschluss eben ist selbst ein Glied
+    pdf = protocol.render(round_, head=head, closed_at=closed_at, content_sha256=content_sha256)
+    return RoundProtocol.objects.create(
         round=round_,
-        kind=RoundEventKind.CLOSED,
-        actor=actor,
-        content_sha256=content_sha256(round_),
+        pdf=pdf,
+        sha256=protocol.sha256(pdf),
+        content_sha256=content_sha256,
+        chain_seq=head.seq,
+        chain_hash=head.hash,
     )
 
 

@@ -242,6 +242,44 @@ class RoundEvent(AppendOnlyModel):
         return f"{self.round}: {self.get_kind_display()}"
 
 
+class RoundProtocol(AppendOnlyModel):
+    """Prüfprotokoll einer abgeschlossenen Runde als PDF, so wie es signiert wird (#38).
+
+    Entsteht beim Abschließen in derselben Transaktion und wird nur angehängt. Es enthält den
+    Kettenkopf von diesem Moment (Nummer und Hash, #15); mit der Signatur bezeugt der
+    Sachkundige so auch den Stand der Hash-Kette. Signiert werden muss genau diese Datei: Ein
+    hochgeladenes signiertes PDF beginnt Byte für Byte mit ihr (Signatur als Nachtrag).
+    """
+
+    round = models.OneToOneField(
+        InspectionRound,
+        on_delete=models.PROTECT,
+        related_name="protocol",
+        verbose_name="Prüfungsrunde",
+    )
+    pdf = models.BinaryField("PDF")
+    sha256 = models.CharField("SHA-256 des PDFs", max_length=64, unique=True)
+    content_sha256 = models.CharField("SHA-256 des Inhalts der Runde", max_length=64)
+    chain_seq = models.PositiveBigIntegerField("Kettenkopf: Nummer")
+    chain_hash = models.CharField("Kettenkopf: Hash", max_length=64)
+    created_at = models.DateTimeField("erzeugt am", default=timezone.now)
+
+    class Meta:
+        verbose_name = "Prüfprotokoll"
+        verbose_name_plural = "Prüfprotokolle"
+        constraints = (
+            models.CheckConstraint(
+                condition=Q(sha256__regex=r"^[0-9a-f]{64}$")
+                & Q(content_sha256__regex=r"^[0-9a-f]{64}$")
+                & Q(chain_hash__regex=r"^[0-9a-f]{64}$"),
+                name="inspections_protocol_sha256",
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"Prüfprotokoll {self.round}"
+
+
 class RoundPart(models.Model):
     """Teil auf der Liste einer offenen Runde, noch ohne Ergebnis (Prüfmodus, Parität 7).
 
