@@ -8,7 +8,7 @@ from playwright.sync_api import Page, expect
 
 from accounts.models import Role
 from inventory.services import create_product
-from tests.e2e.conftest import sign_in
+from tests.e2e.conftest import add_yubikey, sign_in
 
 pytestmark = [pytest.mark.e2e, pytest.mark.django_db(transaction=True)]
 
@@ -33,7 +33,7 @@ def test_export_marked_and_all(page: Page, site: str, tmp_path: Path) -> None:
 
 
 def test_admin_downloads_backup(page: Page, site: str, tmp_path: Path) -> None:
-    sign_in(page, site, Role.ADMIN)
+    add_yubikey(page, sign_in(page, site, Role.ADMIN))
     create_product({"designation": "Helm", "ei": "TST-E3"})
 
     page.goto(f"{site}/verwaltung/nutzer/")

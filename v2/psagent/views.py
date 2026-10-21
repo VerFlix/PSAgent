@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.utils.cache import add_never_cache_headers
 from django.views.decorators.http import require_GET, require_http_methods
 
+from accounts.confirm import requires_yubikey
 from accounts.rights import Right, has_right, public, requires
 from psagent import backup
 
@@ -48,9 +49,13 @@ audit = logging.getLogger("psagent.audit")
 
 
 @requires(Right.MANAGE_USERS)
+@requires_yubikey
 @require_http_methods(["GET", "POST"])
 def backup_view(request: HttpRequest) -> HttpResponse:
-    """Parität 11: vollständige Sicherung als ZIP; nur Admin, jeder Abruf wird protokolliert."""
+    """Parität 11: vollständige Sicherung als ZIP; nur Admin, jeder Abruf wird protokolliert.
+
+    Jeder Abruf braucht eine Bestätigung mit YubiKey (Felix, 21.10.2026, #95).
+    """
     if request.method == "GET":
         return render(request, "backup.html")
     content = backup.build()

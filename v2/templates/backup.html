@@ -11,6 +11,7 @@
   </ul>
   <p class="error">Enthält Personendaten (Entleiher, Unterschriften). Sicher aufbewahren und nicht weitergeben. Der Abruf wird protokolliert.</p>
   <p class="hint">Ohne Zugangsdaten (Passwörter, Passkeys, Einrichtungslinks). Ersetzt nicht das verschlüsselte Datenbank-Backup.</p>
-  <form method="post">{% csrf_token %}<button type="submit" class="primary">Sicherung herunterladen</button></form>
+  <form method="post" data-yubikey="{% url 'accounts:yubikey_options' %}" data-download>{% csrf_token %}<button type="submit" class="primary">Sicherung herunterladen</button></form>
+  <p id="yubikey-status" class="hint" role="status" aria-live="polite">Jeden Abruf bestätigen Sie mit Ihrem YubiKey.</p>
 </section>
 {% endblock %}

@@ -31,9 +31,8 @@ from tests.yubikey_client import (
 pytestmark = pytest.mark.django_db
 
 CONFIRMED = [(name, url) for name, url, _ in PROTECTED if needs_confirmation(url)]
-# Lesen und die Optionen selbst brauchen keine Bestätigung. Die Sicherung (ZIP) hängt am selben
-# Recht, gehört aber nicht zur Nutzerverwaltung und ändert nichts.
-NOT_CONFIRMED = {"accounts:users", "accounts:user_detail", "accounts:yubikey_options", "backup"}
+# Lesen und die Optionen selbst brauchen keine Bestätigung; die Sicherung (ZIP) schon.
+NOT_CONFIRMED = {"accounts:users", "accounts:user_detail", "accounts:yubikey_options"}
 
 
 def options(client: Client, path: str) -> Any:
@@ -63,7 +62,7 @@ def admin(make_user: MakeUser, client: YubiKeyClient) -> User:
 
 
 def test_every_change_in_user_management_needs_confirmation() -> None:
-    """Jede Adresse mit „Nutzer verwalten“ außer Liste, Detailseite, Optionen und Sicherung."""
+    """Jede Adresse mit „Nutzer verwalten“ außer Liste, Detailseite und Optionen."""
     managed = {
         name
         for name, entry in walk(get_resolver().url_patterns)
@@ -71,7 +70,7 @@ def test_every_change_in_user_management_needs_confirmation() -> None:
     }
 
     assert managed - NOT_CONFIRMED == {name for name, _ in CONFIRMED}
-    assert {"accounts:certificate_register", "accounts:club_device_register"} <= managed
+    assert {"accounts:certificate_register", "accounts:club_device_register", "backup"} <= managed
 
 
 # --- Erlaubt ---
