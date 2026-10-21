@@ -112,6 +112,12 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
   abschließen. Je Person eine offene
   Runde; die Teileseite bietet „Zur Prüfungsrunde hinzufügen“. Die Kamera braucht HTTPS. Auf die
   Teile wirkt eine Runde erst mit der Signatur (#38).
+- Signatur (Parität 8, #38): Beim Abschluss entsteht das Prüfprotokoll als PDF. Der Prüfer
+  signiert es am PC mit dem YubiKey (Signier-Tool `signiertool/`, Befehl `signieren`) und lädt es
+  im Prüfmodus hoch; der Server prüft Datei, Zertifikatsliste und Sachkunde, ergänzt den
+  Zeitstempel, und erst dann wirkt die Runde. Einrichtung: `docs/runbooks/signieren.md`. Die Tests
+  des Tools brauchen SoftHSM und OpenSC (`softhsm2`, `opensc`; in Cloud-Sitzungen und CI
+  installiert).
 
 Browser-Tests (Playwright, eigener CI-Job; bei Fehlern Screenshots und Traces als Artefakt):
 

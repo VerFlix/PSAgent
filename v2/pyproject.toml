@@ -26,11 +26,16 @@ dev = [
     "pre-commit>=4",
     "pytest-playwright>=0.7",
     "pypdf>=5",
+    "psagent-signieren",
 ]
 
 [tool.uv]
 # Django-Projekt, kein installierbares Paket.
 package = false
+
+[tool.uv.sources]
+# Signier-Tool für den PC (#38): eigenes Paket ohne Django, in den Tests mit geprüft.
+psagent-signieren = { path = "signiertool", editable = true }
 
 [tool.ruff]
 line-length = 100
