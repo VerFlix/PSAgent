@@ -15,7 +15,7 @@ Authenticator des Browsers (Chrome DevTools Protocol), nicht von Hardware.
 
 import base64
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -120,11 +120,12 @@ def assert_fits_width(page: Page) -> None:
     assert overflow <= 0, f"Seite ist {overflow}px breiter als der Bildschirm: {page.url}"
 
 
-def add_yubikey(page: Page, user: User) -> None:
+def add_yubikey(page: Page, user: User) -> Callable[[], None]:
     """Virtueller Schlüssel im Browser mit einem YubiKey-Passkey von `user` (Bescheinigung geprüft).
 
     Den Passkey trägt der Test direkt ein; den privaten Schlüssel bekommt nur der virtuelle
-    Authenticator des Browsers. So bestätigt der Browser wie mit echter Hardware.
+    Authenticator des Browsers. So bestätigt der Browser wie mit echter Hardware. Zurück kommt
+    eine Funktion, die den Passkey wieder aus dem virtuellen Schlüssel nimmt.
     """
     key = give_yubikey(user)
     cdp = page.context.new_cdp_session(page)
@@ -161,3 +162,14 @@ def add_yubikey(page: Page, user: User) -> None:
             },
         },
     )
+
+    def remove() -> None:
+        cdp.send(
+            "WebAuthn.removeCredential",
+            {
+                "authenticatorId": authenticator,
+                "credentialId": base64.b64encode(key.credential_id).decode(),
+            },
+        )
+
+    return remove

@@ -75,9 +75,9 @@
     if (!window.PublicKeyCredential) {
       throw new Error("Dieser Browser unterstützt keine Passkeys.");
     }
-    const options = await post(button.dataset.optionsUrl);
     let body;
     if (button.dataset.passkey === "login") {
+      const options = await post(button.dataset.optionsUrl);
       const credential = await navigator.credentials.get({ publicKey: requestOptions(options) });
       body = { credential: authenticationJSON(credential) };
     } else {
@@ -89,6 +89,7 @@
         const yubikey = await navigator.credentials.get({ publicKey: requestOptions(confirmOptions) });
         confirmation = authenticationJSON(yubikey);
       }
+      const options = await post(button.dataset.optionsUrl);
       const credential = await navigator.credentials.create({ publicKey: creationOptions(options) });
       const nameInput = document.getElementById(button.dataset.nameInput || "");
       body = {
