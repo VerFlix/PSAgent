@@ -89,6 +89,48 @@
     window.location.assign(result.redirect);
   };
 
+  // Nutzerverwaltung (#95): Vor dem Absenden die Änderung mit dem YubiKey bestätigen. Die
+  // Bestätigung gilt nur für diese eine Anfrage an genau diese Adresse.
+  const confirmForm = async (form) => {
+    if (!window.PublicKeyCredential) {
+      throw new Error("Dieser Browser unterstützt keine Passkeys.");
+    }
+    const path = new URL(form.action, window.location.href).pathname;
+    const options = await post(form.dataset.yubikey, { path });
+    const credential = await navigator.credentials.get({ publicKey: requestOptions(options) });
+    let field = form.querySelector('input[name="yubikey_assertion"]');
+    if (!field) {
+      field = document.createElement("input");
+      field.type = "hidden";
+      field.name = "yubikey_assertion";
+      form.appendChild(field);
+    }
+    field.value = JSON.stringify(authenticationJSON(credential));
+    form.submit();
+  };
+
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("form[data-yubikey]");
+    if (!form) {
+      return;
+    }
+    event.preventDefault();
+    const status = document.getElementById("yubikey-status");
+    const buttons = form.querySelectorAll("button");
+    buttons.forEach((button) => { button.disabled = true; });
+    if (status) {
+      status.textContent = "Bitte die Änderung mit dem YubiKey bestätigen …";
+    }
+    confirmForm(form).catch((error) => {
+      if (status) {
+        status.textContent = error.name === "NotAllowedError"
+          ? "Abgebrochen oder nicht erlaubt. Nichts geändert."
+          : error.message;
+      }
+      buttons.forEach((button) => { button.disabled = false; });
+    });
+  });
+
   document.addEventListener("click", (event) => {
     const button = event.target.closest("[data-passkey]");
     if (!button) {

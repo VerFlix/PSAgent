@@ -2,6 +2,7 @@
 {% block title %}{{ account.get_full_name|default:account.username }}{% endblock %}
 {% block content %}
 <h1>{{ account.get_full_name|default:account.username }}</h1>
+<p id="yubikey-status" class="hint" role="status" aria-live="polite">Jede Änderung hier bestätigen Sie mit Ihrem YubiKey.</p>
 <p>Benutzername <strong>{{ account.username }}</strong> · Rolle <strong>{{ account.get_role_display }}</strong> ·
   {% if account.is_active %}aktiv{% else %}<span class="danger">deaktiviert</span>{% endif %}
   {% if is_self %} · Ihr eigenes Konto{% endif %}</p>
@@ -11,7 +12,7 @@
   {% if is_self and account.role == "admin" %}
     <p>Die eigene Admin-Rolle ändert ein anderer Admin.</p>
   {% else %}
-  <form method="post" action="{% url 'accounts:user_role' account.pk %}">
+  <form method="post" data-yubikey="{% url 'accounts:yubikey_options' %}" action="{% url 'accounts:user_role' account.pk %}">
     {% csrf_token %}
     <label for="role-new">Neue Rolle</label>
     <select id="role-new" name="role">
@@ -35,11 +36,11 @@
       <tbody>
       {% for passkey in passkeys %}
         <tr>
-          <td>{{ passkey.name }}</td>
+          <td>{{ passkey.name }}{% if passkey.yubikey_attested %} <span class="hint">(YubiKey, bescheinigt)</span>{% endif %}</td>
           <td>{{ passkey.created_at|date:"d.m.Y" }}</td>
           <td>{{ passkey.last_used_at|date:"d.m.Y H:i"|default:"–" }}</td>
           <td>
-            <form method="post" action="{% url 'accounts:user_passkey_revoke' account.pk passkey.pk %}">{% csrf_token %}
+            <form method="post" data-yubikey="{% url 'accounts:yubikey_options' %}" action="{% url 'accounts:user_passkey_revoke' account.pk passkey.pk %}">{% csrf_token %}
               <label for="passkey-reason-{{ passkey.pk }}">Begründung</label>
               <input id="passkey-reason-{{ passkey.pk }}" name="reason" maxlength="500" required>
               <button type="submit" class="danger">Widerrufen</button>
@@ -53,7 +54,7 @@
     <p>Kein Passkey eingerichtet.{% if account.requires_passkey %} Diese Rolle meldet sich nur mit Passkey an; ohne Passkey hilft ein Einrichtungslink.{% endif %}</p>
   {% endif %}
   {% if account.is_active %}
-  <form method="post" action="{% url 'accounts:user_enrollment' account.pk %}">{% csrf_token %}
+  <form method="post" data-yubikey="{% url 'accounts:yubikey_options' %}" action="{% url 'accounts:user_enrollment' account.pk %}">{% csrf_token %}
     <button type="submit">Neuen Einrichtungslink ausstellen</button>
   </form>
   {% endif %}
@@ -74,7 +75,7 @@
             {% if entry.revocation %}
               widerrufen am {{ entry.revocation.revoked_at|date:"d.m.Y" }}: {{ entry.revocation.reason }}
             {% else %}
-              <form method="post" action="{% url 'accounts:qualification_revoke' account.pk entry.pk %}">{% csrf_token %}
+              <form method="post" data-yubikey="{% url 'accounts:yubikey_options' %}" action="{% url 'accounts:qualification_revoke' account.pk entry.pk %}">{% csrf_token %}
                 <label for="qualification-reason-{{ entry.pk }}">Begründung</label>
                 <input id="qualification-reason-{{ entry.pk }}" name="reason" maxlength="500" required>
                 <button type="submit" class="danger">Widerrufen</button>
@@ -86,7 +87,7 @@
       </tbody>
     </table></div>
   {% endif %}
-  <form method="post" action="{% url 'accounts:qualification_grant' account.pk %}">
+  <form method="post" data-yubikey="{% url 'accounts:yubikey_options' %}" action="{% url 'accounts:qualification_grant' account.pk %}">
     {% csrf_token %}
     <h3>Sachkunde eintragen</h3>
     <label for="qualification-from">gültig ab</label>
@@ -120,7 +121,7 @@
               widerrufen ab {{ entry.revocation.revoked_at|date:"d.m.Y H:i" }}: {{ entry.revocation.reason }}
             {% else %}
               aufgenommen {{ entry.created_at|date:"d.m.Y" }}
-              <form method="post" action="{% url 'accounts:certificate_revoke' account.pk entry.pk %}">{% csrf_token %}
+              <form method="post" data-yubikey="{% url 'accounts:yubikey_options' %}" action="{% url 'accounts:certificate_revoke' account.pk entry.pk %}">{% csrf_token %}
                 <label for="certificate-reason-{{ entry.pk }}">Begründung</label>
                 <input id="certificate-reason-{{ entry.pk }}" name="reason" maxlength="500" required>
                 <label for="certificate-at-{{ entry.pk }}">widerrufen ab (leer: jetzt; z. B. seit wann verloren)</label>
@@ -135,7 +136,7 @@
     </table></div>
   {% endif %}
   {% if may_hold_certificate %}
-  <form method="post" enctype="multipart/form-data" action="{% url 'accounts:certificate_register' account.pk %}">
+  <form method="post" data-yubikey="{% url 'accounts:yubikey_options' %}" enctype="multipart/form-data" action="{% url 'accounts:certificate_register' account.pk %}">
     {% csrf_token %}
     <h3>Zertifikat aufnehmen</h3>
     <label for="certificate-name">Bezeichnung (z. B. YubiKey 1, Reserve)</label>
@@ -159,7 +160,7 @@
   <h2>Briefkopf/Stempel</h2>
   <p>Steht auf Produktdatenblatt (PD) und Haftungsausschluss, die diese Person mit gültiger Sachkunde erzeugt.
     Leer: der vollständige Name. Höchstens 5 Zeilen.</p>
-  <form method="post" action="{% url 'accounts:user_stamp' account.pk %}">
+  <form method="post" data-yubikey="{% url 'accounts:yubikey_options' %}" action="{% url 'accounts:user_stamp' account.pk %}">
     {% csrf_token %}
     <label for="stamp-text">Briefkopf/Stempel</label>
     <textarea id="stamp-text" name="stamp_text" rows="5" maxlength="300" placeholder="{{ account.get_full_name }}">{{ account.stamp_text }}</textarea>
@@ -170,7 +171,7 @@
 {% if not is_self %}
 <section class="card">
   <h2>Konto {% if account.is_active %}deaktivieren{% else %}wieder aktivieren{% endif %}</h2>
-  <form method="post" action="{% if account.is_active %}{% url 'accounts:user_deactivate' account.pk %}{% else %}{% url 'accounts:user_reactivate' account.pk %}{% endif %}">
+  <form method="post" data-yubikey="{% url 'accounts:yubikey_options' %}" action="{% if account.is_active %}{% url 'accounts:user_deactivate' account.pk %}{% else %}{% url 'accounts:user_reactivate' account.pk %}{% endif %}">
     {% csrf_token %}
     <label for="status-reason">Begründung</label>
     <input id="status-reason" name="reason" maxlength="500" required>

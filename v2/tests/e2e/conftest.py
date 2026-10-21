@@ -5,24 +5,29 @@ Authenticator des Browsers (Chrome DevTools Protocol), nicht von Hardware.
 
 - `sign_in(page, role)` meldet eine Person direkt per Sitzungs-Cookie an. Der Weg über die
   Anmeldeseite hat eigene Tests; Ablauf-Tests sparen sich so das Durchklicken.
+- `add_yubikey(page, user)` steckt einen virtuellen YubiKey an, mit dem `user` Änderungen in der
+  Nutzerverwaltung bestätigt (#95).
 - `device_page` öffnet eine Seite als Desktop, Handy oder Tablet (#13: mobile Ansicht);
   `assert_fits_width` prüft, dass nichts seitlich übersteht.
 - Jeder Oberflächen-PR bringt seinen Browser-Test mit, für Verleih und Prüfmodus auch auf
   Handy und Tablet.
 """
 
+import base64
 import os
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
+from cryptography.hazmat.primitives import serialization
 from django.conf import settings
 from django.test import Client, override_settings
 from playwright.sync_api import Browser, BrowserType, Page, Playwright
 from pytest_django.live_server_helper import LiveServer
 
 from accounts.models import Role, User
+from tests.yubikey_client import give_yubikey
 
 # Playwright betreibt im Testprozess eine Ereignisschleife; Django-Datenbankzugriffe aus den
 # Tests selbst sind trotzdem synchron und sicher.
@@ -113,3 +118,46 @@ def assert_fits_width(page: Page) -> None:
         "document.documentElement.scrollWidth - document.documentElement.clientWidth"
     )
     assert overflow <= 0, f"Seite ist {overflow}px breiter als der Bildschirm: {page.url}"
+
+
+def add_yubikey(page: Page, user: User) -> None:
+    """Virtueller Schlüssel im Browser mit einem YubiKey-Passkey von `user` (Bescheinigung geprüft).
+
+    Den Passkey trägt der Test direkt ein; den privaten Schlüssel bekommt nur der virtuelle
+    Authenticator des Browsers. So bestätigt der Browser wie mit echter Hardware.
+    """
+    key = give_yubikey(user)
+    cdp = page.context.new_cdp_session(page)
+    cdp.send("WebAuthn.enable")
+    authenticator = cdp.send(
+        "WebAuthn.addVirtualAuthenticator",
+        {
+            "options": {
+                "protocol": "ctap2",
+                "transport": "usb",
+                "hasResidentKey": True,
+                "hasUserVerification": True,
+                "isUserVerified": True,
+                "automaticPresenceSimulation": True,
+            }
+        },
+    )["authenticatorId"]
+    private = key.private_key.private_bytes(
+        serialization.Encoding.DER,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    )
+    cdp.send(
+        "WebAuthn.addCredential",
+        {
+            "authenticatorId": authenticator,
+            "credential": {
+                "credentialId": base64.b64encode(key.credential_id).decode(),
+                "isResidentCredential": True,
+                "rpId": "localhost",
+                "privateKey": base64.b64encode(private).decode(),
+                "userHandle": base64.b64encode(user.webauthn_id.bytes).decode(),
+                "signCount": 0,
+            },
+        },
+    )

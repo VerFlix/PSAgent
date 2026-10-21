@@ -49,16 +49,31 @@ Die drei `.pem`-Dateien enthalten nur Öffentliches. Den SHA-256-Fingerabdruck n
 openssl x509 -in zertifikat.pem -noout -fingerprint -sha256
 ```
 
-## 3. Aufnehmen (Admin)
+## 3. YubiKey als Passkey des Admins (einmalig, #95)
+
+Jede Änderung in der Nutzerverwaltung bestätigt der Admin mit einem YubiKey. Dafür zählt nur ein
+Passkey, dessen Herstellerbescheinigung (FIDO-Attestation) von Yubico stammt:
+
+1. Das Wurzelzertifikat der FIDO-Bescheinigung von `developers.yubico.com/PKI/` laden, den
+   Fingerabdruck vergleichen, als PEM ablegen und in `PSAGENT_YUBICO_FIDO_CA_PATH` eintragen.
+2. Unter „Konto“ den YubiKey als Passkey einrichten. Der Browser fragt, ob die Website Marke
+   und Modell des Schlüssels sehen darf: zulassen. Ein schon vorher eingerichteter Passkey zählt
+   nicht; dann denselben YubiKey noch einmal einrichten (z. B. „YubiKey 1 (bescheinigt)“).
+3. Den Reserve-YubiKey ebenso einrichten.
+
+Ohne einen solchen Passkey geht in der Nutzerverwaltung keine Änderung; dann bleiben nur die
+Verwaltungsbefehle auf dem Server.
+
+## 4. Aufnehmen (Admin)
 
 Nutzerverwaltung → Person (Rolle PSA-Sachkundig oder Admin) → „Signaturzertifikate“ →
-Bezeichnung (z. B. „YubiKey 1“), dann die drei Dateien hochladen. Der Server zeigt den
+Bezeichnung (z. B. „YubiKey 1“), dann die drei Dateien hochladen und mit dem YubiKey bestätigen. Der Server zeigt den
 Fingerabdruck; er muss mit dem notierten übereinstimmen. Den Fingerabdruck auf Papier dem
 Vorstand geben; die Zeugen-Mail am nächsten Tag muss ihn ebenfalls nennen.
 
 Ein Zertifikat gilt nur zusammen mit gültiger Sachkunde der Person (Abschnitt „Sachkunde“).
 
-## 4. Widerrufen
+## 5. Widerrufen
 
 YubiKey verloren oder Person scheidet aus: Nutzerverwaltung → Person → „Widerrufen“, mit
 Begründung. „widerrufen ab“ darf zurückliegen (seit wann verloren), nicht in der Zukunft.
@@ -66,7 +81,7 @@ Signaturen davor bleiben gültig, Signaturen ab dann nicht. Danach die Seriennum
 `PSAGENT_YUBIKEY_SERIALS` streichen. Ein widerrufener Schlüssel lässt sich nicht wieder
 aufnehmen, auch nicht mit neuem Zertifikat.
 
-## 5. Abgleichen
+## 6. Abgleichen
 
 - Täglich: Die Zeugen-Mail nennt alle Fingerabdrücke. Der Vorstand vergleicht mit der
   Papierliste; ein unbekannter Fingerabdruck ist ein Sicherheitsvorfall.

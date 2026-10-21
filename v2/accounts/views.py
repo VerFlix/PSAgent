@@ -24,6 +24,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts import services, webauthn
+from accounts.confirm import requires_yubikey
 from accounts.devices import register_device, revoke_device
 from accounts.enrollment import find_token, mark_used
 from accounts.models import ClubDevice, Passkey, User
@@ -305,6 +306,7 @@ def enroll_password(request: HttpRequest, token: str) -> HttpResponse:
 
 
 @requires(Right.MANAGE_USERS)
+@requires_yubikey
 @require_POST
 def club_device_register(request: HttpRequest) -> HttpResponse:
     admin = _current_user(request)
@@ -319,6 +321,7 @@ def club_device_register(request: HttpRequest) -> HttpResponse:
 
 
 @requires(Right.MANAGE_USERS)
+@requires_yubikey
 @require_POST
 def club_device_revoke(request: HttpRequest, pk: int) -> HttpResponse:
     device = get_object_or_404(ClubDevice, pk=pk, revoked_at__isnull=True)

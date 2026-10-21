@@ -109,7 +109,15 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   der Anmeldung zur Teileseite und ist für jede Rolle mit „Verfügbarkeit sehen“ erreichbar.
 - Signaturzertifikate (#18): aufnehmen und widerrufen gehört zu „Nutzer, Rollen,
   Sachkunde-Zertifikate verwalten“ (nur Admin, ohne Sachkunde-Pflicht). Zertifikate gibt es nur
-  für Konten ab PSA-Sachkundig. Ob eine Signatur gilt, entscheidet nicht die Rolle allein:
+  für Konten ab PSA-Sachkundig; Verleiher bekommen keine (Felix, 21.10.2026). Die Ausgabe belegen
+  persönliche Anmeldung, Unterschrift des Entleihers und Hash-Kette; signiert wird nur am PC,
+  ausgegeben am Tablet. Ob eine Signatur gilt, entscheidet nicht die Rolle allein:
   Zertifikat zum Signaturzeitpunkt hinterlegt und nicht widerrufen, Rolle ab PSA-Sachkundig und
   gültige Sachkunde zu diesem Zeitpunkt. Ein Widerruf darf zurückdatiert werden (verloren seit),
   nicht vorausdatiert.
+- Nutzerverwaltung mit YubiKey (#95, Felix, 21.10.2026): Jede Änderung unter „Nutzer, Rollen,
+  Sachkunde-Zertifikate verwalten“ bestätigt der Admin einzeln mit einem YubiKey. Dazu gehören
+  Konten, Rollen, Einrichtungslinks, Passkeys, Sachkunde, Stempel, Signaturzertifikate und
+  Vereinsgeräte. Es zählt nur ein Passkey mit geprüfter Herstellerbescheinigung von Yubico; die
+  Bestätigung gilt einmal und nur für die eine Adresse. Ohne YubiKey bleiben nur die
+  Verwaltungsbefehle auf dem Server. Lesen und die Sicherung (ZIP) brauchen keine Bestätigung.

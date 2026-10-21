@@ -29,6 +29,7 @@ from lending.services import (
 )
 from tests.helpers import make_inspector
 from tests.lending.conftest import DAY, NEXT_DUE, STROKES, TODAY, MakePart, checkout_kwargs
+from tests.yubikey_client import login_with_yubikey
 
 pytestmark = pytest.mark.django_db
 
@@ -266,7 +267,7 @@ def test_parity_14_missing_contact_shown_before_checkout(
 def test_club_device_logs_out_after_lending(
     client: Client, make_part: MakePart, make_user_admin: User
 ) -> None:
-    client.force_login(make_user_admin)
+    login_with_yubikey(client, make_user_admin)
     client.post(reverse("accounts:club_device_register"), {"name": "Tablet"})
     client.post(reverse("accounts:logout"))  # client.logout() löschte auch das Geräte-Cookie
     client.force_login(make_inspector(role=Role.LENDER, qualified=False))

@@ -20,6 +20,7 @@ from django.urls.converters import IntConverter
 from accounts.models import Role
 from accounts.rights import Right, may_use, public, requires
 from tests.helpers import make_inspector
+from tests.yubikey_client import needs_confirmation
 
 LOGIN = resolve_url(settings.LOGIN_URL)
 ROLES = (Role.ADMIN, Role.PPE_EXPERT, Role.TRAINER, Role.LENDER, Role.VIEWER)
@@ -152,7 +153,12 @@ def test_role_without_right_gets_403_and_nothing_changes(
         client.post(url, headers={"HX-Request": "true"}),
     ]
 
-    if allowed:
+    if allowed and needs_confirmation(url):
+        # Nutzerverwaltung (#95): Ohne Bestätigung mit YubiKey wird nichts geändert.
+        assert responses[0].status_code != 403
+        assert [response.status_code for response in responses[1:]] == [403, 403]
+        assert row_counts() == before
+    elif allowed:
         assert all(response.status_code != 403 for response in responses)
     else:
         assert [response.status_code for response in responses] == [403, 403, 403]

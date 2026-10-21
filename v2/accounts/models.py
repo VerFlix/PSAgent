@@ -341,6 +341,11 @@ class Passkey(models.Model):
     sign_count = models.PositiveBigIntegerField("Signaturzähler", default=0)
     transports = models.JSONField("Übertragungswege", default=list, blank=True)
     aaguid = models.CharField("AAGUID (Modell)", max_length=36, blank=True)
+    yubikey_attested = models.BooleanField(
+        "YubiKey (Herstellerbescheinigung geprüft)",
+        default=False,
+        help_text="Nur solche Passkeys bestätigen Änderungen in der Nutzerverwaltung (#95).",
+    )
     created_at = models.DateTimeField("angelegt am", default=timezone.now)
     last_used_at = models.DateTimeField("zuletzt benutzt", null=True, blank=True)
     revoked_at = models.DateTimeField("widerrufen am", null=True, blank=True)

@@ -2,8 +2,9 @@
 {% block title %}Konto anlegen{% endblock %}
 {% block content %}
 <h1>Konto anlegen</h1>
+<p id="yubikey-status" class="hint" role="status" aria-live="polite">Jede Änderung hier bestätigen Sie mit Ihrem YubiKey.</p>
 <section class="card">
-  <form method="post">
+  <form method="post" data-yubikey="{% url 'accounts:yubikey_options' %}">
     {% csrf_token %}
     {% for error in form.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
     {% for field in form %}

@@ -19,6 +19,7 @@ from accounts.models import ClubDevice, EnrollmentToken, Passkey, Role, User
 from accounts.net import client_ip
 from tests.accounts.conftest import MakeUser
 from tests.accounts.softkey import SoftKey
+from tests.yubikey_client import login_with_yubikey
 
 pytestmark = pytest.mark.django_db
 COOKIE = settings.PSAGENT_CLUB_DEVICE_COOKIE
@@ -30,7 +31,7 @@ def admin(make_user: MakeUser) -> User:
 
 
 def make_device(client: Client, admin: User, name: str = "Tablet Ausgabe") -> ClubDevice:
-    client.force_login(admin)
+    login_with_yubikey(client, admin)
     client.post(reverse("accounts:club_device_register"), {"name": name})
     return ClubDevice.objects.get(name=name)
 
