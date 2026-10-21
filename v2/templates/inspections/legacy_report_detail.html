@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}{{ report }}{% endblock %}
+{% block content %}
+<h1>{{ report }}</h1>
+<section class="card">
+  <p><span class="status status-new">Altbestand, ungesichert</span> Aus dem Altsystem übernommen; ohne Signatur und ohne Prüfknopf.</p>
+  <p>Sachkundige*r <strong>{{ report.inspector_name|default:"–" }}</strong> ·
+    erstellt am {{ report.created_at|date:"d.m.Y H:i"|default:report.created_at_raw|default:"–" }} ·
+    „Ich bin PSA-Sachkundig“ {% if report.confirmed %}bestätigt{% else %}nicht bestätigt{% endif %}</p>
+  {% if signature %}<svg class="signature-view" viewBox="{{ signature.viewbox }}" role="img" aria-label="Gezeichnete Unterschrift {{ report.inspector_name }}">{% for path in signature.paths %}<path d="{{ path }}"/>{% endfor %}</svg>
+  {% else %}<p class="hint">Keine gezeichnete Unterschrift.</p>{% endif %}
+</section>
+<section class="card">
+  <h2>Einträge</h2>
+  <div class="table-scroll"><table class="list">
+    <thead><tr><th>Teil</th><th>geprüft</th><th>Kommentar</th><th>nächste Prüfung</th><th>Aktion</th></tr></thead>
+    <tbody>
+    {% for item in items %}
+      <tr>
+        <td>{% if item.part %}<a href="{% url 'inventory:part_detail' item.part.pk %}">{{ item.item_label }}</a>{% else %}{{ item.item_label }}{% endif %}</td>
+        <td>{% if item.inspection_done %}ja{% else %}nein{% endif %}</td>
+        <td>{{ item.comment|default:"–" }}</td>
+        <td>{{ item.next_due_raw|default:"–" }}</td>
+        <td>{{ item.action|default:"–" }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+<p><a href="{% url 'inspections:reports' %}">Zur Liste der Prüfberichte</a></p>
+{% endblock %}

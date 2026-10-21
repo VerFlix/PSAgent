@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Prüfberichte{% endblock %}
+{% block content %}
+<h1>Prüfberichte</h1>
+<form method="get" class="card search">
+  {% for field in form %}{% include "inventory/_field.html" %}{% endfor %}
+  <button type="submit">Filtern</button>
+</form>
+{% if entries %}
+<div class="table-scroll"><table class="list">
+  <thead><tr><th>Datum</th><th>Bericht</th><th>Sachkundige*r</th><th>Teile</th><th>Art</th></tr></thead>
+  <tbody>
+  {% for entry in entries %}
+    <tr>
+      <td>{{ entry.at|date:"d.m.Y"|default:"–" }}</td>
+      <td>{% if entry.legacy %}<a href="{% url 'inspections:legacy_report_detail' entry.pk %}">{{ entry.label }}</a>{% else %}<a href="{% url 'inspections:report_detail' entry.pk %}">{{ entry.label }}</a>{% endif %}</td>
+      <td>{{ entry.inspector }}</td>
+      <td>{{ entry.parts }}</td>
+      <td>{% if entry.legacy %}<span class="status status-new">Altbestand, ungesichert</span>{% else %}<span class="status status-released">signiert</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% if entries|length >= limit %}<p class="hint">Es werden höchstens {{ limit }} Berichte gezeigt; bitte filtern.</p>{% endif %}
+{% else %}
+<p>Keine Prüfberichte{% if form.is_bound %} für diese Auswahl{% endif %}.</p>
+{% endif %}
+{% endblock %}

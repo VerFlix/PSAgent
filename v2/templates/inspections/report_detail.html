@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Prüfbericht {{ signed.round }}{% endblock %}
+{% block content %}
+<h1>Prüfbericht: {{ signed.round }}</h1>
+<section class="card">
+  <p>Sachkundige*r <strong>{{ signed.round.inspector_display }}</strong> ·
+    signiert und hochgeladen am {{ signed.signed_at|date:"d.m.Y H:i" }} ·
+    Zeitstempel {{ signed.stamped_at|date:"d.m.Y H:i" }}</p>
+  <p class="hint break">Zertifikat „{{ signed.certificate.name }}“, Fingerabdruck (SHA-256) <code>{{ signed.certificate.sha256 }}</code></p>
+  <p><a href="{% url 'inspections:report_pdf' signed.round_id %}">Signiertes Prüfprotokoll (PDF)</a></p>
+  <button type="button" hx-get="{% url 'inspections:report_check' signed.round_id %}" hx-target="#check-result" hx-swap="innerHTML">Unverändert?</button>
+  <div id="check-result" class="break" role="status" aria-live="polite"></div>
+</section>
+<section class="card">
+  <h2>Ergebnisse</h2>
+  <div class="table-scroll"><table class="list">
+    <thead><tr><th>Teil</th><th>EI</th><th>Ergebnis</th><th>Kommentar</th><th>nächste Prüfung</th></tr></thead>
+    <tbody>
+    {% for result in results %}
+      <tr>
+        <td><a href="{% url 'inventory:part_detail' result.part.pk %}">{{ result.part.name }}</a></td>
+        <td>{% for component in result.part.components.all %}{{ component.ei }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+        <td>{{ result.get_outcome_display }}</td>
+        <td>{{ result.comment|default:"–" }}</td>
+        <td>{{ result.next_due|date:"d.m.Y"|default:"–" }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+<p><a href="{% url 'inspections:reports' %}">Zur Liste der Prüfberichte</a></p>
+{% endblock %}
