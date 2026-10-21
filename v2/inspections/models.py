@@ -280,6 +280,92 @@ class RoundProtocol(AppendOnlyModel):
         return f"Prüfprotokoll {self.round}"
 
 
+class SignedProtocol(AppendOnlyModel):
+    """Vom Sachkundigen signiertes Prüfprotokoll mit Zeitstempel des Servers (#38 Schritt 2).
+
+    `pdf` ist die hochgeladene Datei mit dem Dokument-Zeitstempel als Nachtrag. Sie beginnt
+    Byte für Byte mit dem gespeicherten Protokoll (`RoundProtocol`). Geprüft wurde gegen den
+    Stand beim Hochladen (`signed_at`): Zertifikat in der Liste und nicht widerrufen, Rolle und
+    Sachkunde gültig (Felix, 21.10.2026).
+    """
+
+    round = models.OneToOneField(
+        InspectionRound,
+        on_delete=models.PROTECT,
+        related_name="signed_protocol",
+        verbose_name="Prüfungsrunde",
+    )
+    protocol = models.OneToOneField(
+        RoundProtocol,
+        on_delete=models.PROTECT,
+        related_name="signed",
+        verbose_name="Prüfprotokoll",
+    )
+    pdf = models.BinaryField("signiertes PDF mit Zeitstempel")
+    sha256 = models.CharField("SHA-256 des PDFs", max_length=64, unique=True)
+    uploaded_sha256 = models.CharField("SHA-256 der hochgeladenen Datei", max_length=64)
+    certificate = models.ForeignKey(
+        "accounts.SigningCertificate",
+        on_delete=models.PROTECT,
+        related_name="+",
+        verbose_name="Signaturzertifikat",
+    )
+    signed_at = models.DateTimeField("hochgeladen und geprüft am")
+    stamped_at = models.DateTimeField("Zeitstempel")
+
+    class Meta:
+        verbose_name = "signiertes Prüfprotokoll"
+        verbose_name_plural = "signierte Prüfprotokolle"
+        constraints = (
+            models.CheckConstraint(
+                condition=Q(sha256__regex=r"^[0-9a-f]{64}$")
+                & Q(uploaded_sha256__regex=r"^[0-9a-f]{64}$"),
+                name="inspections_signed_sha256",
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"Signiertes Prüfprotokoll {self.round}"
+
+
+class SignatureRejection(AppendOnlyModel):
+    """Abgelehnter Versuch, ein signiertes Protokoll hochzuladen (Felix, 21.10.2026).
+
+    Mit Grund und Prüfsumme der Datei, ohne die Datei selbst. So fällt auf, wenn jemand
+    fremde oder veränderte PDFs versucht.
+    """
+
+    round = models.ForeignKey(
+        InspectionRound,
+        on_delete=models.PROTECT,
+        related_name="signature_rejections",
+        verbose_name="Prüfungsrunde",
+    )
+    at = models.DateTimeField("Zeitpunkt", default=timezone.now)
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="+",
+        verbose_name="hochgeladen von",
+    )
+    reason = models.TextField("Grund")
+    uploaded_sha256 = models.CharField("SHA-256 der Datei", max_length=64)
+
+    class Meta:
+        verbose_name = "abgelehnte Signatur"
+        verbose_name_plural = "abgelehnte Signaturen"
+        ordering = ("at", "id")
+        constraints = (
+            models.CheckConstraint(
+                condition=Q(reason__regex=r"\S") & Q(uploaded_sha256__regex=r"^[0-9a-f]{64}$"),
+                name="inspections_rejection_reason_and_hash",
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"Abgelehnte Signatur {self.round} ({self.at:%d.%m.%Y %H:%M})"
+
+
 class RoundPart(models.Model):
     """Teil auf der Liste einer offenen Runde, noch ohne Ergebnis (Prüfmodus, Parität 7).
 

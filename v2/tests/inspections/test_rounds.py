@@ -24,7 +24,6 @@ from inspections.services import (
     content_sha256,
     next_inspection_due,
     record_result,
-    sign_round,
     start_round,
     suggest_next_due,
 )
@@ -32,6 +31,7 @@ from inventory.models import EventKind, PartEvent, PartStatus
 from inventory.services import record_event, update_component
 from tests.helpers import make_inspector, signed_inspection
 from tests.inspections.conftest import MakePart, in_days
+from tests.signing import sign
 
 
 def test_full_round_releases_new_parts(make_part: MakePart, inspector: User) -> None:
@@ -47,7 +47,7 @@ def test_full_round_releases_new_parts(make_part: MakePart, inspector: User) -> 
     assert first.status() == PartStatus.NEW  # noch ohne Wirkung
     assert next_inspection_due(first) is None
 
-    sign_round(round_, actor=inspector)
+    sign(round_, actor=inspector)
 
     assert round_.state() == RoundState.SIGNED
     assert (first.status(), second.status()) == (PartStatus.RELEASED, PartStatus.RELEASED)
@@ -118,7 +118,7 @@ def test_cancelled_round_has_no_effect(make_part: MakePart, inspector: User) -> 
     assert round_.state() == RoundState.CANCELLED
     assert part.status() == PartStatus.NEW
     with pytest.raises(InspectionError, match="abgebrochen"):
-        sign_round(round_, actor=inspector)
+        sign(round_, actor=inspector)
 
 
 @pytest.mark.parametrize("comment", ["", "  "])
@@ -139,7 +139,7 @@ def test_signed_round_cannot_be_cancelled_or_signed_again(
     with pytest.raises(InspectionError, match="signiert"):
         cancel_round(round_, actor=inspector, comment="doch nicht")
     with pytest.raises(InspectionError, match="signiert"):
-        sign_round(round_, actor=inspector)
+        sign(round_, actor=inspector)
     with pytest.raises(IntegrityError), transaction.atomic():
         RoundEvent.objects.create(round=round_, kind=RoundEventKind.SIGNED)
 
@@ -149,7 +149,7 @@ def test_open_round_cannot_be_signed(make_part: MakePart, inspector: User) -> No
     record_result(round_, make_part(), Outcome.PASSED, actor=inspector, next_due=in_days(365))
 
     with pytest.raises(InspectionError, match="offen"):
-        sign_round(round_, actor=inspector)
+        sign(round_, actor=inspector)
 
 
 def test_empty_round_cannot_be_closed(inspector: User) -> None:
@@ -196,7 +196,7 @@ def test_changed_content_after_close_blocks_signing(make_part: MakePart, inspect
     update_component(part.components.get(), actor=inspector, ei="TST-GEAENDERT")
 
     with pytest.raises(InspectionError, match="geändert"):
-        sign_round(round_, actor=inspector)
+        sign(round_, actor=inspector)
 
     assert part.status() == PartStatus.NEW
 
@@ -286,7 +286,7 @@ def test_part_retired_before_signing_aborts_whole_round(
     record_event(second, EventKind.RETIRED, actor=inspector, comment="inzwischen ausgesondert")
 
     with pytest.raises(ValueError, match="ausgesondert"):
-        sign_round(round_, actor=inspector)
+        sign(round_, actor=inspector)
 
     assert round_.state() == RoundState.CLOSED
     assert first.status() == PartStatus.NEW
@@ -313,7 +313,7 @@ def test_failure_in_the_middle_of_signing_leaves_nothing(
     monkeypatch.setattr("inspections.services.record_event", failing_record_event)
 
     with pytest.raises(RuntimeError):
-        sign_round(round_, actor=inspector)
+        sign(round_, actor=inspector)
 
     assert len(calls) == 2
     assert round_.state() == RoundState.CLOSED
@@ -353,6 +353,6 @@ def test_only_the_rounds_inspector_acts_in_it(make_part: MakePart, inspector: Us
         close_round(round_, actor=other)
     close_round(round_, actor=inspector)
     with pytest.raises(InspectionError, match="handelt nur"):
-        sign_round(round_, actor=other)
+        sign(round_, actor=other)
     with pytest.raises(InspectionError, match="handelt nur"):
         cancel_round(round_, actor=other, comment="fremde Runde")

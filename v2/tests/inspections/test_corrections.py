@@ -11,12 +11,12 @@ from inspections.services import (
     correct_result,
     next_inspection_due,
     record_result,
-    sign_round,
     start_round,
 )
 from inventory.models import PartStatus
 from tests.helpers import make_inspector, signed_inspection
 from tests.inspections.conftest import MakePart, in_days
+from tests.signing import sign
 
 
 def test_correction_in_open_round_adds_new_entry(make_part: MakePart, inspector: User) -> None:
@@ -36,7 +36,7 @@ def test_correction_in_open_round_adds_new_entry(make_part: MakePart, inspector:
     assert list(round_.current_results()) == [second]
 
     close_round(round_, actor=inspector)
-    sign_round(round_, actor=inspector)
+    sign(round_, actor=inspector)
     assert part.status() == PartStatus.LOCKED
 
 
@@ -47,7 +47,7 @@ def test_correction_chain(make_part: MakePart, inspector: User) -> None:
     second = correct_result(first, Outcome.PASSED, actor=inspector, next_due=in_days(180))
     third = correct_result(second, Outcome.PASSED, actor=inspector, next_due=in_days(90))
     close_round(round_, actor=inspector)
-    sign_round(round_, actor=inspector)
+    sign(round_, actor=inspector)
 
     assert list(round_.current_results()) == [third]
     assert next_inspection_due(part) == in_days(90)
@@ -88,7 +88,7 @@ def test_signed_result_is_corrected_in_a_new_round(make_part: MakePart, inspecto
     assert next_inspection_due(part) == in_days(365)  # wirkt erst mit Signatur
 
     close_round(follow_up, actor=inspector)
-    sign_round(follow_up, actor=inspector)
+    sign(follow_up, actor=inspector)
 
     assert next_inspection_due(part) == in_days(30)
     old.refresh_from_db()

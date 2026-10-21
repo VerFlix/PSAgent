@@ -25,6 +25,7 @@ from typing import Any
 import typst
 from django.conf import settings
 from django.utils import timezone
+from pyhanko.pdf_utils import generic
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.sign.fields import SigFieldSpec, append_signature_field
 
@@ -136,6 +137,11 @@ def render(
     append_signature_field(
         writer, SigFieldSpec(sig_field_name=SIGNATURE_FIELD, on_page=-1, box=field_box())
     )
+    # Wie nach dem Signieren (SignaturesExist | AppendOnly): Sonst ändert schon das Signieren
+    # das Formular über das Ausfüllen hinaus, und die Prüfung beim Hochladen (#38) lehnt ab.
+    form = writer.root["/AcroForm"]
+    form["/SigFlags"] = generic.NumberObject(3)  # type: ignore[no-untyped-call]
+    writer.update_container(form)
     out = BytesIO()
     writer.write(out)  # type: ignore[no-untyped-call]
     return out.getvalue()

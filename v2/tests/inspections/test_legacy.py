@@ -11,11 +11,11 @@ from inspections.services import (
     close_round,
     next_inspection_due,
     record_result,
-    sign_round,
     start_round,
 )
 from inventory.models import Part, PartStatus
 from tests.inspections.conftest import MakePart, in_days
+from tests.signing import sign
 
 
 def legacy_round(part_due: list[tuple[Part, int]]) -> InspectionRound:
@@ -59,7 +59,7 @@ def test_legacy_round_cannot_be_signed_or_used_by_accounts(
     round_ = legacy_round([(make_part(), 100)])
 
     with pytest.raises(InspectionError, match="Altsystem"):
-        sign_round(round_, actor=inspector)
+        sign(round_, actor=inspector)
     with pytest.raises(InspectionError, match="Altsystem"):
         record_result(round_, make_part(), Outcome.PASSED, actor=inspector, next_due=in_days(9))
 

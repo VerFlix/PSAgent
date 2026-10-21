@@ -14,11 +14,12 @@ from django.utils import timezone
 
 from accounts.models import Qualification, QualificationRevocation, Role, User
 from inspections.models import InspectionRound, Outcome, RoundState
-from inspections.services import close_round, record_result, sign_round, start_round
+from inspections.services import close_round, record_result, start_round
 from inventory.models import EventKind, PartStatus
 from inventory.services import InventoryError, record_event, update_component
 from tests.helpers import make_inspector, signed_inspection
 from tests.inspections.conftest import MakePart, in_days
+from tests.signing import sign
 
 
 def _expired() -> User:
@@ -80,7 +81,7 @@ def test_qualification_lost_before_signing(make_part: MakePart, inspector: User)
     )
 
     with pytest.raises(PermissionDenied):
-        sign_round(round_, actor=inspector)
+        sign(round_, actor=inspector)
 
     assert round_.state() == RoundState.CLOSED
     assert part.status() == PartStatus.NEW

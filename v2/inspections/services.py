@@ -5,10 +5,11 @@ Ablauf (Parität 7):
 1. `start_round` – nur mit gültiger Sachkunde und der Rolle PSA-Sachkundig.
 2. `record_result` je Teil; `correct_result` legt bei Korrekturen ein neues Ergebnis mit Verweis
    auf das alte an.
-3. `close_round` friert den Inhalt ein und hält seine SHA-256-Prüfsumme fest.
-4. `sign_round` wirkt auf die Teile, alles in einer Transaktion. Bis Phase 3 ist das ein
-   Platzhalter: Später ruft ihn die Signaturprüfung (YubiKey, #16/#18) erst nach erfolgreicher
-   Prüfung der Signatur auf. Altbestand übernimmt `adopt_legacy_round` statt einer Signatur.
+3. `close_round` friert den Inhalt ein, hält seine SHA-256-Prüfsumme fest und erzeugt das
+   Prüfprotokoll als PDF (`protocol`, #38).
+4. `sign_round` nimmt das mit dem YubiKey signierte Protokoll an (`signature`: Prüfung gegen
+   Zertifikatsliste und Sachkunde, Zeitstempel) und wirkt auf die Teile, alles in einer
+   Transaktion. Altbestand übernimmt `adopt_legacy_round` statt einer Signatur.
 
 `cancel_round` bricht eine noch nicht signierte Runde ab; sie wirkt dann nie.
 `next_inspection_due` liefert „nächste Prüfung“ eines Teils aus der letzten wirksamen Prüfung;
@@ -27,7 +28,7 @@ from django.utils import timezone
 from accounts.models import User
 from accounts.rights import Right, require
 from core import chain
-from inspections import protocol
+from inspections import protocol, signature
 from inspections.models import (
     EFFECTIVE_KINDS,
     OUTCOMES_WITH_COMMENT,
@@ -39,7 +40,10 @@ from inspections.models import (
     RoundPart,
     RoundProtocol,
     RoundState,
+    SignatureRejection,
+    SignedProtocol,
 )
+from inspections.signature import SignatureError
 from inventory.models import Component, EventKind, Part, normalize_ei
 from inventory.services import record_event
 
@@ -407,20 +411,48 @@ def _apply(round_: InspectionRound, *, actor: User | None, at: datetime) -> None
             effect(EventKind.RETIRED, result.comment)
 
 
-@transaction.atomic
-def sign_round(round_: InspectionRound, *, actor: User) -> RoundEvent:
-    """Signiert eine abgeschlossene Runde und überträgt die Ergebnisse auf die Teile.
+def sign_round(round_: InspectionRound, *, actor: User, signed_pdf: bytes) -> RoundEvent:
+    """Nimmt das signierte Prüfprotokoll an und überträgt die Ergebnisse auf die Teile (#38).
 
-    Platzhalter bis Phase 3: Die echte Signatur (YubiKey, Zeitstempel) prüft der Aufrufer vorher.
-    Alles geschieht in einer Transaktion; scheitert ein Teil, bleibt nichts zurück.
+    Prüft Signatur, Zertifikat und Sachkunde gegen den Zeitpunkt des Hochladens, hängt den
+    Zeitstempel an und speichert das PDF; alles in einer Transaktion. Wird das PDF abgelehnt,
+    bleibt die Runde unverändert, und der Versuch steht mit Grund bei der Runde.
     """
+    try:
+        return _sign(round_, actor=actor, signed_pdf=signed_pdf)
+    except SignatureError as error:
+        SignatureRejection.objects.create(
+            round=round_,
+            actor=actor,
+            reason=str(error),
+            uploaded_sha256=signature.sha256(signed_pdf),
+        )
+        raise
+
+
+@transaction.atomic
+def _sign(round_: InspectionRound, *, actor: User, signed_pdf: bytes) -> RoundEvent:
     round_ = _lock(round_)
     if round_.inspector_id is None:
         raise InspectionError(f"{round_} ist eine Übernahme aus dem Altsystem.")
     _require_inspector(round_, actor)
     _require_state(round_, RoundState.CLOSED)
     _verify_unchanged(round_)
+    entry = RoundProtocol.objects.filter(round=round_).first()
+    if entry is None:
+        raise InspectionError(f"Zu {round_} gibt es kein Prüfprotokoll.")
     moment = timezone.now()
+    checked = signature.verify_and_stamp(entry, signed_pdf, at=moment)
+    SignedProtocol.objects.create(
+        round=round_,
+        protocol=entry,
+        pdf=checked.stamped_pdf,
+        sha256=signature.sha256(checked.stamped_pdf),
+        uploaded_sha256=signature.sha256(signed_pdf),
+        certificate=checked.certificate,
+        signed_at=moment,
+        stamped_at=checked.stamped_at,
+    )
     event = RoundEvent.objects.create(
         round=round_, kind=RoundEventKind.SIGNED, actor=actor, at=moment
     )

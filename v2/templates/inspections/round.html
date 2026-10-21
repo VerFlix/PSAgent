@@ -54,7 +54,13 @@
   <h2>Abgeschlossen, noch nicht signiert</h2>
   <p class="hint">Diese Runden wirken erst mit der Signatur auf die Teile.</p>
   <ul class="plain">{% for closed in unsigned %}<li>{{ closed }} · {{ closed.results.count }} Ergebnis(se)
-    {% if closed.has_protocol %} · <a href="{% url 'inspections:round_protocol' closed.pk %}">Prüfprotokoll zum Signieren (PDF)</a>{% endif %}</li>{% endfor %}</ul>
+    {% if closed.has_protocol %} · <a href="{% url 'inspections:round_protocol' closed.pk %}">Prüfprotokoll zum Signieren (PDF)</a>
+    <form method="post" enctype="multipart/form-data" action="{% url 'inspections:round_sign' closed.pk %}">{% csrf_token %}
+      <label for="signed-{{ closed.pk }}">Signiertes Prüfprotokoll hochladen</label>
+      <input id="signed-{{ closed.pk }}" name="signed_pdf" type="file" accept="application/pdf" required>
+      <button type="submit">Signatur prüfen und Runde wirksam machen</button>
+    </form>{% endif %}</li>{% endfor %}</ul>
+  <p class="hint">Signieren am PC mit dem YubiKey (Signier-Tool oder Adobe Acrobat Reader), genau die heruntergeladene Datei, ins vorbereitete Feld „Sachkundiger“.</p>
 </section>
 {% endif %}
 {% endif %}
