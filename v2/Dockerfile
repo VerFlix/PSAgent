@@ -15,6 +15,9 @@ WORKDIR /app
 # Abhängigkeiten zuerst, damit der Docker-Cache bei Code-Änderungen greift.
 # Solange noch kein uv.lock existiert, wird frisch aufgelöst.
 COPY pyproject.toml uv.lock* ./
+# Das Signier-Tool (Entwicklungsabhängigkeit, #38) wird nicht installiert; uv braucht nur seine
+# Paketbeschreibung, um uv.lock zu prüfen.
+COPY signiertool/pyproject.toml signiertool/
 RUN if [ -f uv.lock ]; then uv sync --locked --no-dev; else uv sync --no-dev; fi
 
 COPY . .

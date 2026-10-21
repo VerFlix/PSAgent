@@ -38,6 +38,12 @@ cd "$PROJECT_DIR/v2"
 command -v uv >/dev/null || fail "uv ist nicht installiert."
 uv sync --locked >>"$STEP_LOG" 2>&1 || fail "uv sync --locked ist fehlgeschlagen."
 
+# 1b. SoftHSM und OpenSC für die Tests des Signier-Tools (#38), wie in der CI.
+if ! command -v softhsm2-util >/dev/null || ! command -v pkcs11-tool >/dev/null; then
+  { apt-get install -y -q softhsm2 opensc || { apt-get update -q && apt-get install -y -q softhsm2 opensc; }; } \
+    >>"$STEP_LOG" 2>&1 || fail "softhsm2/opensc ließen sich nicht installieren."
+fi
+
 # 2. Docker-Daemon: läuft in Cloud-Sitzungen nicht von selbst.
 command -v docker >/dev/null || fail "docker ist nicht installiert."
 if ! docker info >/dev/null 2>&1; then
