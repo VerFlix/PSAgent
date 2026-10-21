@@ -5,7 +5,9 @@ nicht bedienen. Dass der QR-Decoder unter der Content-Security-Policy läuft und
 unserer Etiketten liest, prüft ein eigener Test.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from pathlib import Path
 
 import pytest
 import segno
@@ -13,9 +15,11 @@ from django.utils import timezone
 from playwright.sync_api import Page, expect
 
 from accounts.models import Qualification, Role, User
-from inspections.models import InspectionRound, RoundState
+from inspections import services
+from inspections.models import InspectionRound, Outcome, RoundState
 from inventory.services import create_product
 from tests.e2e.conftest import assert_fits_width, sign_in
+from tests.signing import signed_protocol, signing_environment
 
 pytestmark = [pytest.mark.e2e, pytest.mark.django_db(transaction=True)]
 
@@ -104,9 +108,6 @@ def test_qr_decoder_reads_our_labels(page: Page, site: str) -> None:
 
 def test_parity_8_protocol_download_after_closing(page: Page, site: str) -> None:
     """#38 Schritt 1: Nach dem Abschluss steht das Prüfprotokoll zum Signieren bereit."""
-    from inspections import services
-    from inspections.models import Outcome
-
     expert = sign_in(page, site, Role.PPE_EXPERT)
     qualify(expert)
     part = create_product({"designation": "Bandschlinge", "ei": "TST-P8"})
@@ -125,3 +126,34 @@ def test_parity_8_protocol_download_after_closing(page: Page, site: str) -> None
         page.get_by_role("link", name="Prüfprotokoll zum Signieren (PDF)").click()
 
     assert download.value.suggested_filename == f"Pruefprotokoll_Runde_{round_.pk}.pdf"
+
+
+def test_parity_8_upload_signed_protocol(page: Page, site: str, tmp_path: Path) -> None:
+    """#38 Schritt 2: Signiertes Protokoll hochladen; danach wirkt die Runde."""
+    expert = sign_in(page, site, Role.PPE_EXPERT)
+    qualify(expert)
+    part = create_product({"designation": "Bandschlinge", "ei": "TST-P8S"})
+    round_ = services.start_round(actor=expert)
+    services.record_result(
+        round_,
+        part,
+        Outcome.PASSED,
+        actor=expert,
+        next_due=timezone.localdate() + timedelta(days=365),
+    )
+    services.close_round(round_, actor=expert)
+    # pyHanko signiert mit asyncio; im Testthread läuft schon die Schleife von Playwright.
+    with ThreadPoolExecutor(max_workers=1) as worker:
+        (tmp_path / "signiert.pdf").write_bytes(worker.submit(signed_protocol, round_).result())
+
+    with signing_environment():
+        page.goto(f"{site}/pruefung/runde/")
+        page.get_by_label("Signiertes Prüfprotokoll hochladen").set_input_files(
+            tmp_path / "signiert.pdf"
+        )
+        page.get_by_role("button", name="Signatur prüfen und Runde wirksam machen").click()
+        expect(
+            page.get_by_text("signiert. Die Ergebnisse wirken jetzt auf die Teile.")
+        ).to_be_visible()
+
+    assert round_.state() == RoundState.SIGNED

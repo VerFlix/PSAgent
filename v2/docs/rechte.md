@@ -126,3 +126,8 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   (`manage.py yubikey_freigeben`), jeden weiteren ein schon freigegebener YubiKey. Wer eine
   fremde Sitzung übernimmt, kann so keinen eigenen YubiKey eintragen; einen weiteren Passkey
   richtet ein Konto mit freigegebenem YubiKey nur mit dessen Bestätigung ein.
+- Prüfprotokoll (#38, Felix, 21.10.2026): Das Protokoll einer abgeschlossenen Runde herunterladen
+  und das signierte hochladen darf nur der Prüfer der Runde (mit „Prüfen“, also gültiger
+  Sachkunde). Zertifikat, Rolle und Sachkunde gelten zum Zeitpunkt des Hochladens; die Uhrzeit
+  in der Signatur zählt nicht. Ohne Zeitstempel wird nichts gespeichert. Abgelehnte Versuche
+  stehen mit Grund bei der Runde (`SignatureRejection`).

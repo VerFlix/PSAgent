@@ -144,8 +144,16 @@ def deliver(witness: WitnessHead) -> list[str]:
 
 
 def known_heads() -> list[chain.Head]:
-    """Alle festgehaltenen Köpfe; sie müssen weiter in der Kette stehen."""
-    return [chain.Head(w.seq, w.head_hash) for w in WitnessHead.objects.order_by("seq", "pk")]
+    """Alle festgehaltenen Köpfe; sie müssen weiter in der Kette stehen.
+
+    Dazu die Köpfe aus den signierten Prüfprotokollen (#38): Sie hat ein Sachkundiger mit
+    seinem YubiKey mitsigniert, mit einem Schlüssel, den der Server nie sieht.
+    """
+    from inspections.models import SignedProtocol
+
+    heads = [chain.Head(w.seq, w.head_hash) for w in WitnessHead.objects.order_by("seq", "pk")]
+    signed = SignedProtocol.objects.select_related("protocol").order_by("protocol__chain_seq")
+    return heads + [chain.Head(s.protocol.chain_seq, s.protocol.chain_hash) for s in signed]
 
 
 def verify() -> list[str]:

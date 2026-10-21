@@ -14,10 +14,10 @@ from inspections.services import (
     adopt_legacy_round,
     close_round,
     record_result,
-    sign_round,
     start_round,
 )
 from inventory.models import Part
+from tests.signing import sign
 
 _numbers = itertools.count(1)
 
@@ -80,5 +80,5 @@ def signed_inspection(
     for part in parts:
         record_result(round_, part, outcome, actor=inspector, comment=comment, next_due=next_due)
     close_round(round_, actor=inspector)
-    sign_round(round_, actor=inspector)
+    sign(round_, actor=inspector)
     return round_

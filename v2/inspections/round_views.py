@@ -32,6 +32,7 @@ from inspections.models import (
     RoundProtocol,
 )
 from inspections.services import InspectionError
+from inspections.signature import MAX_BYTES, SignatureError
 from inventory.models import Part
 
 DATE = forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
@@ -81,7 +82,7 @@ def _answer(request: HttpRequest, round_: InspectionRound) -> HttpResponse:
 def _run(request: HttpRequest, action: Any, success: str | None = None) -> None:
     try:
         result = action()
-    except InspectionError as error:
+    except (InspectionError, SignatureError) as error:
         messages.error(request, str(error))
     else:
         if success:
@@ -200,6 +201,26 @@ def round_protocol(request: HttpRequest, pk: int) -> HttpResponse:
     response["Content-Disposition"] = f'attachment; filename="{protocol.filename(round_)}"'
     add_never_cache_headers(response)
     return response
+
+
+@requires(Right.INSPECT)
+@require_POST
+def round_sign(request: HttpRequest, pk: int) -> HttpResponse:
+    """Signiertes Prüfprotokoll hochladen; nur der Prüfer der Runde (#38)."""
+    round_ = _own_round(request, pk)
+    upload = request.FILES.get("signed_pdf")
+    if upload is None:
+        messages.error(request, "Bitte das signierte Prüfprotokoll (PDF) auswählen.")
+    elif upload.size is None or upload.size > MAX_BYTES:
+        messages.error(request, "Die Datei ist zu groß für ein Prüfprotokoll.")
+    else:
+        data = upload.read()
+        _run(
+            request,
+            lambda: services.sign_round(round_, actor=_actor(request), signed_pdf=data),
+            f"{round_} signiert. Die Ergebnisse wirken jetzt auf die Teile.",
+        )
+    return redirect("inspections:round_mode")
 
 
 @requires(Right.INSPECT)
