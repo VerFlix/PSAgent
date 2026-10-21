@@ -144,8 +144,8 @@ class User(AbstractUser):
 class Qualification(AppendOnlyModel):
     """Sachkunde einer Person für einen Zeitraum. Wird nur angehängt, nie geändert.
 
-    Gültig vom ersten bis einschließlich zum letzten Tag, nach deutscher Zeit. Die Verknüpfung
-    mit dem Signaturzertifikat folgt mit der Zertifikatsliste (#18).
+    Gültig vom ersten bis einschließlich zum letzten Tag, nach deutscher Zeit. Ein
+    Signaturzertifikat (`SigningCertificate`, #18) gilt nur zusammen mit gültiger Sachkunde.
     """
 
     user = models.ForeignKey(
@@ -220,6 +220,113 @@ class QualificationRevocation(AppendOnlyModel):
 
     def __str__(self) -> str:
         return f"Widerruf {self.qualification} ab {self.revoked_at}"
+
+
+class SigningCertificate(AppendOnlyModel):
+    """Zugelassenes Signaturzertifikat eines YubiKeys (#18). Wird nur angehängt, nie geändert.
+
+    Die Liste bestimmt, wessen Signatur der Server annimmt. Aufnahme und Widerruf sind eigene
+    Vorgänge in der Hash-Kette; die Regeln stehen in `accounts/certificates.py`. Gespeichert ist
+    nur Öffentliches: das Zertifikat und die Herstellerbescheinigung (Attestation) von Yubico.
+    """
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="signing_certificates",
+        verbose_name="Person",
+    )
+    name = models.CharField("Bezeichnung", max_length=100, help_text="z. B. YubiKey 1, Reserve")
+    der = models.BinaryField("Zertifikat (DER)")
+    sha256 = models.CharField("SHA-256-Fingerabdruck", max_length=64, unique=True)
+    key_sha256 = models.CharField(
+        "SHA-256 des öffentlichen Schlüssels",
+        max_length=64,
+        unique=True,
+        help_text="Ein Schlüssel steht nur einmal in der Liste, auch mit neuem Zertifikat.",
+    )
+    subject = models.CharField("Inhaber laut Zertifikat", max_length=500)
+    not_valid_before = models.DateTimeField("Zertifikat gültig ab")
+    not_valid_after = models.DateTimeField("Zertifikat gültig bis")
+    yubikey_serial = models.PositiveBigIntegerField("Seriennummer des YubiKeys")
+    attestation = models.TextField(
+        "Herstellerbescheinigung (PEM)",
+        help_text="Bescheinigung für Slot 9c und die Zwischenzertifikate bis zu Yubico.",
+    )
+    created_at = models.DateTimeField("aufgenommen am", default=timezone.now)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="aufgenommen von",
+    )
+
+    class Meta:
+        verbose_name = "Signaturzertifikat"
+        verbose_name_plural = "Signaturzertifikate"
+        ordering = ("created_at", "id")
+        constraints = (
+            models.CheckConstraint(
+                condition=Q(sha256__regex=r"^[0-9a-f]{64}$")
+                & Q(key_sha256__regex=r"^[0-9a-f]{64}$"),
+                name="accounts_certificate_sha256",
+            ),
+            models.CheckConstraint(
+                condition=Q(name__regex=r"\S"), name="accounts_certificate_name_required"
+            ),
+            models.CheckConstraint(
+                condition=Q(not_valid_after__gt=models.F("not_valid_before")),
+                name="accounts_certificate_period_valid",
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.user}, {self.sha256[:16]}…)"
+
+
+class SigningCertificateRevocation(AppendOnlyModel):
+    """Widerruf (Sperre) eines Signaturzertifikats ab einem Zeitpunkt. Nur angehängt.
+
+    Der Zeitpunkt darf zurückliegen (z. B. seit wann ein YubiKey verloren ist), aber nicht in
+    der Zukunft. Signaturen davor bleiben gültig, Signaturen ab dann nicht.
+    """
+
+    certificate = models.OneToOneField(
+        SigningCertificate,
+        on_delete=models.PROTECT,
+        related_name="revocation",
+        verbose_name="Zertifikat",
+    )
+    revoked_at = models.DateTimeField("widerrufen ab", default=timezone.now)
+    reason = models.TextField("Begründung")
+    created_at = models.DateTimeField("eingetragen am", default=timezone.now)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="widerrufen von",
+    )
+
+    class Meta:
+        verbose_name = "Widerruf eines Signaturzertifikats"
+        verbose_name_plural = "Widerrufe von Signaturzertifikaten"
+        constraints = (
+            models.CheckConstraint(
+                condition=Q(reason__regex=r"\S"),
+                name="accounts_certificate_revocation_reason",
+            ),
+            models.CheckConstraint(
+                condition=Q(revoked_at__lte=models.F("created_at")),
+                name="accounts_certificate_revocation_not_future",
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"Widerruf {self.certificate} ab {self.revoked_at}"
 
 
 class Passkey(models.Model):

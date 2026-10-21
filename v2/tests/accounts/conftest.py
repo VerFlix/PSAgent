@@ -3,12 +3,14 @@
 import itertools
 from collections.abc import Callable
 from datetime import date, datetime
+from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
 
 from accounts.models import Qualification, Role, User
+from tests.accounts.yubikey import FakeYubico, pem
 
 BERLIN = ZoneInfo("Europe/Berlin")
 # Fester Zeitpunkt, damit Tests nicht vom heutigen Datum abhängen.
@@ -51,3 +53,18 @@ def grant(db: None) -> Grant:
         )
 
     return grant_qualification
+
+
+# Seriennummern der künstlichen YubiKeys, die die Einstellungen in Tests zulassen.
+SERIALS = (1000001, 1000002)
+
+
+@pytest.fixture
+def yubico(settings: Any, tmp_path: Path) -> FakeYubico:
+    """Künstliche Yubico-Wurzel als Vertrauensanker; zugelassen sind die Nummern aus SERIALS."""
+    authority = FakeYubico()
+    path = tmp_path / "yubico-ca.pem"
+    path.write_bytes(pem(authority.root))
+    settings.PSAGENT_YUBICO_CA_PATH = str(path)
+    settings.PSAGENT_YUBIKEY_SERIALS = [str(serial) for serial in SERIALS]
+    return authority

@@ -9,7 +9,8 @@
 
 Damit fällt eine neu berechnete Kette gleich doppelt auf: Ihre Köpfe passen nicht zu den
 verschickten, und für frühere Tage gibt es keine passenden Stempel, weil niemand rückdatieren
-kann. Mail und Datei enthalten nur Nummer, Hash und Stempel, keine Personendaten.
+kann. Mail und Datei enthalten nur Nummer, Hash und Stempel, dazu die Fingerabdrücke der
+Signaturzertifikate (#18), aber keine Namen oder andere Personendaten.
 """
 
 import base64
@@ -52,7 +53,7 @@ def capture() -> tuple[WitnessHead, str | None]:
 
 
 def report(witness: WitnessHead) -> str:
-    """Text für Mail und Datei: nur Nummer, Hash und Zeitstempel."""
+    """Text für Mail und Datei: Nummer, Hash, Zeitstempel und Fingerabdrücke, keine Namen."""
     at = timezone.localtime(witness.at)
     lines = [
         f"PSAgent – Kettenkopf vom {at:%d.%m.%Y %H:%M}",
@@ -76,6 +77,7 @@ def report(witness: WitnessHead) -> str:
         "Prüfen in PSAgent (Admin):",
         f"  uv run python manage.py kette_pruefen --kopf {witness.seq}:{witness.head_hash}",
     ]
+    lines += _certificates()
     if witness.token is not None:
         encoded = base64.b64encode(bytes(witness.token)).decode()
         lines += [
@@ -89,6 +91,27 @@ def report(witness: WitnessHead) -> str:
             *textwrap.wrap(encoded, 64),
         ]
     return "\n".join(lines) + "\n"
+
+
+def _certificates() -> list[str]:
+    """Fingerabdrücke der Signaturzertifikate (#18), zum Abgleich mit der Papierliste."""
+    from accounts.models import SigningCertificate
+
+    entries = SigningCertificate.objects.select_related("revocation").order_by("created_at", "pk")
+    if not entries:
+        return []
+    lines = [
+        "",
+        "Signaturzertifikate (SHA-256-Fingerabdruck), bitte mit der Papierliste vergleichen:",
+    ]
+    for entry in entries:
+        revocation = getattr(entry, "revocation", None)
+        since = timezone.localtime(entry.created_at)
+        state = f"aufgenommen {since:%d.%m.%Y}"
+        if revocation is not None:
+            state += f", widerrufen ab {timezone.localtime(revocation.revoked_at):%d.%m.%Y}"
+        lines += [f"  {entry.sha256}", f"    {state}"]
+    return lines
 
 
 def deliver(witness: WitnessHead) -> list[str]:

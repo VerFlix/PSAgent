@@ -6,7 +6,6 @@ Manipuliert wird wie ein Angreifer mit Datenbankzugang: per SQL, mit ausgeschalt
 import threading
 from io import StringIO
 from itertools import pairwise
-from typing import Any
 
 import pytest
 from django.core.management import CommandError, call_command
@@ -18,6 +17,7 @@ from core.append_only import AppendOnlyError, AppendOnlyModel
 from core.chain import GENESIS, Head
 from core.models import ChainLink
 from emergency.models import Binder, FormKind, FormSheet
+from tests.helpers import tamper
 
 pytestmark = pytest.mark.django_db
 
@@ -30,16 +30,6 @@ def event(user: User, detail: str) -> AccountEvent:
     return AccountEvent.objects.create(
         user=user, kind=AccountEventKind.STAMP_CHANGED, detail=detail
     )
-
-
-def tamper(table: str, sql: str, params: list[Any] | None = None) -> None:
-    """Ändert eine Tabelle an Trigger und App vorbei."""
-    with connection.cursor() as cursor:
-        # Im Test läuft alles in einer Transaktion; ausstehende Prüfungen erst abschließen.
-        cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
-        cursor.execute(f'ALTER TABLE "{table}" DISABLE TRIGGER "{table}_append_only"')
-        cursor.execute(sql, params or [])
-        cursor.execute(f'ALTER TABLE "{table}" ENABLE TRIGGER "{table}_append_only"')
 
 
 def links() -> list[ChainLink]:

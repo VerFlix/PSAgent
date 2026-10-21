@@ -15,8 +15,8 @@ from django.urls import reverse
 from django.utils.cache import add_never_cache_headers
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from accounts import services
-from accounts.models import Passkey, Qualification, Role, User
+from accounts import certificates, services
+from accounts.models import Passkey, Qualification, Role, SigningCertificate, User
 from accounts.rights import Right, requires
 from accounts.services import AccountError
 from accounts.views import save_stamp
@@ -44,6 +44,36 @@ class QualificationForm(forms.Form):
     )
     evidence = forms.CharField(
         label="Nachweis", max_length=500, help_text="z. B. Lehrgang, Anbieter und Datum"
+    )
+
+
+# Zertifikate und Bescheinigungen sind wenige Kilobyte groß.
+MAX_CERTIFICATE_BYTES = 64 * 1024
+
+
+class CertificateForm(forms.Form):
+    name = forms.CharField(
+        label="Bezeichnung", max_length=100, help_text="z. B. YubiKey 1, Reserve"
+    )
+    certificate = forms.FileField(label="Zertifikat aus Slot 9c (PEM oder DER)")
+    attestation = forms.FileField(label="Herstellerbescheinigung für Slot 9c")
+    intermediates = forms.FileField(label="Zwischenzertifikat(e) bis zu Yubico (Slot f9)")
+
+    def clean(self) -> dict[str, Any]:
+        data = super().clean() or {}
+        for key in ("certificate", "attestation", "intermediates"):
+            upload = data.get(key)
+            if upload is not None and upload.size > MAX_CERTIFICATE_BYTES:
+                raise forms.ValidationError("Eine Datei ist zu groß für ein Zertifikat.")
+        return data
+
+
+class CertificateRevokeForm(ReasonForm):
+    revoked_at = forms.DateTimeField(
+        label="widerrufen ab (leer: jetzt)",
+        required=False,
+        input_formats=["%Y-%m-%dT%H:%M"],
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}),
     )
 
 
@@ -118,6 +148,10 @@ def user_detail(request: HttpRequest, pk: int) -> HttpResponse:
         "role_form": RoleForm(initial={"role": account.role}),
         "reason_form": ReasonForm(),
         "qualification_form": QualificationForm(),
+        "certificates": SigningCertificate.objects.filter(user=account)
+        .select_related("revocation")
+        .order_by("-created_at"),
+        "may_hold_certificate": account.has_role(Role.PPE_EXPERT),
         "is_self": account.pk == request.user.pk,
     }
     return render(request, "accounts/manage/detail.html", context)
@@ -243,4 +277,52 @@ def qualification_revoke(request: HttpRequest, pk: int, qualification: int) -> H
 def user_stamp(request: HttpRequest, pk: int) -> HttpResponse:
     account = get_object_or_404(User, pk=pk)
     save_stamp(request, account)
+    return _back(account)
+
+
+@requires(Right.MANAGE_USERS)
+@require_POST
+def certificate_register(request: HttpRequest, pk: int) -> HttpResponse:
+    account = get_object_or_404(User, pk=pk)
+    form = CertificateForm(request.POST, request.FILES)
+    if not form.is_valid():
+        _invalid(request, form)
+        return _back(account)
+    data = form.cleaned_data
+    try:
+        entry = certificates.register(
+            account,
+            certificate=data["certificate"].read(),
+            attestation=data["attestation"].read(),
+            intermediates=data["intermediates"].read(),
+            name=data["name"],
+            actor=_actor(request),
+        )
+    except AccountError as error:
+        messages.error(request, str(error))
+    else:
+        messages.success(request, f"Signaturzertifikat „{entry.name}“ aufgenommen.")
+    return _back(account)
+
+
+@requires(Right.MANAGE_USERS)
+@require_POST
+def certificate_revoke(request: HttpRequest, pk: int, certificate: int) -> HttpResponse:
+    account = get_object_or_404(User, pk=pk)
+    entry = get_object_or_404(SigningCertificate, pk=certificate, user=account)
+    form = CertificateRevokeForm(request.POST)
+    if not form.is_valid():
+        _invalid(request, form)
+        return _back(account)
+    try:
+        certificates.revoke(
+            entry,
+            actor=_actor(request),
+            revoked_at=form.cleaned_data["revoked_at"],
+            **_reason(form),
+        )
+    except AccountError as error:
+        messages.error(request, str(error))
+    else:
+        messages.success(request, f"Signaturzertifikat „{entry.name}“ widerrufen.")
     return _back(account)

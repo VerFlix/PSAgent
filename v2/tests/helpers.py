@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from datetime import date, timedelta
 from typing import Any
 
+from django.db import connection
 from django.utils import timezone
 
 from accounts.models import Qualification, Role, User
@@ -40,6 +41,16 @@ def make_inspector(*, qualified: bool = True, role: Role = Role.PPE_EXPERT, **fi
             evidence="Lehrgang PSA-Sachkunde (Testdaten)",
         )
     return user
+
+
+def tamper(table: str, sql: str, params: list[Any] | None = None) -> None:
+    """Ändert eine Tabelle an Trigger und App vorbei, wie ein Angreifer mit Datenbankzugang."""
+    with connection.cursor() as cursor:
+        # Im Test läuft alles in einer Transaktion; ausstehende Prüfungen erst abschließen.
+        cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
+        cursor.execute(f'ALTER TABLE "{table}" DISABLE TRIGGER "{table}_append_only"')
+        cursor.execute(sql, params or [])
+        cursor.execute(f'ALTER TABLE "{table}" ENABLE TRIGGER "{table}_append_only"')
 
 
 def adopt_inspection(

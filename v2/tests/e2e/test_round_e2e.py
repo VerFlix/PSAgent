@@ -77,7 +77,9 @@ def test_qr_decoder_reads_our_labels(page: Page, site: str) -> None:
     qualify(expert)
     page.goto(f"{site}/pruefung/runde/")
     page.get_by_role("button", name="Prüfungsrunde beginnen").click()
-    page.wait_for_function("typeof window.jsQR === 'function'")
+    # Als Funktion, nicht als Ausdruck: Den Ausdruck wertet Playwright per eval aus, und das
+    # verbietet die Content Security Policy der Seite (neuere Chromium-Versionen).
+    page.wait_for_function("() => typeof window.jsQR === 'function'")
     content = "https://psagent.example.org/q/TST-QR1"
 
     decoded = page.evaluate(
