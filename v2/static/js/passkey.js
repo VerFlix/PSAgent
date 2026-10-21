@@ -81,9 +81,21 @@
       const credential = await navigator.credentials.get({ publicKey: requestOptions(options) });
       body = { credential: authenticationJSON(credential) };
     } else {
+      // Mit freigegebenem YubiKey (#95): zuerst ihn bestätigen, dann den neuen Schlüssel.
+      let confirmation = null;
+      if (button.dataset.yubikey) {
+        const path = new URL(button.dataset.submitUrl, window.location.href).pathname;
+        const confirmOptions = await post(button.dataset.yubikey, { path });
+        const yubikey = await navigator.credentials.get({ publicKey: requestOptions(confirmOptions) });
+        confirmation = authenticationJSON(yubikey);
+      }
       const credential = await navigator.credentials.create({ publicKey: creationOptions(options) });
       const nameInput = document.getElementById(button.dataset.nameInput || "");
-      body = { credential: registrationJSON(credential), name: nameInput ? nameInput.value : "" };
+      body = {
+        credential: registrationJSON(credential),
+        name: nameInput ? nameInput.value : "",
+        yubikey_assertion: confirmation,
+      };
     }
     const result = await post(button.dataset.submitUrl, body);
     window.location.assign(result.redirect);

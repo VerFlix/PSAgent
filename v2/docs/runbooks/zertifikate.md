@@ -59,9 +59,19 @@ Passkey, dessen Herstellerbescheinigung (FIDO-Attestation) von Yubico stammt:
 2. Unter „Konto“ den YubiKey als Passkey einrichten. Der Browser fragt, ob die Website Marke
    und Modell des Schlüssels sehen darf: zulassen. Ein schon vorher eingerichteter Passkey zählt
    nicht; dann denselben YubiKey noch einmal einrichten (z. B. „YubiKey 1 (bescheinigt)“).
-3. Den Reserve-YubiKey ebenso einrichten.
+3. Den ersten YubiKey auf dem Server freigeben. Erst dann bestätigt er Änderungen; so kann
+   niemand mit einer übernommenen Sitzung einen eigenen YubiKey unterschieben:
 
-Ohne einen solchen Passkey geht in der Nutzerverwaltung keine Änderung; dann bleiben nur die
+   ```bash
+   uv run python manage.py yubikey_freigeben <Benutzername>            # zeigt die Kandidaten
+   uv run python manage.py yubikey_freigeben <Benutzername> --passkey <Nummer>
+   ```
+
+   Nur den Passkey freigeben, den man eben selbst eingerichtet hat (Bezeichnung und Uhrzeit).
+4. Den Reserve-YubiKey unter „Konto“ einrichten. Dabei fragt der Browser zuerst den schon
+   freigegebenen YubiKey; der neue ist dann gleich freigegeben.
+
+Ohne freigegebenen YubiKey geht in der Nutzerverwaltung keine Änderung; dann bleiben nur die
 Verwaltungsbefehle auf dem Server.
 
 ## 4. Aufnehmen (Admin)

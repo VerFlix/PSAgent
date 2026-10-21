@@ -121,3 +121,7 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   Vereinsgeräte. Es zählt nur ein Passkey mit geprüfter Herstellerbescheinigung von Yubico; die
   Bestätigung gilt einmal und nur für die eine Adresse. Ohne YubiKey bleiben nur die
   Verwaltungsbefehle auf dem Server. Lesen und die Sicherung (ZIP) brauchen keine Bestätigung.
+  Ein YubiKey bestätigt erst nach der Freigabe: den ersten eines Kontos gibt der Server frei
+  (`manage.py yubikey_freigeben`), jeden weiteren ein schon freigegebener YubiKey. Wer eine
+  fremde Sitzung übernimmt, kann so keinen eigenen YubiKey eintragen; einen weiteren Passkey
+  richtet ein Konto mit freigegebenem YubiKey nur mit dessen Bestätigung ein.

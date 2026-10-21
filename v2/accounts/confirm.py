@@ -49,16 +49,30 @@ def requires_yubikey[V: Callable[..., HttpResponseBase]](view: V) -> V:
     return confirmed  # type: ignore[return-value]
 
 
-@requires(Right.MANAGE_USERS)
+def when_yubikey_present[V: Callable[..., HttpResponseBase]](view: V) -> V:
+    """Kennzeichnet eine Ansicht, die selbst eine Bestätigung verlangt, sobald das Konto einen
+    freigegebenen YubiKey hat (weiteren Passkey einrichten). Geprüft wird in der Ansicht."""
+    view.psagent_yubikey_if_present = True  # type: ignore[attr-defined]
+    return view
+
+
+@requires(Right.ACCOUNT)
 @require_POST
 def options(request: HttpRequest) -> HttpResponse:
-    """Optionen für eine Bestätigung; nur für Adressen, die eine Bestätigung verlangen."""
+    """Optionen für eine Bestätigung; nur für Adressen, die eine Bestätigung verlangen.
+
+    Erreichbar für jedes Konto: Den eigenen YubiKey bestätigt man auch beim Einrichten eines
+    weiteren Passkeys. Ob die Änderung selbst erlaubt ist, prüft die Zielansicht.
+    """
     try:
         path = str(json.loads(request.body or b"{}").get("path", ""))
         match = resolve(path)
     except (ValueError, AttributeError, Resolver404):
         return JsonResponse({"error": "Unbekannte Adresse."}, status=400)
-    if not getattr(match.func, "psagent_yubikey", False):
+    if not (
+        getattr(match.func, "psagent_yubikey", False)
+        or getattr(match.func, "psagent_yubikey_if_present", False)
+    ):
         return JsonResponse({"error": "Diese Adresse braucht keine Bestätigung."}, status=400)
     assert isinstance(request.user, User)  # noqa: S101 – von requires() geprüft
     try:

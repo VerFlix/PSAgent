@@ -346,6 +346,15 @@ class Passkey(models.Model):
         default=False,
         help_text="Nur solche Passkeys bestätigen Änderungen in der Nutzerverwaltung (#95).",
     )
+    yubikey_approved_at = models.DateTimeField(
+        "als YubiKey freigegeben am",
+        null=True,
+        blank=True,
+        help_text=(
+            "Erst freigegeben bestätigt ein YubiKey Änderungen: mit einem schon freigegebenen "
+            "YubiKey desselben Kontos oder auf dem Server (manage.py yubikey_freigeben)."
+        ),
+    )
     created_at = models.DateTimeField("angelegt am", default=timezone.now)
     last_used_at = models.DateTimeField("zuletzt benutzt", null=True, blank=True)
     revoked_at = models.DateTimeField("widerrufen am", null=True, blank=True)

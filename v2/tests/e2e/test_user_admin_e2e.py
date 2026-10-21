@@ -99,3 +99,21 @@ def test_promotion_ends_running_session_in_browser(page: Page, site: str, browse
     page.reload()
     expect(page.get_by_role("heading", name="Anmelden")).to_be_visible()
     admin_context.close()
+
+
+def test_further_passkey_is_confirmed_with_yubikey(
+    page: Page, site: str, authenticator: str
+) -> None:
+    """Mit freigegebenem YubiKey verlangt ein weiterer Passkey dessen Bestätigung (#95).
+
+    Zwei virtuelle Schlüssel: der freigegebene bestätigt, auf dem leeren entsteht der neue.
+    """
+    admin = sign_in(page, site, Role.ADMIN)
+    add_yubikey(page, admin)
+
+    page.goto(f"{site}/konto/")
+    page.get_by_label("Neuer Passkey, Bezeichnung").fill("Reserve")
+    page.get_by_role("button", name="Passkey hinzufügen").click()
+
+    expect(page.get_by_text("Passkey eingerichtet.", exact=True)).to_be_visible()
+    assert Passkey.objects.filter(user=admin).count() == 2

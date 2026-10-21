@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 
 from django.test import Client
 from django.urls import Resolver404, resolve, reverse
+from django.utils import timezone
 
 from accounts.confirm import FIELD
 from accounts.models import Passkey, User
@@ -51,7 +52,7 @@ class YubiKeyClient(Client):
 
 
 def give_yubikey(user: User, key: SoftKey | None = None) -> SoftKey:
-    """Trägt einen Passkey ein, dessen Herstellerbescheinigung von Yubico geprüft ist."""
+    """Trägt einen Passkey ein, dessen Herstellerbescheinigung geprüft und der freigegeben ist."""
     key = key or SoftKey()
     Passkey.objects.create(
         user=user,
@@ -59,6 +60,7 @@ def give_yubikey(user: User, key: SoftKey | None = None) -> SoftKey:
         credential_id=key.credential_id,
         public_key=key.cose_key(),
         yubikey_attested=True,
+        yubikey_approved_at=timezone.now(),
     )
     return key
 

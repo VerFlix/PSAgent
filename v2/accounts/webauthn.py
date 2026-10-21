@@ -11,11 +11,14 @@ der Ablauf und die Regeln:
   der Schlüssel womöglich geklont; dann wird ebenfalls abgewiesen.
 - Admin und PSA-Sachkundige fragen beim Einrichten die Herstellerbescheinigung an. Stammt sie
   nachweislich von Yubico (Kette bis `PSAGENT_YUBICO_FIDO_CA_PATH`, geprüft von py_webauthn),
-  gilt der Passkey als YubiKey (`Passkey.yubikey_attested`, #95).
+  gilt der Passkey als YubiKey (`Passkey.yubikey_attested`, #95). Änderungen bestätigt er erst
+  nach der Freigabe: Den ersten YubiKey eines Kontos gibt der Server frei
+  (`manage.py yubikey_freigeben`), jeden weiteren ein schon freigegebener YubiKey. Wer nur eine
+  fremde Sitzung übernimmt, kann so keinen eigenen YubiKey unterschieben.
 """
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
@@ -49,6 +52,9 @@ from webauthn.helpers.structs import (
 from webauthn.registration.verify_registration_response import VerifiedRegistration
 
 from accounts.models import Passkey, User
+
+if TYPE_CHECKING:
+    from django.db.models import QuerySet
 
 REGISTRATION_CHALLENGE = "webauthn_registration_challenge"
 AUTHENTICATION_CHALLENGE = "webauthn_authentication_challenge"
@@ -97,9 +103,18 @@ def registration_options(user: User, session: SessionBase) -> str:
 
 @transaction.atomic
 def register(
-    user: User, credential: str | dict[str, Any], name: str, session: SessionBase
+    user: User,
+    credential: str | dict[str, Any],
+    name: str,
+    session: SessionBase,
+    *,
+    approved: bool = False,
 ) -> Passkey:
-    """Prüft die Antwort des Schlüssels und speichert den Passkey."""
+    """Prüft die Antwort des Schlüssels und speichert den Passkey.
+
+    `approved`: Die Einrichtung wurde mit einem freigegebenen YubiKey des Kontos bestätigt; ein
+    neuer YubiKey ist dann gleich freigegeben.
+    """
     challenge = _take_challenge(session, REGISTRATION_CHALLENGE)
     name = name.strip()[:100] or "Passkey"
     try:
@@ -109,6 +124,7 @@ def register(
     if Passkey.objects.filter(credential_id=verified.credential_id).exists():
         raise PasskeyError("Dieser Passkey ist bereits eingetragen.")
     transports = _transports(credential)
+    attested = _attested_by_yubico(credential, challenge, verified)
     return Passkey.objects.create(
         user=user,
         name=name,
@@ -117,7 +133,8 @@ def register(
         sign_count=verified.sign_count,
         transports=transports,
         aaguid=str(verified.aaguid),
-        yubikey_attested=_attested_by_yubico(credential, challenge, verified),
+        yubikey_attested=attested,
+        yubikey_approved_at=timezone.now() if attested and approved else None,
     )
 
 
@@ -224,9 +241,24 @@ def authenticate(credential: str | dict[str, Any], session: SessionBase) -> User
 # --- Änderung mit YubiKey bestätigen (#95) ---
 
 
+def yubikeys(user: User) -> "QuerySet[Passkey]":
+    """Passkeys, die Änderungen bestätigen: bescheinigt, freigegeben, nicht widerrufen."""
+    return user.passkeys.filter(
+        revoked_at__isnull=True, yubikey_attested=True, yubikey_approved_at__isnull=False
+    )
+
+
 def confirmation_options(user: User, session: SessionBase, path: str) -> str:
     """Optionen für die Bestätigung genau einer Anfrage an `path` mit einem YubiKey des Kontos."""
-    keys = user.passkeys.filter(revoked_at__isnull=True, yubikey_attested=True)
+    keys = yubikeys(user)
+    if (
+        not keys.exists()
+        and user.passkeys.filter(revoked_at__isnull=True, yubikey_attested=True).exists()
+    ):
+        raise PasskeyError(
+            "Ihr YubiKey ist noch nicht freigegeben. Den ersten YubiKey eines Kontos gibt der "
+            "Server frei: manage.py yubikey_freigeben <Benutzername>."
+        )
     if not keys.exists():
         raise PasskeyError(
             "Für Änderungen in der Nutzerverwaltung braucht dieses Konto einen YubiKey mit "
@@ -259,13 +291,7 @@ def confirm(
         parsed = parse_authentication_credential_json(credential)
     except (InvalidAuthenticationResponse, ValueError, TypeError) as error:
         raise PasskeyError(failed) from error
-    passkey = (
-        Passkey.objects.select_for_update()
-        .filter(
-            user=user, credential_id=parsed.raw_id, revoked_at__isnull=True, yubikey_attested=True
-        )
-        .first()
-    )
+    passkey = yubikeys(user).select_for_update().filter(credential_id=parsed.raw_id).first()
     if passkey is None:
         raise PasskeyError(failed)
     try:

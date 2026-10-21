@@ -6,9 +6,11 @@ Ohne Bestätigung (403, nichts ändert sich) prüft `tests/test_url_rights.py` f
 """
 
 import json
+from io import StringIO
 from typing import Any
 
 import pytest
+from django.core.management import CommandError, call_command
 from django.test import Client
 from django.urls import get_resolver, reverse
 from django.utils import timezone
@@ -17,7 +19,7 @@ from accounts.confirm import FIELD
 from accounts.models import Passkey, Qualification, Role, User
 from accounts.rights import Right
 from tests.accounts.conftest import MakeUser
-from tests.accounts.softkey import SoftKey
+from tests.accounts.softkey import FakeFidoRoot, SoftKey
 from tests.test_url_rights import PROTECTED, row_counts, walk
 from tests.yubikey_client import (
     YubiKeyClient,
@@ -159,15 +161,96 @@ def test_options_only_for_addresses_that_need_confirmation(
     assert response.status_code == 400
 
 
-def test_options_only_for_admins(client: Client, make_user: MakeUser) -> None:
+def test_options_do_not_grant_the_change(client: YubiKeyClient, make_user: MakeUser) -> None:
+    """Optionen bekommt jedes Konto mit YubiKey; die Änderung selbst bleibt Sache des Admins."""
     expert = make_user(Role.PPE_EXPERT)
-    give_yubikey(expert)
-    client.force_login(expert)
+    login_with_yubikey(client, expert)
+    before = row_counts()
 
-    assert options(client, reverse("accounts:user_create")).status_code == 403
+    response = client.post(reverse("accounts:user_create"), {"username": "x", "role": "admin"})
+
+    assert response.status_code == 403
+    assert row_counts() == before
 
 
 def test_account_page_marks_attested_yubikey(client: YubiKeyClient, admin: User) -> None:
     page = client.get(reverse("accounts:account")).content.decode()
 
     assert "(YubiKey, bescheinigt)" in page
+
+
+# --- Weiterer Passkey nur mit freigegebenem YubiKey ---
+
+
+def register_passkey(client: Client, key: SoftKey, **extra: Any) -> Any:
+    options = Client.post(client, reverse("accounts:passkey_register_options")).json()
+    return Client.post(
+        client,
+        reverse("accounts:passkey_register"),
+        data=json.dumps({"credential": key.register(options), "name": "Neu", **extra}),
+        content_type="application/json",
+    )
+
+
+def test_hijacked_session_cannot_add_own_yubikey(
+    client: YubiKeyClient, admin: User, fido_root: FakeFidoRoot
+) -> None:
+    """Angriff: Mit übernommener Sitzung den eigenen (echten) YubiKey eintragen."""
+    response = register_passkey(client, fido_root.yubikey())
+
+    assert response.status_code == 403
+    assert Passkey.objects.filter(user=admin).count() == 1
+
+
+def test_further_yubikey_with_confirmation_is_approved(
+    client: YubiKeyClient, admin: User, fido_root: FakeFidoRoot
+) -> None:
+    assert client.key is not None
+    path = reverse("accounts:passkey_register")
+
+    response = register_passkey(
+        client, fido_root.yubikey(), **{FIELD: json.loads(signed(client, client.key, path))}
+    )
+
+    assert response.status_code == 200
+    new = Passkey.objects.get(user=admin, name="Neu")
+    assert new.yubikey_attested and new.yubikey_approved_at is not None
+
+
+def test_first_yubikey_needs_approval_on_the_server(
+    client: Client, make_user: MakeUser, fido_root: FakeFidoRoot
+) -> None:
+    admin = make_user(Role.ADMIN)
+    client.force_login(admin)
+
+    assert register_passkey(client, fido_root.yubikey()).status_code == 200
+    passkey = Passkey.objects.get(user=admin)
+    assert passkey.yubikey_attested and passkey.yubikey_approved_at is None
+    response = options(client, reverse("accounts:user_create"))
+    assert response.status_code == 400
+    assert "noch nicht freigegeben" in response.json()["error"]
+
+    out = StringIO()
+    call_command("yubikey_freigeben", admin.username, stdout=out)
+    assert f"{passkey.pk}: Neu" in out.getvalue()
+    passkey.refresh_from_db()
+    assert passkey.yubikey_approved_at is None
+
+    call_command("yubikey_freigeben", admin.username, "--passkey", str(passkey.pk), stdout=out)
+    passkey.refresh_from_db()
+    assert passkey.yubikey_approved_at is not None
+    assert options(client, reverse("accounts:user_create")).status_code == 200
+
+
+def test_command_approves_only_attested_keys(client: Client, make_user: MakeUser) -> None:
+    admin = make_user(Role.ADMIN)
+    phone = SoftKey()
+    passkey = Passkey.objects.create(
+        user=admin, name="Handy", credential_id=phone.credential_id, public_key=phone.cose_key()
+    )
+
+    with pytest.raises(CommandError, match="Kein freizugebender YubiKey"):
+        call_command("yubikey_freigeben", admin.username, "--passkey", str(passkey.pk))
+
+    passkey.refresh_from_db()
+    assert passkey.yubikey_approved_at is None
