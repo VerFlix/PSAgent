@@ -39,10 +39,10 @@ FIELD_CM = {"left": 1.5, "top": 24.6, "width": 9.0, "height": 3.2}
 PAGE_HEIGHT_CM = 29.7
 POINTS_PER_CM = 72 / 2.54
 
+# Wortlaut: Felix, 21.10.2026 (ohne „nach Gebrauchsanleitung des Herstellers“).
 STATEMENT = (
-    "Mit meiner Signatur bestätige ich als PSA-Sachkundige*r, die aufgeführten Teile nach "
-    "Gebrauchsanleitung des Herstellers geprüft zu haben. Die Signatur deckt dieses Protokoll "
-    "und den genannten Kettenkopf ab."
+    "Mit meiner Signatur bestätige ich als PSA-Sachkundige*r, die aufgeführten Teile geprüft "
+    "zu haben. Die Signatur deckt dieses Protokoll und den genannten Kettenkopf ab."
 )
 
 

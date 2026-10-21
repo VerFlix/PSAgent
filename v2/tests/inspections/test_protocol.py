@@ -67,6 +67,8 @@ def test_parity_8_closing_creates_protocol_with_master_data(
         f"{in_days(365):%d.%m.%Y}",
     ]:
         assert expected in text, expected
+    assert protocol.STATEMENT in text
+    assert "Gebrauchsanleitung" not in text
     assert entry.sha256 == protocol.sha256(bytes(entry.pdf))
 
 
