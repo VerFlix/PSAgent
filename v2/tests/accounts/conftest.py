@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from accounts.models import Qualification, Role, User
+from tests.accounts.softkey import FakeFidoRoot
 from tests.accounts.yubikey import FakeYubico, pem
 
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -67,4 +68,14 @@ def yubico(settings: Any, tmp_path: Path) -> FakeYubico:
     path.write_bytes(pem(authority.root))
     settings.PSAGENT_YUBICO_CA_PATH = str(path)
     settings.PSAGENT_YUBIKEY_SERIALS = [str(serial) for serial in SERIALS]
+    return authority
+
+
+@pytest.fixture
+def fido_root(settings: Any, tmp_path: Path) -> FakeFidoRoot:
+    """Künstliche Wurzel der FIDO-Bescheinigung von Yubico, als Einstellung eingetragen (#95)."""
+    authority = FakeFidoRoot()
+    path = tmp_path / "yubico-fido-ca.pem"
+    path.write_bytes(authority.pem())
+    settings.PSAGENT_YUBICO_FIDO_CA_PATH = str(path)
     return authority

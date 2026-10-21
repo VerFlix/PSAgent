@@ -43,6 +43,7 @@ from core.models import ChainLink, WitnessHead
 from tests.accounts.conftest import SERIALS, MakeUser
 from tests.accounts.yubikey import FakeYubico, FakeYubiKey, der, issue, name, new_key, pem
 from tests.helpers import make_inspector, tamper
+from tests.yubikey_client import login_with_yubikey
 
 pytestmark = pytest.mark.django_db
 SERIAL, OTHER_SERIAL = SERIALS
@@ -589,7 +590,7 @@ def test_only_admins_register_or_revoke(
 def test_admin_uses_the_list_in_user_management(
     client: Client, admin: User, inspector: User, yubikey: FakeYubiKey
 ) -> None:
-    client.force_login(admin)
+    login_with_yubikey(client, admin)
     url = reverse("accounts:certificate_register", args=[inspector.pk])
     upload = yubikey.upload()
 
@@ -622,7 +623,7 @@ def test_admin_uses_the_list_in_user_management(
 def test_refused_upload_shows_reason(
     client: Client, admin: User, inspector: User, yubico: FakeYubico
 ) -> None:
-    client.force_login(admin)
+    login_with_yubikey(client, admin)
     upload = yubico.yubikey(SERIAL, touch=TOUCH_ALWAYS + 1).upload()
 
     response = client.post(

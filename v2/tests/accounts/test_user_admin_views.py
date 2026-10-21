@@ -24,6 +24,7 @@ from accounts.models import (
 )
 from accounts.services import issue_enrollment
 from tests.accounts.conftest import MakeUser
+from tests.yubikey_client import login_with_yubikey
 
 pytestmark = pytest.mark.django_db
 PASSWORD = "ein-langes-Test-Passwort-42"  # gitleaks:allow – künstliches Testpasswort
@@ -32,7 +33,7 @@ PASSWORD = "ein-langes-Test-Passwort-42"  # gitleaks:allow – künstliches Test
 @pytest.fixture
 def admin(make_user: MakeUser, client: Client) -> User:
     user = make_user(Role.ADMIN)
-    client.force_login(user)
+    login_with_yubikey(client, user)
     return user
 
 

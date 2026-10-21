@@ -141,6 +141,9 @@ PSAGENT_WITNESS_DIR = env("PSAGENT_WITNESS_DIR", "")
 # (PEM-Datei, von Yubico veröffentlicht) und die Seriennummern der zugelassenen YubiKeys.
 PSAGENT_YUBICO_CA_PATH = env("PSAGENT_YUBICO_CA_PATH", "")
 PSAGENT_YUBIKEY_SERIALS = env_list("PSAGENT_YUBIKEY_SERIALS")
+# Wurzelzertifikat(e) der FIDO-Bescheinigung von Yubico (PEM): Nur damit bescheinigte Passkeys
+# bestätigen Änderungen in der Nutzerverwaltung (#95).
+PSAGENT_YUBICO_FIDO_CA_PATH = env("PSAGENT_YUBICO_FIDO_CA_PATH", "")
 PSAGENT_RETENTION_YEARS = int(env("PSAGENT_RETENTION_YEARS", "3"))
 if PSAGENT_RETENTION_YEARS < 1:
     raise ImproperlyConfigured("PSAGENT_RETENTION_YEARS muss mindestens 1 sein.")

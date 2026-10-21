@@ -10,7 +10,7 @@
       <tbody>
       {% for passkey in passkeys %}
         <tr>
-          <td>{{ passkey.name }}</td>
+          <td>{{ passkey.name }}{% if passkey.yubikey_attested %} <span class="hint">(YubiKey, bescheinigt)</span>{% endif %}</td>
           <td>{{ passkey.created_at|date:"d.m.Y" }}</td>
           <td>{{ passkey.last_used_at|date:"d.m.Y H:i"|default:"–" }}</td>
           <td>
@@ -29,7 +29,8 @@
   <input id="passkey-name" maxlength="100" placeholder="z. B. YubiKey blau">
   <button type="button" class="primary" data-passkey="register" data-name-input="passkey-name"
           data-options-url="{% url 'accounts:passkey_register_options' %}"
-          data-submit-url="{% url 'accounts:passkey_register' %}">Passkey hinzufügen</button>
+          data-submit-url="{% url 'accounts:passkey_register' %}"{% if has_yubikey %}
+          data-yubikey="{% url 'accounts:yubikey_options' %}"{% endif %}>Passkey hinzufügen</button>
   <p class="status" id="passkey-status" role="status" aria-live="polite"></p>
 </section>
 <section class="card">
@@ -46,13 +47,14 @@
 {% if devices is not None %}
 <section class="card">
   <h2>Vereinsgeräte</h2>
+  <p id="yubikey-status" class="hint" role="status" aria-live="polite">Festlegen und Widerrufen bestätigen Sie mit Ihrem YubiKey.</p>
   <p>Am Vereinsgerät endet die Sitzung nach 3 Minuten ohne Eingabe und nach jedem abgeschlossenen Vorgang.</p>
   {% if request.club_device %}<p>Dieses Gerät ist das Vereinsgerät „{{ request.club_device.name }}“.</p>{% endif %}
   {% if devices %}
     <ul class="plain">
     {% for device in devices %}
       <li>{{ device.name }} (seit {{ device.created_at|date:"d.m.Y" }})
-        <form method="post" action="{% url 'accounts:club_device_revoke' device.pk %}" class="inline">{% csrf_token %}
+        <form method="post" data-yubikey="{% url 'accounts:yubikey_options' %}" action="{% url 'accounts:club_device_revoke' device.pk %}" class="inline">{% csrf_token %}
           <button type="submit" class="link danger">Widerrufen</button>
         </form>
       </li>
@@ -60,7 +62,7 @@
     </ul>
   {% endif %}
   {% if not request.club_device %}
-  <form method="post" action="{% url 'accounts:club_device_register' %}">
+  <form method="post" data-yubikey="{% url 'accounts:yubikey_options' %}" action="{% url 'accounts:club_device_register' %}">
     {% csrf_token %}
     <label for="id_name">Dieses Gerät als Vereinsgerät festlegen</label>
     <input id="id_name" name="name" maxlength="100" placeholder="z. B. Tablet Ausgabe" required>

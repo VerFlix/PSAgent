@@ -23,7 +23,8 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods, require_POST
 
-from accounts import services, webauthn
+from accounts import confirm, services, webauthn
+from accounts.confirm import requires_yubikey
 from accounts.devices import register_device, revoke_device
 from accounts.enrollment import find_token, mark_used
 from accounts.models import ClubDevice, Passkey, User
@@ -162,6 +163,7 @@ def account(request: HttpRequest) -> HttpResponse:
     user = _current_user(request)
     context: dict[str, Any] = {
         "passkeys": user.passkeys.filter(revoked_at__isnull=True),
+        "has_yubikey": webauthn.yubikeys(user).exists(),
         "device_form": DeviceForm(),
     }
     if has_right(user, Right.MANAGE_USERS):
@@ -188,12 +190,28 @@ def passkey_register_options(request: HttpRequest) -> HttpResponse:
 
 @requires(Right.ACCOUNT)
 @require_POST
+@confirm.when_yubikey_present
 def passkey_register(request: HttpRequest) -> JsonResponse:
+    """Weiterer Passkey. Hat das Konto einen freigegebenen YubiKey, nur mit dessen Bestätigung.
+
+    Sonst könnte jemand, der eine fremde Sitzung übernimmt, seinen eigenen YubiKey eintragen und
+    damit Änderungen in der Nutzerverwaltung bestätigen (#95).
+    """
     user = _current_user(request)
     data = _json_body(request)
+    approved = webauthn.yubikeys(user).exists()
+    try:
+        if approved:
+            webauthn.confirm(user, data.get(confirm.FIELD) or {}, request.session, request.path)
+    except webauthn.PasskeyError:
+        return _error("Einen weiteren Passkey bestätigen Sie mit Ihrem YubiKey.", status=403)
     try:
         webauthn.register(
-            user, data.get("credential", {}), str(data.get("name", "")), request.session
+            user,
+            data.get("credential", {}),
+            str(data.get("name", "")),
+            request.session,
+            approved=approved,
         )
     except webauthn.PasskeyError as error:
         return _error(str(error))
@@ -305,6 +323,7 @@ def enroll_password(request: HttpRequest, token: str) -> HttpResponse:
 
 
 @requires(Right.MANAGE_USERS)
+@requires_yubikey
 @require_POST
 def club_device_register(request: HttpRequest) -> HttpResponse:
     admin = _current_user(request)
@@ -319,6 +338,7 @@ def club_device_register(request: HttpRequest) -> HttpResponse:
 
 
 @requires(Right.MANAGE_USERS)
+@requires_yubikey
 @require_POST
 def club_device_revoke(request: HttpRequest, pk: int) -> HttpResponse:
     device = get_object_or_404(ClubDevice, pk=pk, revoked_at__isnull=True)

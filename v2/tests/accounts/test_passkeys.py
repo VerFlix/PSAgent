@@ -13,7 +13,7 @@ from django.urls import reverse
 
 from accounts.models import Passkey, Role, User
 from tests.accounts.conftest import MakeUser
-from tests.accounts.softkey import SoftKey
+from tests.accounts.softkey import FakeFidoRoot, SoftKey
 
 pytestmark = pytest.mark.django_db
 
@@ -232,3 +232,53 @@ def test_sign_in_without_user_verification_is_rejected(client: Client, key: Soft
 
     assert response.status_code == 400
     assert "_auth_user_id" not in client.session
+
+
+# --- YubiKey mit Herstellerbescheinigung (#95) ---
+
+
+def test_admin_passkey_with_yubico_attestation_counts_as_yubikey(
+    client: Client, make_user: MakeUser, fido_root: FakeFidoRoot
+) -> None:
+    client.force_login(make_user(Role.ADMIN))
+
+    options = post_json(client, "accounts:passkey_register_options").json()
+    assert options["attestation"] == "direct"
+    response = post_json(
+        client,
+        "accounts:passkey_register",
+        {"credential": fido_root.yubikey().register(options), "name": "YubiKey"},
+    )
+
+    assert response.status_code == 200
+    assert Passkey.objects.get().yubikey_attested
+
+
+@pytest.mark.parametrize(
+    "case", ["ohne Bescheinigung", "Selbstbescheinigung", "fremde Wurzel", "nicht eingerichtet"]
+)
+def test_other_passkeys_do_not_count_as_yubikey(
+    case: str, client: Client, make_user: MakeUser, fido_root: FakeFidoRoot, settings: Any
+) -> None:
+    """Handy-Passkeys (ohne oder mit fremder Bescheinigung) zählen nicht als YubiKey."""
+    client.force_login(make_user(Role.ADMIN))
+    key = SoftKey()
+    if case == "Selbstbescheinigung":
+        key.attestation_key = key.private_key  # „packed“ ohne Zertifikatskette
+    elif case == "fremde Wurzel":
+        key = FakeFidoRoot().yubikey()
+    elif case == "nicht eingerichtet":
+        key = fido_root.yubikey()
+        settings.PSAGENT_YUBICO_FIDO_CA_PATH = ""
+
+    assert register(client, key).status_code == 200
+
+    assert not Passkey.objects.get().yubikey_attested
+
+
+def test_lenders_are_not_asked_for_attestation(client: Client, user: User) -> None:
+    client.force_login(user)
+
+    options = post_json(client, "accounts:passkey_register_options").json()
+
+    assert options["attestation"] == "none"

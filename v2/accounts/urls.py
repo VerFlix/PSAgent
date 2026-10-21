@@ -2,7 +2,7 @@
 
 from django.urls import path
 
-from accounts import manage_views, views
+from accounts import confirm, manage_views, views
 
 app_name = "accounts"
 
@@ -31,6 +31,7 @@ urlpatterns = [
     path("einrichten/<str:token>/passkey/", views.enroll_finish, name="enroll_finish"),
     path("einrichten/<str:token>/passwort/", views.enroll_password, name="enroll_password"),
     # Verwaltung (nur Admin)
+    path("verwaltung/bestaetigen/", confirm.options, name="yubikey_options"),
     path("verwaltung/nutzer/", manage_views.user_list, name="users"),
     path("verwaltung/nutzer/neu/", manage_views.user_create, name="user_create"),
     path("verwaltung/nutzer/<int:pk>/", manage_views.user_detail, name="user_detail"),

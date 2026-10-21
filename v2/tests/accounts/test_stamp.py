@@ -13,6 +13,7 @@ from accounts import services
 from accounts.models import AccountEvent, AccountEventKind, Role, User
 from accounts.services import AccountError
 from tests.accounts.conftest import MakeUser
+from tests.yubikey_client import login_with_yubikey
 
 pytestmark = pytest.mark.django_db
 STAMP = "Testperson Beispiel\nPSA-Sachkunde\nBeispielverein"
@@ -106,7 +107,7 @@ def test_parity_5_stamp_on_own_account_page(client: Client, make_user: MakeUser)
 
 
 def test_parity_5_stamp_in_user_management(client: Client, make_user: MakeUser) -> None:
-    client.force_login(make_user(Role.ADMIN))
+    login_with_yubikey(client, make_user(Role.ADMIN))
     user = make_user(Role.PPE_EXPERT)
 
     client.post(reverse("accounts:user_stamp", args=[user.pk]), {"stamp_text": STAMP})

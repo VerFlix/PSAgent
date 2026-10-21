@@ -1,11 +1,14 @@
-"""Ende-zu-Ende: Nutzerverwaltung im Browser (#67) – anlegen, Link, Zugang einrichten."""
+"""Ende-zu-Ende: Nutzerverwaltung im Browser (#67) – anlegen, Link, Zugang einrichten.
+
+Jede Änderung bestätigt der Admin mit einem virtuellen YubiKey (#95).
+"""
 
 import pytest
 from django.utils import timezone
-from playwright.sync_api import Browser, Page, expect
+from playwright.sync_api import Browser, Page, Route, expect
 
 from accounts.models import Passkey, Role, User
-from tests.e2e.conftest import sign_in
+from tests.e2e.conftest import add_yubikey, sign_in
 
 pytestmark = [pytest.mark.e2e, pytest.mark.django_db(transaction=True)]
 PASSWORD = "ein-langes-Test-Passwort-42"  # gitleaks:allow – künstliches Testpasswort
@@ -29,7 +32,7 @@ def create_account(admin_page: Page, site: str, username: str, role: str) -> str
 def test_admin_creates_lender_who_sets_password(page: Page, site: str, browser: Browser) -> None:
     admin_context = browser.new_context()
     admin_page = admin_context.new_page()
-    sign_in(admin_page, site, Role.ADMIN)
+    add_yubikey(admin_page, sign_in(admin_page, site, Role.ADMIN))
 
     link = create_account(admin_page, site, "robin", "Verleiher")
     page.goto(link)
@@ -50,7 +53,7 @@ def test_admin_creates_expert_who_enrolls_passkey(
     """PSA-Sachkundige: kein Passwort angeboten, Passkey über den Link; Sachkunde im Browser."""
     admin_context = browser.new_context()
     admin_page = admin_context.new_page()
-    sign_in(admin_page, site, Role.ADMIN)
+    add_yubikey(admin_page, sign_in(admin_page, site, Role.ADMIN))
 
     link = create_account(admin_page, site, "robin", "PSA-Sachkundig")
     page.goto(link)
@@ -85,7 +88,7 @@ def test_promotion_ends_running_session_in_browser(page: Page, site: str, browse
     expect(page.get_by_text("(Verleiher)")).to_be_visible()
     admin_context = browser.new_context()
     admin_page = admin_context.new_page()
-    sign_in(admin_page, site, Role.ADMIN)
+    add_yubikey(admin_page, sign_in(admin_page, site, Role.ADMIN))
 
     admin_page.goto(f"{site}/verwaltung/nutzer/{lender.pk}/")
     admin_page.get_by_label("Neue Rolle").select_option(label="Trainer/Materialwart")
@@ -96,3 +99,26 @@ def test_promotion_ends_running_session_in_browser(page: Page, site: str, browse
     page.reload()
     expect(page.get_by_role("heading", name="Anmelden")).to_be_visible()
     admin_context.close()
+
+
+def test_further_passkey_is_confirmed_with_yubikey(page: Page, site: str) -> None:
+    """Mit freigegebenem YubiKey verlangt ein weiterer Passkey dessen Bestätigung (#95).
+
+    Ein virtueller Schlüssel: Er bestätigt mit dem freigegebenen Passkey; bevor der neue entsteht,
+    nimmt der Test den alten heraus, sonst schließt der Browser den Schlüssel als schon
+    eingetragen aus (excludeCredentials).
+    """
+    admin = sign_in(page, site, Role.ADMIN)
+    remove_yubikey = add_yubikey(page, admin)
+
+    def after_confirmation(route: Route) -> None:
+        remove_yubikey()
+        route.continue_()
+
+    page.route("**/konto/passkey/optionen/", after_confirmation)
+    page.goto(f"{site}/konto/")
+    page.get_by_label("Neuer Passkey, Bezeichnung").fill("Reserve")
+    page.get_by_role("button", name="Passkey hinzufügen").click()
+
+    expect(page.get_by_text("Passkey eingerichtet.", exact=True)).to_be_visible()
+    assert Passkey.objects.filter(user=admin).count() == 2

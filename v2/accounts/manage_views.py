@@ -16,6 +16,7 @@ from django.utils.cache import add_never_cache_headers
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from accounts import certificates, services
+from accounts.confirm import requires_yubikey
 from accounts.models import Passkey, Qualification, Role, SigningCertificate, User
 from accounts.rights import Right, requires
 from accounts.services import AccountError
@@ -120,6 +121,7 @@ def user_list(request: HttpRequest) -> HttpResponse:
 
 
 @requires(Right.MANAGE_USERS)
+@requires_yubikey
 @require_http_methods(["GET", "POST"])
 def user_create(request: HttpRequest) -> HttpResponse:
     form = AccountForm(request.POST or None)
@@ -158,6 +160,7 @@ def user_detail(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @requires(Right.MANAGE_USERS)
+@requires_yubikey
 @require_POST
 def user_role(request: HttpRequest, pk: int) -> HttpResponse:
     account = get_object_or_404(User, pk=pk)
@@ -181,12 +184,14 @@ def _reason(form: forms.Form) -> dict[str, str]:
 
 
 @requires(Right.MANAGE_USERS)
+@requires_yubikey
 @require_POST
 def user_deactivate(request: HttpRequest, pk: int) -> HttpResponse:
     return _status(request, pk, services.deactivate, "deaktiviert")
 
 
 @requires(Right.MANAGE_USERS)
+@requires_yubikey
 @require_POST
 def user_reactivate(request: HttpRequest, pk: int) -> HttpResponse:
     return _status(request, pk, services.reactivate, "wieder aktiviert")
@@ -208,6 +213,7 @@ def _status(request: HttpRequest, pk: int, action: Any, done: str) -> HttpRespon
 
 
 @requires(Right.MANAGE_USERS)
+@requires_yubikey
 @require_POST
 def user_enrollment(request: HttpRequest, pk: int) -> HttpResponse:
     account = get_object_or_404(User, pk=pk)
@@ -220,6 +226,7 @@ def user_enrollment(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @requires(Right.MANAGE_USERS)
+@requires_yubikey
 @require_POST
 def user_passkey_revoke(request: HttpRequest, pk: int, passkey: int) -> HttpResponse:
     account = get_object_or_404(User, pk=pk)
@@ -238,6 +245,7 @@ def user_passkey_revoke(request: HttpRequest, pk: int, passkey: int) -> HttpResp
 
 
 @requires(Right.MANAGE_USERS)
+@requires_yubikey
 @require_POST
 def qualification_grant(request: HttpRequest, pk: int) -> HttpResponse:
     account = get_object_or_404(User, pk=pk)
@@ -255,6 +263,7 @@ def qualification_grant(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @requires(Right.MANAGE_USERS)
+@requires_yubikey
 @require_POST
 def qualification_revoke(request: HttpRequest, pk: int, qualification: int) -> HttpResponse:
     account = get_object_or_404(User, pk=pk)
@@ -273,6 +282,7 @@ def qualification_revoke(request: HttpRequest, pk: int, qualification: int) -> H
 
 
 @requires(Right.MANAGE_USERS)
+@requires_yubikey
 @require_POST
 def user_stamp(request: HttpRequest, pk: int) -> HttpResponse:
     account = get_object_or_404(User, pk=pk)
@@ -281,6 +291,7 @@ def user_stamp(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @requires(Right.MANAGE_USERS)
+@requires_yubikey
 @require_POST
 def certificate_register(request: HttpRequest, pk: int) -> HttpResponse:
     account = get_object_or_404(User, pk=pk)
@@ -306,6 +317,7 @@ def certificate_register(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @requires(Right.MANAGE_USERS)
+@requires_yubikey
 @require_POST
 def certificate_revoke(request: HttpRequest, pk: int, certificate: int) -> HttpResponse:
     account = get_object_or_404(User, pk=pk)
