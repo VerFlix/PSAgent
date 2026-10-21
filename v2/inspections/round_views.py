@@ -15,14 +15,22 @@ from urllib.parse import unquote
 
 from django import forms
 from django.contrib import messages
+from django.db.models import Exists, OuterRef
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.cache import add_never_cache_headers
 from django.views.decorators.http import require_GET, require_POST
 
 from accounts.models import User
 from accounts.rights import Right, requires
-from inspections import services
-from inspections.models import InspectionRound, Outcome, RoundEvent, RoundEventKind
+from inspections import protocol, services
+from inspections.models import (
+    InspectionRound,
+    Outcome,
+    RoundEvent,
+    RoundEventKind,
+    RoundProtocol,
+)
 from inspections.services import InspectionError
 from inventory.models import Part
 
@@ -89,6 +97,7 @@ def round_mode(request: HttpRequest) -> HttpResponse:
     closed = (
         InspectionRound.objects.filter(inspector=actor, events__kind=RoundEventKind.CLOSED)
         .exclude(events__kind__in=[RoundEventKind.SIGNED, RoundEventKind.CANCELLED])
+        .annotate(has_protocol=Exists(RoundProtocol.objects.filter(round=OuterRef("pk"))))
         .order_by("-started_at")[:10]
     )
     context: dict[str, Any] = {"round": None, "unsigned": closed}
@@ -179,6 +188,18 @@ def round_close(request: HttpRequest, pk: int) -> HttpResponse:
         f"{round_} abgeschlossen. Sie wirkt auf die Teile, sobald sie signiert ist.",
     )
     return redirect("inspections:round_mode")
+
+
+@requires(Right.INSPECT)
+@require_GET
+def round_protocol(request: HttpRequest, pk: int) -> HttpResponse:
+    """Prüfprotokoll zum Signieren; nur für den Prüfer der Runde (#38)."""
+    round_ = _own_round(request, pk)
+    entry = get_object_or_404(RoundProtocol, round=round_)
+    response = HttpResponse(bytes(entry.pdf), content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{protocol.filename(round_)}"'
+    add_never_cache_headers(response)
+    return response
 
 
 @requires(Right.INSPECT)

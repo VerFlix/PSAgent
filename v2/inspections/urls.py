@@ -20,4 +20,5 @@ urlpatterns = [
     path("runde/<int:pk>/teil/<int:part_pk>/entfernen/", round_views.round_drop, name="round_drop"),
     path("runde/<int:pk>/abschliessen/", round_views.round_close, name="round_close"),
     path("runde/<int:pk>/abbrechen/", round_views.round_cancel, name="round_cancel"),
+    path("runde/<int:pk>/protokoll/", round_views.round_protocol, name="round_protocol"),
 ]

@@ -100,3 +100,28 @@ def test_qr_decoder_reads_our_labels(page: Page, site: str) -> None:
     )
 
     assert decoded == content
+
+
+def test_parity_8_protocol_download_after_closing(page: Page, site: str) -> None:
+    """#38 Schritt 1: Nach dem Abschluss steht das Prüfprotokoll zum Signieren bereit."""
+    from inspections import services
+    from inspections.models import Outcome
+
+    expert = sign_in(page, site, Role.PPE_EXPERT)
+    qualify(expert)
+    part = create_product({"designation": "Bandschlinge", "ei": "TST-P8"})
+    round_ = services.start_round(actor=expert)
+    services.record_result(
+        round_,
+        part,
+        Outcome.PASSED,
+        actor=expert,
+        next_due=timezone.localdate() + timedelta(days=365),
+    )
+    services.close_round(round_, actor=expert)
+
+    page.goto(f"{site}/pruefung/runde/")
+    with page.expect_download() as download:
+        page.get_by_role("link", name="Prüfprotokoll zum Signieren (PDF)").click()
+
+    assert download.value.suggested_filename == f"Pruefprotokoll_Runde_{round_.pk}.pdf"
