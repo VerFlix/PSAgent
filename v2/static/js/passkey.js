@@ -120,6 +120,12 @@
     }
     field.value = JSON.stringify(authenticationJSON(credential));
     form.submit();
+    // Ein Download lädt die Seite nicht neu: Formular wieder freigeben (neue Bestätigung nötig).
+    if (form.hasAttribute("data-download")) {
+      field.remove();
+      return "Sicherung wird heruntergeladen. Für einen weiteren Abruf erneut bestätigen.";
+    }
+    return null;
   };
 
   document.addEventListener("submit", (event) => {
@@ -134,7 +140,14 @@
     if (status) {
       status.textContent = "Bitte die Änderung mit dem YubiKey bestätigen …";
     }
-    confirmForm(form).catch((error) => {
+    confirmForm(form).then((message) => {
+      if (message) {
+        if (status) {
+          status.textContent = message;
+        }
+        buttons.forEach((button) => { button.disabled = false; });
+      }
+    }).catch((error) => {
       if (status) {
         status.textContent = error.name === "NotAllowedError"
           ? "Abgebrochen oder nicht erlaubt. Nichts geändert."

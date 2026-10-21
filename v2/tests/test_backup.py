@@ -15,6 +15,7 @@ from accounts.models import Passkey, Role
 from inventory.services import create_product, store_document_file
 from lending.services import create_borrower
 from tests.helpers import make_inspector
+from tests.yubikey_client import login_with_yubikey
 
 pytestmark = pytest.mark.django_db
 PASSWORD = "ein-langes-Test-Passwort-42"  # gitleaks:allow – künstliches Testpasswort
@@ -36,7 +37,7 @@ def download(client: Client) -> zipfile.ZipFile:
 
 def test_parity_11_backup_contains_data_and_files(client: Client) -> None:
     admin = make_inspector(role=Role.ADMIN)
-    client.force_login(admin)
+    login_with_yubikey(client, admin)
     part = create_product({"designation": "Helm", "ei": "TST-B1"})
     document = store_document_file(b"%PDF-1.4 GAL", "gal.pdf", title="GAL Helm")
     part.documents.add(document)
@@ -53,7 +54,7 @@ def test_parity_11_backup_contains_data_and_files(client: Client) -> None:
 
 
 def test_parity_11_checksums_match(client: Client) -> None:
-    client.force_login(make_inspector(role=Role.ADMIN))
+    login_with_yubikey(client, make_inspector(role=Role.ADMIN))
     store_document_file(b"%PDF-1.4 GAL", "gal.pdf", title="GAL")
 
     archive = download(client)
@@ -69,7 +70,7 @@ def test_backup_leaves_out_credentials(client: Client) -> None:
     admin = make_inspector(role=Role.ADMIN)
     admin.set_password(PASSWORD)
     admin.save()
-    client.force_login(admin)
+    login_with_yubikey(client, admin)
     Passkey.objects.create(user=admin, name="YubiKey", credential_id=b"k1", public_key=b"\x01")
     create_token(admin)
 
@@ -92,7 +93,7 @@ def test_only_admin_downloads_backup(role: Role, client: Client) -> None:
 
 def test_backup_download_is_logged(client: Client, caplog: pytest.LogCaptureFixture) -> None:
     admin = make_inspector(role=Role.ADMIN)
-    client.force_login(admin)
+    login_with_yubikey(client, admin)
 
     with caplog.at_level("WARNING", logger="psagent.audit"):
         download(client)
@@ -101,7 +102,7 @@ def test_backup_download_is_logged(client: Client, caplog: pytest.LogCaptureFixt
 
 
 def test_backup_page_explains_content(client: Client) -> None:
-    client.force_login(make_inspector(role=Role.ADMIN))
+    login_with_yubikey(client, make_inspector(role=Role.ADMIN))
 
     html = client.get(reverse("backup")).content.decode()
 
@@ -112,9 +113,19 @@ def test_backup_contains_form_numbers(client: Client) -> None:
     """Die vergebenen Formularnummern des Notbetriebs (#52) gehören zur Sicherung."""
     from emergency.binder import create_binder
 
-    client.force_login(make_inspector(role=Role.ADMIN))
+    login_with_yubikey(client, make_inspector(role=Role.ADMIN))
     create_binder(actor=None)
 
     models = {record["model"] for record in json.loads(download(client).read("daten.json"))}
 
     assert {"emergency.binder", "emergency.formsheet"} <= models
+
+
+def test_backup_needs_yubikey(client: Client) -> None:
+    """Felix, 21.10.2026: Die vollständige Sicherung nur mit Bestätigung per YubiKey (#95)."""
+    client.force_login(make_inspector(role=Role.ADMIN))
+
+    response = client.post(reverse("backup"))
+
+    assert response.status_code == 403
+    assert "application/zip" not in response.get("Content-Type", "")
