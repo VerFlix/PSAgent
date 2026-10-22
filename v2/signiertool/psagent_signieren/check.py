@@ -40,6 +40,11 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _FINGERPRINT = re.compile(r"\b[0-9A-Fa-f]{2}(?::?[0-9A-Fa-f]{2}){31}\b")
 
 
+def printable(text: str) -> str:
+    """Ersetzt Steuerzeichen aus dem PDF durch „?“, damit sie die Ausgabe nicht verfälschen."""
+    return "".join(char if char.isprintable() else "?" for char in text)
+
+
 class InputError(ValueError):
     """Eine angegebene Datei fehlt oder ist unbrauchbar; der Text sagt, welche."""
 
@@ -171,18 +176,23 @@ def _check_signature(
     if not (status.intact and status.valid):
         result.findings.append("Die Signatur passt nicht zum Inhalt.")
         return
+    if len(stamps) > 1:
+        result.findings.append("Das PDF hat mehr als einen Zeitstempel.")
+        return
+    if stamps and stamps[0].signed_revision <= signature.signed_revision:
+        result.findings.append("Der Zeitstempel liegt vor der Signatur und deckt sie nicht ab.")
+        return
+    # Ohne Zeitstempel darf nach der Signatur nichts mehr kommen, mit ihm nur der Stempel.
+    allowed = ModificationLevel.LTA_UPDATES if stamps else ModificationLevel.NONE
+    level = status.modification_level
+    if level is None or level > allowed:
+        result.findings.append("Nach der Signatur wurde das PDF geändert.")
+        return
     if not stamps:
-        result.confirmed.append("Signatur intakt")
+        result.confirmed.append("Signatur intakt, danach keine Änderung")
         result.unchecked.append(
             "Kein Zeitstempel: Das PDF ist signiert, aber noch nicht in PSAgent hochgeladen."
         )
-        return
-    if len(stamps) != 1:
-        result.findings.append("Das PDF hat mehr als einen Zeitstempel.")
-        return
-    level = status.modification_level
-    if level is None or level > ModificationLevel.LTA_UPDATES:
-        result.findings.append("Nach dem Zeitstempel wurde das PDF geändert.")
         return
     result.confirmed.append("Signatur intakt, danach nur der Zeitstempel")
 
@@ -193,7 +203,7 @@ def _check_signer(
     signer = signature.signer_cert
     digest = hashlib.sha256(signer.dump()).hexdigest()
     result.info.append(f"Signaturzertifikat (SHA-256): {digest}")
-    result.info.append(f"Inhaber laut Zertifikat: {signer.subject.human_friendly}")
+    result.info.append(f"Inhaber laut Zertifikat: {printable(signer.subject.human_friendly)}")
     if fingerprints is None:
         result.unchecked.append(
             "Fingerabdruck nicht abgeglichen: Liste mit --fingerabdruecke angeben "

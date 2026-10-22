@@ -4,6 +4,7 @@ Festlegungen (Felix, 21.10.2026): alle Rollen sehen die Berichte; Altberichte in
 markiert, ohne Prüfknopf; Filter nach Zeitraum, Sachkundiger Person und Teil/EI.
 """
 
+import hashlib
 import json
 from datetime import timedelta
 
@@ -17,10 +18,11 @@ from accounts.models import QualificationRevocation, Role, User
 from inspections import reports, services
 from inspections.models import InspectionRound, Outcome, RoundProtocol, SignedProtocol
 from inspections.reports import Verdict
+from inspections.signature import stamp
 from legacy.models import LegacyReport, LegacyReportItem
 from tests.helpers import make_inspector, tamper
 from tests.inspections.conftest import MakePart, in_days
-from tests.signing import sign, signing_environment
+from tests.signing import sign, sign_pdf, signing_environment, yubikey_of
 
 pytestmark = pytest.mark.django_db
 
@@ -278,3 +280,22 @@ def test_missing_timestamp_settings_make_it_uncheckable(
 
     assert result.verdict == Verdict.UNCHECKABLE
     assert any("PSAGENT_TSA_CA_PATH" in reason for reason in result.unchecked)
+
+
+def test_timestamp_before_signature_is_found(inspector: User, make_part: MakePart) -> None:
+    """Stempel zuerst, Signatur später: Die Zeit des Stempels belegt die Signatur nicht."""
+    round_ = signed_round(inspector, make_part)
+    entry = SignedProtocol.objects.get(round=round_)
+    with signing_environment():
+        stamped, stamped_at = stamp(bytes(entry.protocol.pdf))
+        pdf = sign_pdf(stamped, yubikey_of(inspector))
+    tamper(
+        "inspections_signedprotocol",
+        "UPDATE inspections_signedprotocol SET pdf = %s, sha256 = %s, stamped_at = %s"
+        " WHERE id = %s",
+        [pdf, hashlib.sha256(pdf).hexdigest(), stamped_at, entry.pk],
+    )
+
+    result = check(round_)
+    assert result.verdict == Verdict.CHANGED
+    assert "Der Zeitstempel liegt vor der Signatur und deckt sie nicht ab." in result.findings

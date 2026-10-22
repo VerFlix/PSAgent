@@ -21,9 +21,18 @@ from accounts.models import User
 from core import audit
 from inspections import protocol, services
 from inspections.models import Outcome, SignedProtocol
+from inspections.signature import stamp
+from tests.accounts.yubikey import FakeYubico
 from tests.core.conftest import make_authority
 from tests.inspections.conftest import MakePart, in_days
-from tests.signing import _environment, sign, signed_protocol, signing_environment
+from tests.signing import (
+    _environment,
+    sign,
+    sign_pdf,
+    signed_protocol,
+    signing_environment,
+    yubikey_of,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -139,7 +148,7 @@ def test_later_update_is_found(
     code, text = run(tmp_path, out.getvalue(), f"--tsa-ca={tsa_ca}", f"--fingerabdruecke={listed}")
 
     assert code == 1, text
-    assert "Nach dem Zeitstempel wurde das PDF geändert." in text
+    assert "Nach der Signatur wurde das PDF geändert." in text
 
 
 def test_signer_missing_from_list(report: SignedProtocol, tsa_ca: Path, tmp_path: Path) -> None:
@@ -201,3 +210,65 @@ def test_missing_option_files_are_errors(report: SignedProtocol, tmp_path: Path)
 
     assert code == 2
     assert "nicht.pem" in text
+
+
+# --- Gefälschte Dateien (Sicherheitsprüfung zu #108) ---
+
+
+def unsigned_protocol(inspector: User, make_part: MakePart) -> bytes:
+    round_ = services.start_round(actor=inspector)
+    services.record_result(
+        round_, make_part(), Outcome.PASSED, actor=inspector, next_due=in_days(365)
+    )
+    services.close_round(round_, actor=inspector)
+    return bytes(round_.protocol.pdf)
+
+
+def test_change_after_signature_without_timestamp_is_found(
+    inspector: User, make_part: MakePart, tmp_path: Path
+) -> None:
+    unsigned = unsigned_protocol(inspector, make_part)
+    with signing_environment():
+        signed = sign_pdf(unsigned, yubikey_of(inspector))
+    writer = IncrementalPdfFileWriter(BytesIO(signed))
+    writer.root["/PSAgentNachtrag"] = generic.TextStringObject("geändert")
+    writer.update_root()  # type: ignore[no-untyped-call]
+    out = BytesIO()
+    writer.write(out)  # type: ignore[no-untyped-call]
+
+    code, text = run(tmp_path, out.getvalue())
+
+    assert code == 1
+    assert "Nach der Signatur wurde das PDF geändert." in text
+    assert "Signatur intakt" not in text
+
+
+def test_timestamp_before_signature_is_found(
+    inspector: User, make_part: MakePart, tsa_ca: Path, tmp_path: Path
+) -> None:
+    """Stempel zuerst, Signatur später: Die Zeit des Stempels belegt die Signatur nicht."""
+    unsigned = unsigned_protocol(inspector, make_part)
+    with signing_environment():
+        stamped, _ = stamp(unsigned)
+        pdf = sign_pdf(stamped, yubikey_of(inspector))
+
+    code, text = run(tmp_path, pdf, f"--tsa-ca={tsa_ca}")
+
+    assert code == 1
+    assert "Der Zeitstempel liegt vor der Signatur und deckt sie nicht ab." in text
+
+
+def test_control_characters_from_the_certificate_are_not_printed(
+    inspector: User, make_part: MakePart, tmp_path: Path
+) -> None:
+    """Ein gefälschter Name darf die Ausgabe nicht überschreiben (Terminal-Steuerzeichen)."""
+    unsigned = unsigned_protocol(inspector, make_part)
+    key = FakeYubico().yubikey(1, holder="Testperson\x1b[2J\rErgebnis: unverändert.")
+    pdf = sign_pdf(unsigned, key)
+
+    code, text = run(tmp_path, pdf)
+
+    assert code == 2
+    assert "\x1b" not in text and "\r" not in text
+    assert "Testperson?[2J?Ergebnis: unverändert." in text
+    assert text.splitlines()[-1] == "Ergebnis: nicht prüfbar."

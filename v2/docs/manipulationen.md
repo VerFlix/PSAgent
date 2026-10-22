@@ -36,6 +36,7 @@ Tests in `tests/inspections/test_manipulations.py` (M1–M8) laufen über `kette
 | M15 | Eigenes Zertifikat in die Zertifikatsliste geschmuggelt | `--fingerabdruecke` (Server und Signier-Tool): „steht nicht auf der Liste“ | `test_certificate_missing_from_list`, `test_signer_missing_from_list` |
 | M16 | Kettenkopf im Protokoll neu berechnet | Bericht und Kette: mitsignierter Kopf weicht ab | `test_recomputed_chain_is_found_by_protocol_head`, `tests/inspections/test_signature.py::test_chain_check_uses_heads_from_signed_protocols` |
 | M17 | Protokoll vor dem Hochladen verändert, anders signiert oder mit fremdem Zertifikat | Hochladen lehnt ab | `tests/inspections/test_signature.py` (`test_change_after_signing_is_refused`, `test_change_of_content_with_the_signature_is_refused`, `test_signature_in_other_field_is_refused`, `test_unlisted_certificate_is_refused`, `test_certificate_of_another_inspector_is_refused`, …) |
+| M18 | Protokoll zuerst gestempelt, später signiert (spätere Signatur mit früherer Zeit ausgeben) | Bericht und `signieren pruefen`: „Der Zeitstempel liegt vor der Signatur“ | `tests/inspections/test_reports.py::test_timestamp_before_signature_is_found`, `tests/signiertool/test_pruefen.py::test_timestamp_before_signature_is_found` |
 
 ## Grenzen
 
