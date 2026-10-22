@@ -10,9 +10,10 @@ Hochladen:
 
 1. PDF und Prüfprotokoll haben noch ihre gespeicherte Prüfsumme; das signierte PDF beginnt mit
    dem Protokoll.
-2. Die Ergebnisse der Runde ergeben noch die Prüfsumme vom Abschluss.
+2. Die Ergebnisse der Runde ergeben noch die Prüfsumme vom Abschluss, und zwar die im signierten
+   Protokoll (Schlüsselwörter, `protocol.read_anchor`), nicht nur die in der Datenbank.
 3. Die Zeilen des Berichts passen zu ihren Kettengliedern, die Kette ist lückenlos und enthält
-   noch den Kettenkopf aus dem Protokoll (und die festgehaltenen Köpfe).
+   noch den mitsignierten Kettenkopf (und die festgehaltenen Köpfe).
 4. Die Signatur ist intakt; nach ihr kam nur der Zeitstempel. Signiert hat das hinterlegte
    Zertifikat, das zum Zeitpunkt des Hochladens gültig war (Rückblick: ohne heutige Rolle).
 5. Der Zeitstempel ist gültig, stammt vom konfigurierten Dienst und trägt die gespeicherte Zeit.
@@ -44,6 +45,7 @@ from inspections.models import (
     RoundProtocol,
     SignedProtocol,
 )
+from inspections.protocol import Anchor, read_anchor
 from inventory.models import normalize_ei
 from legacy.models import LegacyReport
 
@@ -59,11 +61,15 @@ class Verdict(StrEnum):
 
 @dataclass
 class CheckResult:
-    """Ergebnis des Prüfknopfs; `findings` nennt Veränderungen, `unchecked` Gründe."""
+    """Ergebnis des Prüfknopfs; `findings` nennt Veränderungen, `unchecked` Gründe.
+
+    `notes` sind Hinweise ohne Einfluss auf das Ergebnis (Prüfwerkzeug, #19).
+    """
 
     findings: list[str] = field(default_factory=list)
     unchecked: list[str] = field(default_factory=list)
     confirmed: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
 
     @property
     def verdict(self) -> Verdict:
@@ -90,7 +96,29 @@ def _check_files(signed: SignedProtocol, result: CheckResult) -> bytes | None:
     return pdf
 
 
-def _check_content(signed: SignedProtocol, result: CheckResult) -> None:
+def anchor_of(signed: SignedProtocol) -> Anchor | None:
+    """Die mitsignierten Werte; nur aus dem Teil des PDFs, den die Signatur abdeckt."""
+    pdf, original = bytes(signed.pdf), bytes(signed.protocol.pdf)
+    return read_anchor(original) if pdf.startswith(original) else None
+
+
+def _check_anchor(signed: SignedProtocol, result: CheckResult) -> Anchor | None:
+    protocol = signed.protocol
+    anchor = anchor_of(signed)
+    if anchor is None:
+        result.unchecked.append("Das Protokoll enthält keine mitsignierten Prüfwerte.")
+        return None
+    if anchor.round_id != signed.round_id:
+        result.findings.append(f"Das signierte Protokoll gehört zu Runde {anchor.round_id}.")
+    if (anchor.content_sha256, anchor.head) != (
+        protocol.content_sha256,
+        chain.Head(protocol.chain_seq, protocol.chain_hash),
+    ):
+        result.findings.append("Die gespeicherten Werte des Protokolls weichen vom signierten ab.")
+    return anchor
+
+
+def _check_content(signed: SignedProtocol, result: CheckResult, anchor: Anchor | None) -> None:
     from inspections.services import content_sha256
 
     round_ = signed.round
@@ -100,32 +128,35 @@ def _check_content(signed: SignedProtocol, result: CheckResult) -> None:
         closed is None
         or digest != closed.content_sha256
         or digest != signed.protocol.content_sha256
+        or (anchor is not None and digest != anchor.content_sha256)
     ):
         result.findings.append("Die Ergebnisse der Runde passen nicht mehr zum Abschluss.")
     else:
         result.confirmed.append("Ergebnisse der Runde wie beim Abschluss")
 
 
-def _check_chain(signed: SignedProtocol, result: CheckResult) -> None:
+def _check_chain(
+    signed: SignedProtocol, result: CheckResult, anchor: Anchor | None, *, links: bool
+) -> None:
     round_ = signed.round
     problems = (
         chain.verify_rows(SignedProtocol, [signed.pk])
         + chain.verify_rows(RoundProtocol, [signed.protocol_id])
         + chain.verify_rows(RoundEvent, round_.events.values_list("pk", flat=True))
         + chain.verify_rows(InspectionResult, round_.results.values_list("pk", flat=True))
-        + chain.verify_links(
-            [
-                chain.Head(signed.protocol.chain_seq, signed.protocol.chain_hash),
-                *witness.known_heads(),
-            ]
-        )
     )
+    if links:
+        head = chain.Head(signed.protocol.chain_seq, signed.protocol.chain_hash)
+        signed_heads = [anchor.head] if anchor is not None else []
+        problems += chain.verify_links([head, *signed_heads, *witness.known_heads()])
     if problems:
         result.findings.extend(f"Hash-Kette: {problem}" for problem in problems)
-    else:
+    elif links:
         result.confirmed.append(
             f"Hash-Kette lückenlos, Kettenkopf {signed.protocol.chain_seq} enthalten"
         )
+    else:
+        result.confirmed.append("Zeilen des Berichts passen zur Hash-Kette")
 
 
 def _check_signature(signed: SignedProtocol, pdf: bytes, result: CheckResult) -> None:
@@ -207,12 +238,16 @@ def _check_stamp(signed: SignedProtocol, stamp: object, result: CheckResult) -> 
     result.confirmed.append(f"Zeitstempel gültig ({status.timestamp:%d.%m.%Y %H:%M} UTC)")
 
 
-def check(signed: SignedProtocol) -> CheckResult:
-    """Prüfknopf „unverändert?“ für einen signierten Prüfbericht."""
+def check(signed: SignedProtocol, *, links: bool = True) -> CheckResult:
+    """Prüfknopf „unverändert?“ für einen signierten Prüfbericht.
+
+    `links=False`: Die Glieder der ganzen Kette prüft der Aufrufer selbst (Prüfwerkzeug, #19).
+    """
     result = CheckResult()
     pdf = _check_files(signed, result)
-    _check_content(signed, result)
-    _check_chain(signed, result)
+    anchor = _check_anchor(signed, result) if pdf is not None else None
+    _check_content(signed, result, anchor)
+    _check_chain(signed, result, anchor, links=links)
     if pdf is not None:
         _check_signature(signed, pdf, result)
     return result

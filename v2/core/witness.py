@@ -158,13 +158,19 @@ def known_heads() -> list[chain.Head]:
 
 def verify() -> list[str]:
     """Prüft die Zeitstempel der festgehaltenen Köpfe und ob sie aktuell sind."""
+    try:
+        return check_stamps()
+    except ImproperlyConfigured as error:
+        return [f"Zeitstempel nicht prüfbar: {error}"]
+
+
+def check_stamps() -> list[str]:
+    """Wie `verify()`, aber eine fehlende Einstellung ist ein Fehler (`ImproperlyConfigured`)."""
     problems = []
     for witness in WitnessHead.objects.exclude(token=None).order_by("seq", "pk"):
         assert witness.token is not None  # noqa: S101 – oben gefiltert
         try:
             stamped = timestamp.check(bytes(witness.token), bytes.fromhex(witness.head_hash))
-        except ImproperlyConfigured as error:
-            return [f"Zeitstempel nicht prüfbar: {error}"]
         except timestamp.TimestampError as error:
             problems.append(f"Kettenkopf {witness.seq}: {error}")
             continue
