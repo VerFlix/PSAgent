@@ -2,12 +2,21 @@
 
 from django.urls import path
 
-from inspections import round_views, views
+from inspections import report_views, round_views, views
 
 app_name = "inspections"
 
 urlpatterns = [
     path("naechste/", views.next_due, name="next_due"),
+    path("berichte/", report_views.report_list, name="reports"),
+    path("berichte/<int:pk>/", report_views.report_detail, name="report_detail"),
+    path("berichte/<int:pk>/pdf/", report_views.report_pdf, name="report_pdf"),
+    path("berichte/<int:pk>/pruefen/", report_views.report_check, name="report_check"),
+    path(
+        "berichte/alt/<int:pk>/",
+        report_views.legacy_report_detail,
+        name="legacy_report_detail",
+    ),
     path("runde/", round_views.round_mode, name="round_mode"),
     path("runde/beginnen/", round_views.round_start, name="round_start"),
     path("runde/teil/<int:part_pk>/", round_views.part_to_round, name="part_to_round"),

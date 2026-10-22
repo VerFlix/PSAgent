@@ -222,6 +222,26 @@ def verify_table(model: type[models.Model]) -> list[str]:
     return problems + _unlinked(model, {entry.row_pk for entry in entries})
 
 
+def verify_rows(model: type[models.Model], pks: Iterable[Any]) -> list[str]:
+    """Prüft bestimmte Zeilen gegen ihre Glieder (z. B. einen Prüfbericht, #39); leer = unverändert.
+
+    Jede Zeile braucht ein Glied, und jedes Glied muss noch zu seiner Zeile passen. Ob die Glieder
+    selbst lückenlos verkettet sind, prüft `verify_links()`.
+    """
+    from core.models import ChainLink
+
+    wanted = {str(pk) for pk in pks}
+    entries = list(
+        ChainLink.objects.filter(table=model._meta.label, row_pk__in=wanted).order_by("seq")
+    )
+    problems = [problem for entry in entries for problem in _check(entry, model)]
+    linked = {entry.row_pk for entry in entries}
+    return problems + [
+        f"{model._meta.label} #{pk}: Vorgang ohne Kettenglied (an der App vorbei eingefügt)."
+        for pk in sorted(wanted - linked)
+    ]
+
+
 def verify_links(known_heads: Iterable[Head] = ()) -> list[str]:
     """Prüft nur die Glieder: lückenlos, richtig verkettet, unverändert, bekannte Köpfe enthalten.
 

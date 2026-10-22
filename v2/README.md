@@ -118,6 +118,11 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
   Zeitstempel, und erst dann wirkt die Runde. Einrichtung: `docs/runbooks/signieren.md`. Die Tests
   des Tools brauchen SoftHSM und OpenSC (`softhsm2`, `opensc`; in Cloud-Sitzungen und CI
   installiert).
+- Prüfberichte (Parität 9, #39, `/pruefung/berichte/`, alle Rollen): Liste mit Filtern nach
+  Zeitraum, sachkundiger Person und Teil/EI, Details, signiertes PDF und der Knopf
+  „Unverändert?“. Er prüft Dateien, Ergebnisse der Runde, Hash-Kette samt Kettenkopf aus dem
+  Protokoll, Signatur, Zertifikat zum Zeitpunkt des Hochladens und Zeitstempel. Altberichte
+  stehen markiert als „Altbestand, ungesichert“ dabei. Die ganze Kette prüft `kette_pruefen` (#19).
 
 Browser-Tests (Playwright, eigener CI-Job; bei Fehlern Screenshots und Traces als Artefakt):
 

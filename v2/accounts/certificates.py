@@ -196,8 +196,14 @@ def check_attestation(
     certificate: x509.Certificate,
     attestation: x509.Certificate,
     intermediates: list[x509.Certificate],
+    *,
+    check_serial: bool = True,
 ) -> int:
-    """Prüft die Bescheinigung zum Zertifikat; gibt die Seriennummer des YubiKeys zurück."""
+    """Prüft die Bescheinigung zum Zertifikat; gibt die Seriennummer des YubiKeys zurück.
+
+    `check_serial=False` (Rückblick, #39): Die heutige Liste zugelassener YubiKeys zählt nicht;
+    ein später gestrichener YubiKey macht frühere Signaturen nicht ungültig.
+    """
     names = attestation.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
     if [name.value for name in names] != [f"{ATTESTATION_NAME} {SLOT}"]:
         raise CertificateError(f"Die Herstellerbescheinigung gilt nicht für Slot {SLOT}.")
@@ -208,7 +214,7 @@ def check_attestation(
         serial = asn1.Integer.load(_extension(attestation, OID_SERIAL)).native
     except (ValueError, TypeError) as error:
         raise CertificateError("Die Herstellerbescheinigung ist unvollständig.") from error
-    if not isinstance(serial, int) or serial not in _serials():
+    if not isinstance(serial, int) or (check_serial and serial not in _serials()):
         raise CertificateError(f"Der YubiKey {serial} ist nicht zugelassen.")
     policy = _extension(attestation, OID_POLICY)
     if len(policy) < 2 or (policy[0], policy[1]) != (PIN_ALWAYS, TOUCH_ALWAYS):
@@ -328,11 +334,15 @@ def list_problems() -> list[str]:
     )
 
 
-def signer_at(certificate: bytes | x509.Certificate, at: datetime) -> SigningCertificate:
+def signer_at(
+    certificate: bytes | x509.Certificate, at: datetime, *, looking_back: bool = False
+) -> SigningCertificate:
     """Eintrag, mit dessen Zertifikat zum Zeitpunkt `at` signiert werden durfte; sonst Fehler.
 
-    Für die Prüfung hochgeladener Prüfprotokolle (#38) und das Prüfwerkzeug (#39). `at` ist
-    der Signaturzeitpunkt, belegt durch den Zeitstempel.
+    Für die Prüfung hochgeladener Prüfprotokolle (#38) und den Prüfknopf an Prüfberichten (#39).
+    `at` ist der Signaturzeitpunkt, belegt durch den Zeitstempel. `looking_back=True` prüft
+    einen früheren Bericht: Dann zählen weder die heutige Rolle noch die heutige Liste
+    zugelassener YubiKeys, nur der Stand der Zertifikatsliste und der Sachkunde zu `at`.
     """
     cert = (
         certificate
@@ -355,11 +365,12 @@ def signer_at(certificate: bytes | x509.Certificate, at: datetime) -> SigningCer
         raise CertificateError("Das Zertifikat war zum Signaturzeitpunkt widerrufen.")
     if not cert.not_valid_before_utc <= at <= cert.not_valid_after_utc:
         raise CertificateError("Das Zertifikat war zum Signaturzeitpunkt nicht gültig.")
-    if not entry.user.has_role(Role.PPE_EXPERT):
+    if not looking_back and not entry.user.has_role(Role.PPE_EXPERT):
         raise CertificateError(f"{entry.user} ist nicht (mehr) PSA-Sachkundig oder deaktiviert.")
     if not entry.user.has_valid_qualification(at):
         raise CertificateError(f"{entry.user} hatte zum Signaturzeitpunkt keine gültige Sachkunde.")
     attested, chain_certs = _attestation_of(entry)
-    if check_attestation(cert, attested, chain_certs) != entry.yubikey_serial:
+    serial = check_attestation(cert, attested, chain_certs, check_serial=not looking_back)
+    if serial != entry.yubikey_serial:
         raise CertificateError("Die Herstellerbescheinigung passt nicht zum Eintrag.")
     return entry
