@@ -4,7 +4,7 @@
 #let data = json(bytes(sys.inputs.data))
 #let feld = data.field
 
-#set document(title: data.title)
+#set document(title: data.title, keywords: data.keywords)
 #set text(lang: "de", size: 9pt)
 #set page(
   paper: "a4",

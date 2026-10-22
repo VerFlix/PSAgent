@@ -46,8 +46,10 @@ Befund.
 ## 4. Prüfen
 
 - In PSAgent (Admin): `uv run python manage.py kette_pruefen`. Der Befehl prüft die Kette, alle
-  festgehaltenen Köpfe und ihre Zeitstempel. Köpfe aus Zeugen-Mails lassen sich zusätzlich
-  angeben: `--kopf <Nummer>:<Hash>` (mehrfach).
+  festgehaltenen Köpfe und ihre Zeitstempel und alle Prüfberichte. Zeugen-Mails und Kopf-Dateien
+  liest er mit `--zeugen <Datei oder Ordner>`, einzelne Köpfe gehen mit `--kopf <Nummer>:<Hash>`
+  (beides mehrfach). Ablauf: `docs/runbooks/pruefwerkzeug.md`.
 - Unabhängig von PSAgent (Vorstand): Jede Zeugen-Mail enthält den Stempel als Base64-Block und
   die OpenSSL-Befehle, um ihn gegen den Hash zu prüfen.
-- Stichprobe einmal im Quartal: einen Kopf aus einer alten Zeugen-Mail mit `--kopf` prüfen.
+- Einmal im Quartal: die Zeugen-Mails des Quartals mit `--zeugen` prüfen
+  (`docs/runbooks/pruefwerkzeug.md`, Abschnitt 3).

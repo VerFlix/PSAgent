@@ -9,6 +9,7 @@ import io
 import re
 
 import pytest
+import typst
 from django.test import Client
 from django.urls import reverse
 from pyhanko.pdf_utils.reader import PdfFileReader
@@ -85,6 +86,35 @@ def test_parity_8_protocol_carries_chain_head_after_closing(
     assert entry.chain_hash in text and entry.content_sha256 in text
     assert entry.content_sha256 == closed.content_sha256
     assert chain.verify() == []
+
+
+def test_protocol_carries_its_values_machine_readable(inspector: User, make_part: MakePart) -> None:
+    """#19: Runde, Inhalt und Kettenkopf stehen mitsigniert in den Schlüsselwörtern des PDFs."""
+    entry = closed_round(inspector, make_part)
+
+    anchor = protocol.read_anchor(bytes(entry.pdf))
+
+    assert anchor == protocol.Anchor(
+        entry.round_id, entry.content_sha256, chain.Head(entry.chain_seq, entry.chain_hash)
+    )
+
+
+@pytest.mark.parametrize(
+    "keywords",
+    ["", "psagent-runde:1", "psagent-runde:x, psagent-inhalt:abc, psagent-kettenkopf:1:abc"],
+)
+def test_missing_or_broken_values_read_as_none(keywords: str) -> None:
+    pdf = typst_pdf(keywords)
+
+    assert protocol.read_anchor(pdf) is None
+    assert protocol.read_anchor(b"kein PDF") is None
+
+
+def typst_pdf(keywords: str) -> bytes:
+    source = f'#set document(keywords: "{keywords}")\nTest'.encode()
+    pdf = typst.compile(source, format="pdf")
+    assert isinstance(pdf, bytes)
+    return pdf
 
 
 def test_protocol_has_empty_signature_field_on_last_page(

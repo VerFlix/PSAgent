@@ -255,7 +255,8 @@ def test_chain_check_uses_heads_from_signed_protocols(inspector: User, make_part
     """#38 (Ergänzung 19.10.2026): Eine neu berechnete Kette passt nicht mehr zum Protokoll."""
     round_ = closed(inspector, make_part)
     sign(round_, actor=inspector)
-    call_command("kette_pruefen", stdout=StringIO(), stderr=StringIO())
+    with signing_environment():
+        call_command("kette_pruefen", stdout=StringIO(), stderr=StringIO())
     head = RoundProtocol.objects.get(round=round_)
 
     tamper(
@@ -265,7 +266,7 @@ def test_chain_check_uses_heads_from_signed_protocols(inspector: User, make_part
     )
 
     errors = StringIO()
-    with pytest.raises(CommandError):
+    with signing_environment(), pytest.raises(CommandError):
         call_command("kette_pruefen", stdout=StringIO(), stderr=errors)
     assert f"Kettenkopf {head.chain_seq} weicht ab" in errors.getvalue()
 

@@ -106,6 +106,11 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
   Zeitstempel nach RFC 3161 fest, schreibt ihn als Datei für Unraid und mailt ihn an das
   Zeugen-Postfach des Vorstands; `kette_pruefen` prüft die festgehaltenen Köpfe und Stempel mit.
   Einrichtung: `docs/runbooks/kettenkopf.md`.
+- Prüfwerkzeug (#19): `kette_pruefen` prüft außerdem alle signierten Prüfberichte, mit
+  `--zeugen` die Zeugen-Mails (`.eml`) bzw. Kopf-Dateien und mit `--fingerabdruecke` die
+  Papierliste der Signaturzertifikate. Ergebnis unverändert (0), verändert (1) oder nicht prüfbar
+  (2). Ablauf: `docs/runbooks/pruefwerkzeug.md`; welche Manipulationen das findet:
+  `docs/manipulationen.md`.
 - Prüfmodus (Parität 7, `/pruefung/runde/`, nur mit gültiger Sachkunde): Prüfungsrunde beginnen,
   Teile per QR-Kamera (eingebauter `BarcodeDetector`, sonst jsQR lokal), Handscanner oder EI-Feld
   sammeln, jedes Teil einzeln bewerten (ohne Sammelbestätigung, ohne vorausgewähltes Ergebnis),
@@ -122,7 +127,7 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
   Zeitraum, sachkundiger Person und Teil/EI, Details, signiertes PDF und der Knopf
   „Unverändert?“. Er prüft Dateien, Ergebnisse der Runde, Hash-Kette samt Kettenkopf aus dem
   Protokoll, Signatur, Zertifikat zum Zeitpunkt des Hochladens und Zeitstempel. Altberichte
-  stehen markiert als „Altbestand, ungesichert“ dabei. Die ganze Kette prüft `kette_pruefen` (#19).
+  stehen markiert als „Altbestand, ungesichert“ dabei. Alles auf einmal prüft `kette_pruefen` (#19).
 
 Browser-Tests (Playwright, eigener CI-Job; bei Fehlern Screenshots und Traces als Artefakt):
 

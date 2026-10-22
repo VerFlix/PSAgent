@@ -13,10 +13,17 @@ Festlegungen (Felix, 21.10.2026):
 
 Typst setzt das PDF (Daten als JSON, nur als Text gesetzt), pyHanko fügt das Signaturfeld als
 Nachtrag an. Das ist reiner PDF-Aufbau, keine Kryptografie.
+
+Runde, Prüfsumme des Inhalts und Kettenkopf stehen zusätzlich maschinenlesbar in den
+Schlüsselwörtern des PDFs (`keywords`, `read_anchor`, #19). Die Signatur deckt sie mit ab; so
+vergleicht der Prüfknopf die Datenbank mit dem, was signiert wurde, nicht mit Spalten, die man
+zusammen mit der Kette neu berechnen könnte.
 """
 
 import hashlib
 import json
+import re
+from dataclasses import dataclass
 from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
@@ -27,6 +34,7 @@ from django.conf import settings
 from django.utils import timezone
 from pyhanko.pdf_utils import generic
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
+from pyhanko.pdf_utils.reader import PdfFileReader
 from pyhanko.sign.fields import SigFieldSpec, append_signature_field
 
 from accounts.models import Qualification
@@ -45,6 +53,41 @@ STATEMENT = (
     "Mit meiner Signatur bestätige ich als PSA-Sachkundige*r, die aufgeführten Teile geprüft "
     "zu haben. Die Signatur deckt dieses Protokoll und den genannten Kettenkopf ab."
 )
+
+
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+
+
+@dataclass(frozen=True)
+class Anchor:
+    """Die mitsignierten Werte eines Protokolls (#19)."""
+
+    round_id: int
+    content_sha256: str
+    head: Head
+
+
+def keywords(round_id: int, *, content_sha256: str, head: Head) -> list[str]:
+    """Schlüsselwörter des PDFs, z. B. `psagent-kettenkopf:12:<SHA-256>`."""
+    return [
+        f"psagent-runde:{round_id}",
+        f"psagent-inhalt:{content_sha256}",
+        f"psagent-kettenkopf:{head}",
+    ]
+
+
+def read_anchor(pdf: bytes) -> Anchor | None:
+    """Liest die Werte aus den Schlüsselwörtern; `None`, wenn sie fehlen oder unlesbar sind."""
+    try:
+        text = str(PdfFileReader(BytesIO(pdf)).trailer_view["/Info"].get("/Keywords", ""))
+        values = dict(item.strip().partition(":")[::2] for item in text.split(","))
+        content = values["psagent-inhalt"]
+        anchor = Anchor(
+            int(values["psagent-runde"]), content, Head.parse(values["psagent-kettenkopf"])
+        )
+    except Exception:
+        return None
+    return anchor if _SHA256.match(content) and _SHA256.match(anchor.head.hash) else None
 
 
 def _date(value: Any) -> str:
@@ -107,6 +150,7 @@ def payload(
         "content_sha256": content_sha256,
         "chain_seq": str(head.seq),
         "chain_hash": head.hash,
+        "keywords": keywords(round_.pk, content_sha256=content_sha256, head=head),
         "statement": STATEMENT,
         "field": FIELD_CM,
     }
