@@ -2,6 +2,7 @@
 
     signieren unterschrift BILD     Unterschrift als Bild einmal hinterlegen (Benutzerordner)
     signieren PROTOKOLL.pdf          anzeigen, bestätigen, mit dem YubiKey signieren
+    signieren pruefen BERICHT.pdf    signierten Prüfbericht ohne Datenbank prüfen (#19)
 
 Das signierte PDF heißt `<name>_signiert.pdf` und liegt neben dem Original; hochgeladen wird es
 im Prüfmodus von PSAgent. Das Tool braucht keine Zugangsdaten zum Server.
@@ -9,6 +10,7 @@ im Prüfmodus von PSAgent. Das Tool braucht keine Zugangsdaten zum Server.
 
 import argparse
 import getpass
+import logging
 import os
 import shutil
 import subprocess
@@ -18,7 +20,10 @@ from pathlib import Path
 
 from PIL import Image
 
-from psagent_signieren import core, yubikey
+from psagent_signieren import check, core, yubikey
+
+# Rückgabewerte von `signieren pruefen`, wie bei `manage.py kette_pruefen`.
+EXIT = {check.UNCHANGED: 0, check.CHANGED: 1, check.UNCHECKABLE: 2}
 
 
 def settings_folder() -> Path:
@@ -96,8 +101,45 @@ def run_sign(
     return target
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def run_check(args: argparse.Namespace, write: Callable[[str], None]) -> int:
+    """Prüft einen signierten Prüfbericht; Rückgabewert 0, 1 oder 2."""
+    # pyHanko meldet jeden Befund zusätzlich mit Traceback; das Ergebnis unten sagt es verständlich.
+    for name in ("pyhanko", "pyhanko_certvalidator"):
+        logging.getLogger(name).setLevel(logging.CRITICAL)
+    try:
+        roots = check.read_tsa_roots(Path(args.tsa_ca)) if args.tsa_ca else None
+        listed = (
+            check.read_fingerprints(Path(args.fingerabdruecke)) if args.fingerabdruecke else None
+        )
+        pdf = Path(args.pdf).read_bytes()
+    except (check.InputError, OSError) as error:
+        write(f"Fehler: {error}")
+        return EXIT[check.UNCHECKABLE]
+    result = check.check(pdf, tsa_roots=roots, fingerprints=listed)
+    for title, lines in (
+        ("Verändert", result.findings),
+        ("Nicht prüfbar", result.unchecked),
+        ("Geprüft", result.confirmed),
+        ("Angaben im Bericht", result.info),
+    ):
+        if lines:
+            write(f"{title}:")
+            write("\n".join(f"  {line}" for line in lines))
+    write(f"Ergebnis: {result.verdict}.")
+    return EXIT[result.verdict]
+
+
+def main(argv: Sequence[str] | None = None, *, write: Callable[[str], None] = print) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments[:1] == ["pruefen"]:
+        parser = argparse.ArgumentParser(
+            prog="signieren pruefen",
+            description="Signierten PSAgent-Prüfbericht ohne Datenbank prüfen.",
+        )
+        parser.add_argument("pdf", help="signierter Prüfbericht (Seite „Prüfberichte“)")
+        parser.add_argument("--tsa-ca", help="Zertifizierungsstelle des Zeitstempeldienstes (PEM)")
+        parser.add_argument("--fingerabdruecke", help="Liste der Fingerabdrücke (Textdatei)")
+        return run_check(parser.parse_args(arguments[1:]), write)
     try:
         if arguments[:1] == ["unterschrift"]:
             parser = argparse.ArgumentParser(prog="signieren unterschrift")

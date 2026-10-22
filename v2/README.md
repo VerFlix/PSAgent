@@ -110,7 +110,8 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
   `--zeugen` die Zeugen-Mails (`.eml`) bzw. Kopf-Dateien und mit `--fingerabdruecke` die
   Papierliste der Signaturzertifikate. Ergebnis unverändert (0), verändert (1) oder nicht prüfbar
   (2). Ablauf: `docs/runbooks/pruefwerkzeug.md`; welche Manipulationen das findet:
-  `docs/manipulationen.md`.
+  `docs/manipulationen.md`. Einen einzelnen signierten Bericht prüft das Signier-Tool auch ohne
+  Server: `signieren pruefen <Bericht.pdf> --tsa-ca … --fingerabdruecke …`.
 - Prüfmodus (Parität 7, `/pruefung/runde/`, nur mit gültiger Sachkunde): Prüfungsrunde beginnen,
   Teile per QR-Kamera (eingebauter `BarcodeDetector`, sonst jsQR lokal), Handscanner oder EI-Feld
   sammeln, jedes Teil einzeln bewerten (ohne Sammelbestätigung, ohne vorausgewähltes Ergebnis),

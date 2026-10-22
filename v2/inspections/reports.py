@@ -171,6 +171,9 @@ def _check_signature(signed: SignedProtocol, pdf: bytes, result: CheckResult) ->
         result.findings.append("Das PDF hat nicht genau eine Signatur und einen Zeitstempel.")
         return
     signature = signatures[0]
+    if stamps[0].signed_revision <= signature.signed_revision:
+        result.findings.append("Der Zeitstempel liegt vor der Signatur und deckt sie nicht ab.")
+        return
     signer = signature.signer_cert
     if _sha256(signer.dump()) != signed.certificate.sha256:
         result.findings.append("Signiert hat ein anderes als das hinterlegte Zertifikat.")
