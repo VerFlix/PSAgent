@@ -12,6 +12,7 @@ Verleiher; Teile anlegen und pflegen ab Trainer/Materialwart (Rechtetabelle, `ac
 
 import hashlib
 from datetime import date, datetime
+from itertools import pairwise
 from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ValidationError
@@ -102,29 +103,57 @@ def _record(
     )
 
 
-def component_problems() -> list[str]:
-    """Bauteile, die nicht zu ihrem letzten festgehaltenen Stand passen (#20); leer = in Ordnung.
+def _require_recorded(component: Component) -> None:
+    """Vor einer Änderung: Das Bauteil steht noch so in der Datenbank, wie zuletzt festgehalten.
 
-    Die Meldungen nennen Bauteil, Teil und Feld, keine Werte.
+    Sonst würde die Änderung einen Wert, den jemand an der App vorbei geändert hat, als neuen
+    Stand festhalten und die Manipulation damit verdecken.
     """
-    latest: dict[int, ComponentRecord] = {}
+    stored = Component.objects.select_for_update().get(pk=component.pk)
+    latest = component.records.order_by("-id").first()
+    if latest is None or component_values(stored) != latest.values:
+        raise InventoryError(
+            f"{component} passt nicht zum festgehaltenen Stand und wird nicht geändert. "
+            "Bitte das Prüfwerkzeug ausführen (kette_pruefen) und den Admin informieren."
+        )
+
+
+def _label(name: str) -> str:
+    return str(getattr(Component._meta.get_field(name), "verbose_name", name))
+
+
+def component_problems() -> list[str]:
+    """Bauteile, die nicht zu ihrer festgehaltenen Geschichte passen (#20); leer = in Ordnung.
+
+    Geprüft wird: Der erste Stand ist die Anlage, zwischen zwei Ständen ändern sich nur die
+    vermerkten Felder, und das Bauteil steht so in der Datenbank wie im letzten Stand. Die
+    Meldungen nennen Bauteil, Teil und Feld, keine Werte.
+    """
+    history: dict[int, list[ComponentRecord]] = {}
     for entry in ComponentRecord.objects.order_by("id").iterator():
-        latest[entry.component_id] = entry
+        history.setdefault(entry.component_id, []).append(entry)
     problems = []
     for component in Component.objects.order_by("pk").iterator():
         where = f"Bauteil #{component.pk} (Teil #{component.part_id})"
-        record = latest.get(component.pk)
-        if record is None:
+        records = history.get(component.pk)
+        if not records:
             problems.append(f"{where}: kein festgehaltener Stand (an der App vorbei angelegt).")
             continue
+        if records[0].kind != RecordKind.CREATED:
+            problems.append(f"{where}: Der erste festgehaltene Stand ist keine Anlage.")
+        for before, after in pairwise(records):
+            problems.extend(
+                f"{where}: {_label(name)} hat sich bis Stand #{after.pk} ohne Vermerk geändert."
+                for name in RECORDED_FIELDS
+                if name not in after.changed and before.values.get(name) != after.values.get(name)
+            )
         current = component_values(component)
-        for name in RECORDED_FIELDS:
-            if current[name] != record.values.get(name):
-                label = getattr(Component._meta.get_field(name), "verbose_name", name)
-                problems.append(
-                    f"{where}: {label} weicht vom festgehaltenen Stand ab "
-                    "(an der App vorbei geändert)."
-                )
+        problems.extend(
+            f"{where}: {_label(name)} weicht vom festgehaltenen Stand ab "
+            "(an der App vorbei geändert)."
+            for name in RECORDED_FIELDS
+            if current[name] != records[-1].values.get(name)
+        )
     return problems
 
 
@@ -278,6 +307,7 @@ def update_component(component: Component, *, actor: User | None, **fields: Any)
         require(actor, Right.MANAGE_PARTS)
     if component.part.is_retired():
         raise InventoryError(f"{component.part} ist ausgesondert; Änderungen sind nicht möglich.")
+    _require_recorded(component)
     for name in changed:
         setattr(component, name, fields[name])
     component.save(update_fields=changed)

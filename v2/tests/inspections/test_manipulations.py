@@ -34,7 +34,8 @@ from inspections.models import (
 )
 from inspections.signature import SignatureError, stamp
 from inventory.models import Component
-from tests.helpers import tamper
+from inventory.services import InventoryError, update_component
+from tests.helpers import make_inspector, tamper
 from tests.inspections.conftest import MakePart, in_days
 from tests.signing import sign, sign_pdf, signed_protocol, signing_environment, yubikey_of
 
@@ -497,6 +498,23 @@ def test_m22_component_and_its_record_changed_together(make_part: MakePart) -> N
     code, text = check()
     assert code == 1
     assert f"(inventory.ComponentRecord #{record.pk}): Vorgang wurde geändert." in text
+
+
+def test_m23_tampering_is_not_laundered_by_a_later_edit(make_part: MakePart) -> None:
+    """Manipulation, danach eine erlaubte Änderung: Die App lehnt ab, der Befund bleibt."""
+    component = make_part(year_of_manufacture=2015).components.get()
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE inventory_component SET year_of_manufacture = 2024 WHERE id = %s",
+            [component.pk],
+        )
+
+    with pytest.raises(InventoryError, match="passt nicht zum festgehaltenen Stand"):
+        update_component(component, actor=make_inspector(), serial_number="SN-NEU")
+
+    code, text = check()
+    assert code == 1
+    assert "Herstellungsjahr weicht vom festgehaltenen Stand ab" in text
 
 
 def test_every_catalog_entry_has_a_numbered_test() -> None:

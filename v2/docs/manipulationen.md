@@ -44,6 +44,7 @@ im Namen (`test_m<Nr>_…`, #20); er läuft über das Werkzeug, das die Manipula
 | M20 | PSA-relevantes Feld in der Datenbank geändert (z. B. Herstellungsjahr „verjüngt“) | Stammdaten: Feld „weicht vom festgehaltenen Stand ab“ | `test_m20_ppe_field_changed_in_database_is_found`, `tests/inventory/test_component_records.py::test_field_changed_in_database_is_found`, `test_component_moved_to_another_part_is_found` |
 | M21 | Bauteil an der App vorbei angelegt | Stammdaten: „kein festgehaltener Stand“ | `test_m21_component_inserted_in_database_is_found`, `test_component_inserted_in_database_is_found` |
 | M22 | Bauteil und sein festgehaltener Stand gemeinsam geändert | Kette: „Vorgang wurde geändert“ (`ComponentRecord`) | `test_m22_component_and_its_record_changed_together`, `test_record_rewritten_in_database_is_found_by_the_chain` |
+| M23 | Manipulation an einem Bauteil durch eine spätere, erlaubte Änderung in der App „verdeckt“ | App lehnt die Änderung ab („passt nicht zum festgehaltenen Stand“), der Befund bleibt; zwischen zwei Ständen ändern sich nur vermerkte Felder | `test_m23_tampering_is_not_laundered_by_a_later_edit`, `test_tampered_component_is_not_laundered_by_a_later_edit`, `test_unlisted_change_between_records_is_found`, `test_history_must_start_with_creation` |
 
 ## Grenzen
 

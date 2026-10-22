@@ -16,7 +16,12 @@ from accounts.models import User
 from core import chain
 from core.append_only import AppendOnlyError
 from inventory.models import Component, ComponentRecord, RecordKind
-from inventory.services import component_problems, component_values, update_component
+from inventory.services import (
+    InventoryError,
+    component_problems,
+    component_values,
+    update_component,
+)
 from tests.helpers import tamper
 from tests.inventory.conftest import MakeProduct, MakeSystem, component
 
@@ -154,3 +159,63 @@ def test_values_are_text_and_empty_for_missing(make_product: MakeProduct) -> Non
     assert values["part"] == str(stored.part_id) and values["position"] == "1"
     assert all(isinstance(value, str) for value in values.values())
     assert date.fromisoformat(values["first_use_date"]) == stored.first_use_date
+
+
+# --- Verdecken durch spätere Änderungen (Sicherheitsprüfung zu #109) ---
+
+
+def test_tampered_component_is_not_laundered_by_a_later_edit(
+    make_product: MakeProduct, actor: User
+) -> None:
+    """Manipulation in der Datenbank, danach eine erlaubte Änderung in der App: abgelehnt."""
+    stored = make_product("TST-REC14").components.get()
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE inventory_component SET year_of_manufacture = 2025 WHERE id = %s",
+            [stored.pk],
+        )
+
+    with pytest.raises(InventoryError, match="passt nicht zum festgehaltenen Stand"):
+        update_component(stored, actor=actor, serial_number="SN-NEU")
+
+    assert stored.records.count() == 1
+    assert len(component_problems()) == 1
+
+
+def test_unlisted_change_between_records_is_found(make_product: MakeProduct) -> None:
+    """Ein späterer Stand darf sich nur in den vermerkten Feldern unterscheiden."""
+    stored = make_product("TST-REC15").components.get()
+    first = stored.records.get()
+    later = ComponentRecord.objects.create(
+        component=stored,
+        kind=RecordKind.CHANGED,
+        changed=["serial_number"],
+        values={**first.values, "serial_number": "SN-2", "year_of_manufacture": "2025"},
+    )
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE inventory_component SET year_of_manufacture = 2025, serial_number = 'SN-2'"
+            " WHERE id = %s",
+            [stored.pk],
+        )
+
+    assert component_problems() == [
+        f"Bauteil #{stored.pk} (Teil #{stored.part_id}): Herstellungsjahr hat sich bis "
+        f"Stand #{later.pk} ohne Vermerk geändert."
+    ]
+
+
+def test_history_must_start_with_creation(make_product: MakeProduct) -> None:
+    part = make_product("TST-REC16")
+    Component.objects.bulk_create([Component(part=part, position=2, **component("TST-REC17"))])
+    inserted = Component.objects.get(ei="TST-REC17")
+    ComponentRecord.objects.create(
+        component=inserted,
+        kind=RecordKind.CHANGED,
+        changed=["serial_number"],
+        values=component_values(inserted),
+    )
+
+    assert component_problems() == [
+        f"Bauteil #{inserted.pk} (Teil #{part.pk}): Der erste festgehaltene Stand ist keine Anlage."
+    ]
