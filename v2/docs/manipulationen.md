@@ -12,6 +12,8 @@ Werkzeuge:
   `--zeugen` die Zeugen-Mails bzw. Kopf-Dateien, mit `--fingerabdruecke` die Papierliste.
   Ablauf: `docs/runbooks/pruefwerkzeug.md`
 - **Hochladen** des signierten Protokolls (#38): lehnt ab, bevor etwas gespeichert wird
+- **`signieren pruefen`** (#19): ein heruntergeladenes signiertes PDF auf einem anderen Rechner,
+  ohne Datenbank (Signatur, Zeitstempel, Fingerabdruck gegen die Papierliste)
 
 Tests in `tests/inspections/test_manipulations.py` (M1–M8) laufen über `kette_pruefen` als Ganzes.
 
@@ -25,13 +27,13 @@ Tests in `tests/inspections/test_manipulations.py` (M1–M8) laufen über `kette
 | M6 | Datenbank auf einen älteren Stand zurückgesetzt (alte Sicherung eingespielt) | nur Zeugen-Mail/Kopf-Datei (`--zeugen`): „Kettenkopf … fehlt: Die Kette wurde gekürzt“ | `test_m6_restored_older_backup_needs_the_witness` |
 | M7 | Signierte Protokolle zweier Runden vertauscht (samt Original) | Bericht: „Das signierte Protokoll gehört zu Runde …“ | `test_m7_swapped_reports_are_found` |
 | M8 | Nachtrag an ein signiertes PDF angehängt, Prüfsumme angepasst | Kette: „Vorgang wurde geändert“ | `test_m8_unsigned_change_after_signing_is_found` |
-| M9 | Signiertes PDF in der Datenbank verändert | Bericht: „Das signierte PDF wurde in der Datenbank verändert“ | `tests/inspections/test_reports.py::test_changed_pdf_in_database_is_found`, `tests/inspections/test_audit.py::test_changed_report_is_found` |
+| M9 | Signiertes PDF verändert (in der Datenbank oder als Datei) | Bericht: „Das signierte PDF wurde in der Datenbank verändert“; `signieren pruefen`: Signatur passt nicht bzw. Nachtrag nach dem Zeitstempel | `tests/inspections/test_reports.py::test_changed_pdf_in_database_is_found`, `tests/inspections/test_audit.py::test_changed_report_is_found`, `tests/signiertool/test_pruefen.py::test_changed_byte_is_found`, `test_later_update_is_found` |
 | M10 | Kettenglieder vertauscht oder gelöscht | Kette | `test_swapped_links_are_detected`, `test_deleted_link_is_detected` |
 | M11 | Letzte Vorgänge samt Gliedern gelöscht (Kette gekürzt) | Kette gegen festgehaltene Köpfe | `test_truncation_needs_a_known_head` |
 | M12 | Festgehaltener Kopf geändert oder fremder Zeitstempel untergeschoben | Kette bzw. Zeitstempel der Köpfe | `tests/core/test_witness.py::test_recomputed_chain_misses_its_witness`, `test_swapped_token_is_detected` |
 | M13 | Zeugen-Datei gefälscht (anderer Hash oder andere Zeit) | `--zeugen`: Zeitstempel passt nicht zum Hash bzw. zur Zeit | `tests/inspections/test_audit.py::test_forged_hash_in_witness_file`, `test_wrong_time_in_witness_file` |
 | M14 | Zeitpunkt des Zeitstempels eines Berichts geändert | Bericht: „weicht vom Zeitstempel ab“ | `test_changed_stamp_time_is_found` |
-| M15 | Eigenes Zertifikat in die Zertifikatsliste geschmuggelt | `--fingerabdruecke`: „steht nicht auf der Liste“ | `test_certificate_missing_from_list` |
+| M15 | Eigenes Zertifikat in die Zertifikatsliste geschmuggelt | `--fingerabdruecke` (Server und Signier-Tool): „steht nicht auf der Liste“ | `test_certificate_missing_from_list`, `test_signer_missing_from_list` |
 | M16 | Kettenkopf im Protokoll neu berechnet | Bericht und Kette: mitsignierter Kopf weicht ab | `test_recomputed_chain_is_found_by_protocol_head`, `tests/inspections/test_signature.py::test_chain_check_uses_heads_from_signed_protocols` |
 | M17 | Protokoll vor dem Hochladen verändert, anders signiert oder mit fremdem Zertifikat | Hochladen lehnt ab | `tests/inspections/test_signature.py` (`test_change_after_signing_is_refused`, `test_change_of_content_with_the_signature_is_refused`, `test_signature_in_other_field_is_refused`, `test_unlisted_certificate_is_refused`, `test_certificate_of_another_inspector_is_refused`, …) |
 

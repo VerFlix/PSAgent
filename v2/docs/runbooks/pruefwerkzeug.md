@@ -84,5 +84,41 @@ Das Konzept sieht vor, auch unabhängig vom Pi zu prüfen. Dafür:
 
 Die Wiederherstellung selbst probt Felix lokal (Wiederherstellungsprobe, Phase 4).
 
-Ein einzelnes signiertes PDF ohne Datenbank prüft das Signier-Tool (`signieren pruefen`,
-folgt in #19 Schritt 2).
+## 5. Einzelnen Prüfbericht ohne Datenbank prüfen (Felix und Vorstand)
+
+`signieren pruefen` aus dem Signier-Tool prüft ein signiertes PDF auf jedem Windows-PC, ohne
+Server, ohne Datenbank, ohne Netz und ohne YubiKey:
+
+- genau eine Signatur im Feld „Sachkundiger“, intakt, danach nur der Zeitstempel,
+- der Fingerabdruck des Signaturzertifikats steht auf der Liste (`--fingerabdruecke`),
+- der Zeitstempel ist gültig und stammt vom Dienst, dessen Zertifizierungsstelle angegeben ist
+  (`--tsa-ca`).
+
+Dazu zeigt es Runde, Prüfsumme des Inhalts und Kettenkopf aus dem signierten Teil. Ob
+Ergebnisse, Sachkunde und Kette in PSAgent noch dazu passen, kann es ohne Datenbank nicht
+wissen; dafür nennt es den passenden Befehl `kette_pruefen --kopf …` für den Server.
+Ergebnis und Rückgabewert wie oben: unverändert (0), verändert (1), nicht prüfbar (2).
+
+Einrichten (einmalig):
+
+1. **uv** installieren: `winget install astral-sh.uv`
+2. Das Repo holen: `git clone https://github.com/VerFlix/PSAgent.git`, ohne Git auf GitHub
+   „Code“ → „Download ZIP“ und entpacken.
+3. Im Repo-Ordner: `uv tool install .\v2\signiertool`. Das Yubico PIV Tool braucht man zum
+   Prüfen nicht. Feste Versionen der Bibliotheken folgen mit #105.
+4. Die Zertifizierungsstelle des Zeitstempeldienstes als PEM-Datei ablegen, dieselbe wie
+   `PSAGENT_TSA_CA_PATH` auf dem Server (`docs/runbooks/kettenkopf.md`, Abschnitt 1). Am besten
+   selbst von der Webseite des Dienstes laden und den Fingerabdruck mit der Angabe dort
+   vergleichen, nicht vom Pi kopieren.
+5. Die Papierliste der Fingerabdrücke als Textdatei abtippen (Format wie in Abschnitt 3).
+
+Prüfen: Den Bericht in PSAgent unter „Prüfberichte“ → Bericht → „Signiertes Prüfprotokoll
+(PDF)“ laden, dann
+
+```powershell
+signieren pruefen Pruefprotokoll_Runde_12_signiert.pdf `
+  --tsa-ca C:\PSAgent\tsa-ca.pem --fingerabdruecke C:\PSAgent\fingerabdruecke.txt
+```
+
+Ohne `--tsa-ca` oder `--fingerabdruecke` lautet das Ergebnis „nicht prüfbar“; der Fingerabdruck
+steht trotzdem da und lässt sich von Hand mit der Papierliste vergleichen.

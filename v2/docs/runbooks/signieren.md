@@ -81,6 +81,11 @@ Nach einem `git pull`:
 uv tool install --reinstall .\v2\signiertool
 ```
 
+## Signierte Berichte prüfen
+
+`signieren pruefen <Bericht.pdf>` prüft einen signierten Prüfbericht ohne Server und ohne
+YubiKey (#19): `docs/runbooks/pruefwerkzeug.md`, Abschnitt 5.
+
 ## Alternative: Adobe Acrobat Reader
 
 Laut Konzept geht auch Acrobat Reader unter Windows (YubiKey über den Yubico Minidriver). Es muss
