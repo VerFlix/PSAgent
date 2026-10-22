@@ -1,0 +1,6 @@
+<div class="card check-{{ result.verdict.name|lower }}">
+  <p><strong>{% if result.verdict == "unverändert" %}Unverändert.{% elif result.verdict == "verändert" %}Verändert!{% else %}Nicht prüfbar.{% endif %}</strong></p>
+  {% if result.findings %}<ul>{% for finding in result.findings %}<li class="error">{{ finding }}</li>{% endfor %}</ul>{% endif %}
+  {% if result.unchecked %}<ul>{% for reason in result.unchecked %}<li>{{ reason }}</li>{% endfor %}</ul>{% endif %}
+  {% if result.confirmed %}<ul class="hint">{% for item in result.confirmed %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+</div>

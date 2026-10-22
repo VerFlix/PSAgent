@@ -166,6 +166,33 @@ def test_inserted_row_is_detected() -> None:
     ]
 
 
+def test_verify_rows_checks_only_the_given_rows() -> None:
+    """Für den Prüfknopf an Prüfberichten (#39): nur die Zeilen des Berichts."""
+    user = make_user()
+    kept, changed = event(user, "bleibt"), event(user, "Original")
+    tamper(
+        "accounts_accountevent",
+        "UPDATE accounts_accountevent SET detail = 'Fälschung' WHERE id = %s",
+        [changed.pk],
+    )
+
+    assert chain.verify_rows(AccountEvent, [kept.pk]) == []
+    [problem] = chain.verify_rows(AccountEvent, [kept.pk, changed.pk])
+    assert problem.endswith(f"(accounts.AccountEvent #{changed.pk}): Vorgang wurde geändert.")
+
+
+def test_verify_rows_reports_rows_without_link() -> None:
+    record = event(make_user(), "ohne Glied")
+    tamper(
+        "core_chainlink",
+        'DELETE FROM core_chainlink WHERE row_pk = %s AND "table" = %s',
+        [str(record.pk), "accounts.AccountEvent"],
+    )
+
+    [problem] = chain.verify_rows(AccountEvent, [record.pk])
+    assert problem.startswith(f"accounts.AccountEvent #{record.pk}: Vorgang ohne Kettenglied")
+
+
 def test_swapped_links_are_detected() -> None:
     user = make_user()
     event(user, "erster")

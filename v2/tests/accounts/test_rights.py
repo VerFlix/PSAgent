@@ -43,6 +43,7 @@ EXPECTED: dict[Right, str] = {
     Right.PPE_FIELDS: "q q - - -",
     Right.EXPORT_PERSONAL: "+ + - - -",
     Right.INSPECT: "q q - - -",
+    Right.REPORTS: "+ + + + +",
     Right.CLARIFY: "+ + - - -",
     Right.ERASURE_HOLD: "+ + - - -",
     Right.REMINDERS: "+ - - - -",

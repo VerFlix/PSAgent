@@ -46,6 +46,7 @@ class Right(StrEnum):
     PPE_DOCUMENTS = "ppe_documents"
     EXPORT_PERSONAL = "export_personal"
     INSPECT = "inspect"
+    REPORTS = "reports"
     CLARIFY = "clarify"
     ERASURE_HOLD = "erasure_hold"
     REMINDERS = "reminders"
@@ -146,6 +147,9 @@ RIGHTS: dict[Right, Rule] = {
         "Prüfungsrunde, entsperren, aussondern, nächste Prüfung setzen",
         Role.PPE_EXPERT,
         qualification=True,
+    ),
+    Right.REPORTS: Rule(
+        "Prüfberichte sehen, signiertes PDF laden, auf Unverändertheit prüfen", Role.VIEWER
     ),
     Right.CLARIFY: Rule("Klärungsliste nach dem Notbetrieb bearbeiten", Role.PPE_EXPERT),
     Right.ERASURE_HOLD: Rule(
