@@ -11,7 +11,7 @@ Verleiher; Teile anlegen und pflegen ab Trainer/Materialwart (Rechtetabelle, `ac
 """
 
 import hashlib
-from datetime import datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ValidationError
@@ -26,11 +26,13 @@ from accounts.rights import Right, require
 from inventory.models import (
     EVENTS_WITH_COMMENT,
     Component,
+    ComponentRecord,
     Document,
     EventKind,
     Part,
     PartEvent,
     PartKind,
+    RecordKind,
     normalize_ei,
 )
 
@@ -69,9 +71,67 @@ class InventoryError(ValueError):
     """Ein Vorgang verstößt gegen eine Fachregel der Stammdaten."""
 
 
-def _add_components(part: Part, components: list[dict[str, Any]]) -> None:
+# Felder, die `ComponentRecord` festhält (#20): Zuordnung zum Teil und alle Bauteilfelder.
+RECORDED_FIELDS = ("part", "position", *COMPONENT_FIELDS)
+
+
+def component_values(component: Component) -> dict[str, str]:
+    """Stand eines Bauteils als Text: Datum ISO 8601, leer statt fehlend."""
+    values = {}
+    for name in RECORDED_FIELDS:
+        value = getattr(component, "part_id" if name == "part" else name)
+        if value is None:
+            values[name] = ""
+        elif isinstance(value, date):
+            values[name] = value.isoformat()
+        else:
+            values[name] = str(value)
+    return values
+
+
+def _record(
+    component: Component, kind: RecordKind, *, actor: User | None, changed: list[str] | None = None
+) -> None:
+    component.refresh_from_db()  # so, wie es in der Datenbank steht
+    ComponentRecord.objects.create(
+        component=component,
+        kind=kind,
+        actor=actor,
+        changed=sorted(changed or []),
+        values=component_values(component),
+    )
+
+
+def component_problems() -> list[str]:
+    """Bauteile, die nicht zu ihrem letzten festgehaltenen Stand passen (#20); leer = in Ordnung.
+
+    Die Meldungen nennen Bauteil, Teil und Feld, keine Werte.
+    """
+    latest: dict[int, ComponentRecord] = {}
+    for entry in ComponentRecord.objects.order_by("id").iterator():
+        latest[entry.component_id] = entry
+    problems = []
+    for component in Component.objects.order_by("pk").iterator():
+        where = f"Bauteil #{component.pk} (Teil #{component.part_id})"
+        record = latest.get(component.pk)
+        if record is None:
+            problems.append(f"{where}: kein festgehaltener Stand (an der App vorbei angelegt).")
+            continue
+        current = component_values(component)
+        for name in RECORDED_FIELDS:
+            if current[name] != record.values.get(name):
+                label = getattr(Component._meta.get_field(name), "verbose_name", name)
+                problems.append(
+                    f"{where}: {label} weicht vom festgehaltenen Stand ab "
+                    "(an der App vorbei geändert)."
+                )
+    return problems
+
+
+def _add_components(part: Part, components: list[dict[str, Any]], *, actor: User | None) -> None:
     for position, fields in enumerate(components, start=1):
-        Component.objects.create(part=part, position=position, **fields)
+        created = Component.objects.create(part=part, position=position, **fields)
+        _record(created, RecordKind.CREATED, actor=actor)
 
 
 @transaction.atomic
@@ -95,7 +155,7 @@ def create_product(
         legacy_kind=legacy_kind,
         legacy_id=legacy_id,
     )
-    _add_components(part, [component])
+    _add_components(part, [component], actor=actor)
     return part
 
 
@@ -119,7 +179,7 @@ def create_system(
         legacy_kind=legacy_kind,
         legacy_id=legacy_id,
     )
-    _add_components(part, components)
+    _add_components(part, components, actor=actor)
     return part
 
 
@@ -221,7 +281,7 @@ def update_component(component: Component, *, actor: User | None, **fields: Any)
     for name in changed:
         setattr(component, name, fields[name])
     component.save(update_fields=changed)
-    component.refresh_from_db(fields=["ei_key"])
+    _record(component, RecordKind.CHANGED, actor=actor, changed=changed)
     return component
 
 

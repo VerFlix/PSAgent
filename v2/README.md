@@ -106,7 +106,9 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
   Zeitstempel nach RFC 3161 fest, schreibt ihn als Datei für Unraid und mailt ihn an das
   Zeugen-Postfach des Vorstands; `kette_pruefen` prüft die festgehaltenen Köpfe und Stempel mit.
   Einrichtung: `docs/runbooks/kettenkopf.md`.
-- Prüfwerkzeug (#19): `kette_pruefen` prüft außerdem alle signierten Prüfberichte, mit
+- Prüfwerkzeug (#19, #20): `kette_pruefen` prüft außerdem alle signierten Prüfberichte und jedes
+  Bauteil gegen seinen festgehaltenen Stand (`ComponentRecord`: beim Anlegen und nach jeder
+  Änderung, nur anhängbar, verkettet), mit
   `--zeugen` die Zeugen-Mails (`.eml`) bzw. Kopf-Dateien und mit `--fingerabdruecke` die
   Papierliste der Signaturzertifikate. Ergebnis unverändert (0), verändert (1) oder nicht prüfbar
   (2). Ablauf: `docs/runbooks/pruefwerkzeug.md`; welche Manipulationen das findet:

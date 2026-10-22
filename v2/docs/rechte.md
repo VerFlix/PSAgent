@@ -134,9 +134,10 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   stehen mit Grund bei der Runde (`SignatureRejection`).
 - Prüfberichte (Parität 9, #39, Felix, 21.10.2026): Liste, Details, signiertes PDF und der
   Prüfknopf „Unverändert?“ für alle Rollen. Altberichte stehen markiert („Altbestand,
-  ungesichert“) in derselben Liste, ohne Prüfknopf. **Offen:** Die Berichte nennen die
-  sachkundige Person, das Konzept sagt aber „Viewer sehen keine Personendaten“. Gilt das auch
-  hier, genügt es, die Zeile „Prüfberichte sehen …“ auf ab Verleiher zu setzen. Der Prüfknopf
+  ungesichert“) in derselben Liste, ohne Prüfknopf. Die Berichte nennen die sachkundige
+  Person; auch Viewer sehen sie (Felix, 22.10.2026). Das ist eine bewusste Ausnahme vom
+  Grundsatz „Viewer sehen keine Personendaten“: Der Name der prüfenden Person gehört zum
+  Prüfbericht, Entleiherdaten bleiben für Viewer gesperrt. Der Prüfknopf
   beurteilt das Zertifikat im Rückblick: Zählt, was beim Hochladen galt; eine später widerrufene
   Sachkunde, eine entzogene Rolle oder ein gestrichener YubiKey machen alte Berichte nicht
   ungültig, ein auf vorher zurückdatierter Widerruf schon.
