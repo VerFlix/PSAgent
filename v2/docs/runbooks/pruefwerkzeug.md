@@ -9,6 +9,8 @@ findet, steht in `docs/manipulationen.md`.
 - **`manage.py kette_pruefen`** (Admin, auf dem Server): prüft alles auf einmal,
   - die ganze Hash-Kette mit allen bekannten Köpfen,
   - die Zeitstempel der festgehaltenen Köpfe,
+  - jedes Bauteil gegen seinen festgehaltenen Stand (EI, Herstellungsjahr, Datum 1. Einsatz und
+    die übrigen Felder, #20),
   - jeden signierten Prüfbericht wie der Prüfknopf,
   - auf Wunsch die Zeugen-Mails bzw. Kopf-Dateien (`--zeugen`) und die Papierliste der
     Fingerabdrücke (`--fingerabdruecke`).

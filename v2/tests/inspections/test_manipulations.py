@@ -1,4 +1,4 @@
-"""Manipulations-Katalog (#19, Abnahme Phase 3): jede gezielte Manipulation wird erkannt.
+"""Manipulations-Katalog (#19, #20, Abnahme Phase 3): jede gezielte Manipulation wird erkannt.
 
 Der Katalog steht in `docs/manipulationen.md`; jede Zeile nennt den Test, der sie abdeckt. Hier
 stehen die Fälle, die das Prüfwerkzeug `kette_pruefen` als Ganzes finden muss, vor allem die
@@ -7,29 +7,37 @@ zwei Fälle, die nur der Zeuge aufdeckt, prüft je ein Test auch die Grenze ohne
 """
 
 import hashlib
+import json
 import re
-from io import StringIO
+from io import BytesIO, StringIO
 from pathlib import Path
 
 import pytest
 from django.core.management import CommandError, call_command
-from django.db import connection
+from django.db import connection, models
+from pyhanko.pdf_utils import generic
+from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 
 from accounts.models import AccountEvent, AccountEventKind, Role, User
 from core import chain, timestamp, witness
 from core.models import ChainLink, WitnessHead
 from inspections import services
 from inspections.models import (
+    InspectionResult,
     InspectionRound,
     Outcome,
     RoundEvent,
     RoundEventKind,
     RoundProtocol,
+    SignatureRejection,
     SignedProtocol,
 )
-from tests.helpers import tamper
+from inspections.signature import SignatureError, stamp
+from inventory.models import Component
+from inventory.services import InventoryError, update_component
+from tests.helpers import make_inspector, tamper
 from tests.inspections.conftest import MakePart, in_days
-from tests.signing import sign, signing_environment
+from tests.signing import sign, sign_pdf, signed_protocol, signing_environment, yubikey_of
 
 pytestmark = pytest.mark.django_db
 
@@ -272,6 +280,252 @@ def test_m8_unsigned_change_after_signing_is_found(inspector: User, make_part: M
     code, text = check()
     assert code == 1
     assert f"(inspections.SignedProtocol #{entry.pk}): Vorgang wurde geändert." in text
+
+
+# --- M9–M18: weitere Fälle, je über das Werkzeug, das sie findet ---
+
+
+def test_m9_changed_report_pdf_is_found(inspector: User, make_part: MakePart) -> None:
+    round_ = signed_round(inspector, make_part)
+    entry = SignedProtocol.objects.get(round=round_)
+    pdf = bytearray(bytes(entry.pdf))
+    pdf[-50] ^= 0x01
+    tamper(
+        "inspections_signedprotocol",
+        "UPDATE inspections_signedprotocol SET pdf = %s WHERE id = %s",
+        [bytes(pdf), entry.pk],
+    )
+
+    code, text = check()
+    assert code == 1
+    assert "Das signierte PDF wurde in der Datenbank verändert." in text
+
+
+def test_m10_deleted_link_is_found() -> None:
+    events(3)
+    middle = ChainLink.objects.order_by("seq")[1]
+    tamper("core_chainlink", "DELETE FROM core_chainlink WHERE seq = %s", [middle.seq])
+
+    code, text = check()
+    assert code == 1
+    assert f"Glied {middle.seq} fehlt" in text
+
+
+def test_m11_truncated_chain_is_found_with_a_known_head() -> None:
+    *_, last = events(3)
+    head = chain.head()
+    assert head is not None
+    tamper("core_chainlink", "DELETE FROM core_chainlink WHERE seq = %s", [head.seq])
+    tamper("accounts_accountevent", "DELETE FROM accounts_accountevent WHERE id = %s", [last.pk])
+
+    assert check()[0] == 0  # ohne bekannten Kopf stimmig
+    code, text = check(f"--kopf={head}")
+    assert code == 1
+    assert f"Kettenkopf {head.seq} fehlt: Die Kette wurde gekürzt." in text
+
+
+def test_m12_changed_witness_head_is_found() -> None:
+    events(2)
+    with signing_environment():
+        witness_head, _ = witness.capture()
+    tamper(
+        "core_witnesshead",
+        "UPDATE core_witnesshead SET head_hash = %s WHERE id = %s",
+        ["e" * 64, witness_head.pk],
+    )
+
+    code, text = check()
+    assert code == 1
+    assert f"Kettenkopf {witness_head.seq} weicht ab" in text
+
+
+def test_m13_forged_witness_file_is_found(tmp_path: Path) -> None:
+    events(2)
+    mail = board_file(tmp_path / "zeuge.txt")
+    head = chain.head()
+    assert head is not None
+    mail.write_text(mail.read_text().replace(head.hash, "d" * 64))
+
+    code, text = check(f"--zeugen={mail}")
+    assert code == 1
+    assert f"Zeugen-Datei zeuge.txt (Kettenkopf {head.seq})" in text
+
+
+def test_m14_changed_stamp_time_is_found(inspector: User, make_part: MakePart) -> None:
+    round_ = signed_round(inspector, make_part)
+    entry = SignedProtocol.objects.get(round=round_)
+    tamper(
+        "inspections_signedprotocol",
+        "UPDATE inspections_signedprotocol SET stamped_at = stamped_at - interval '30 days'"
+        " WHERE id = %s",
+        [entry.pk],
+    )
+
+    code, text = check()
+    assert code == 1
+    assert "Die gespeicherte Zeit weicht vom Zeitstempel ab." in text
+
+
+def test_m15_certificate_missing_from_paper_list(
+    inspector: User, make_part: MakePart, tmp_path: Path
+) -> None:
+    signed_round(inspector, make_part)
+    listed = tmp_path / "liste.txt"
+    listed.write_text("ab" * 32 + "\n")
+
+    code, text = check(f"--fingerabdruecke={listed}")
+    assert code == 1
+    assert "steht nicht auf der Liste der Fingerabdrücke" in text
+
+
+def test_m16_protocol_head_recomputed_is_found(inspector: User, make_part: MakePart) -> None:
+    round_ = signed_round(inspector, make_part)
+    protocol = RoundProtocol.objects.get(round=round_)
+    tamper(
+        "core_chainlink",
+        "UPDATE core_chainlink SET hash = %s WHERE seq = %s",
+        ["e" * 64, protocol.chain_seq],
+    )
+
+    code, text = check()
+    assert code == 1
+    assert f"Kettenkopf {protocol.chain_seq} weicht ab" in text
+
+
+def test_m17_changed_protocol_is_refused_at_upload(inspector: User, make_part: MakePart) -> None:
+    round_ = services.start_round(actor=inspector)
+    services.record_result(
+        round_, make_part(), Outcome.PASSED, actor=inspector, next_due=in_days(365)
+    )
+    services.close_round(round_, actor=inspector)
+    with signing_environment():
+        writer = IncrementalPdfFileWriter(BytesIO(signed_protocol(round_)))
+    writer.root["/Lang"] = generic.TextStringObject("en")
+    writer.update_root()  # type: ignore[no-untyped-call]
+    out = BytesIO()
+    writer.write(out)  # type: ignore[no-untyped-call]
+
+    with signing_environment(), pytest.raises(SignatureError):
+        services.sign_round(round_, actor=inspector, signed_pdf=out.getvalue())
+
+    assert not SignedProtocol.objects.filter(round=round_).exists()
+    assert SignatureRejection.objects.filter(round=round_).count() == 1
+    assert check()[0] == 0  # abgelehnt und protokolliert, nichts verändert
+
+
+def test_m18_timestamp_before_signature_is_found(inspector: User, make_part: MakePart) -> None:
+    round_ = signed_round(inspector, make_part)
+    entry = SignedProtocol.objects.get(round=round_)
+    with signing_environment():
+        stamped, stamped_at = stamp(bytes(entry.protocol.pdf))
+        pdf = sign_pdf(stamped, yubikey_of(inspector))
+    tamper(
+        "inspections_signedprotocol",
+        "UPDATE inspections_signedprotocol SET pdf = %s, sha256 = %s, stamped_at = %s"
+        " WHERE id = %s",
+        [pdf, hashlib.sha256(pdf).hexdigest(), stamped_at, entry.pk],
+    )
+
+    code, text = check()
+    assert code == 1
+    assert "Der Zeitstempel liegt vor der Signatur und deckt sie nicht ab." in text
+
+
+# --- M19–M22: „nächste Prüfung“ und Stammdaten (#20) ---
+
+
+def test_m19_next_due_slipped_in_without_inspection(inspector: User, make_part: MakePart) -> None:
+    """Eine „Korrektur“ mit späterer nächster Prüfung, an der App vorbei eingefügt."""
+    round_ = signed_round(inspector, make_part)
+    original = round_.results.get()
+    forged = InspectionResult(
+        round=round_,
+        part=original.part,
+        outcome=Outcome.PASSED,
+        next_due=in_days(3650),
+        corrects=original,
+        recorded_by=inspector,
+    )
+    models.Model.save(forged, force_insert=True)  # ohne Kettenglied, wie per SQL
+
+    code, text = check()
+    assert code == 1
+    assert f"inspections.InspectionResult #{forged.pk}: Vorgang ohne Kettenglied" in text
+    assert "Die Ergebnisse der Runde passen nicht mehr zum Abschluss." in text
+
+
+def test_m20_ppe_field_changed_in_database_is_found(make_part: MakePart) -> None:
+    """Herstellungsjahr „verjüngt“, an der App vorbei."""
+    component = make_part(year_of_manufacture=2015).components.get()
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE inventory_component SET year_of_manufacture = 2024 WHERE id = %s",
+            [component.pk],
+        )
+
+    code, text = check()
+    assert code == 1
+    assert (
+        f"Stammdaten: Bauteil #{component.pk} (Teil #{component.part_id}): Herstellungsjahr "
+        "weicht vom festgehaltenen Stand ab" in text
+    )
+
+
+def test_m21_component_inserted_in_database_is_found(make_part: MakePart) -> None:
+    part = make_part()
+    Component.objects.bulk_create([Component(part=part, position=2, ei="TST-M21")])
+    inserted = Component.objects.get(ei="TST-M21")
+
+    code, text = check()
+    assert code == 1
+    assert f"Bauteil #{inserted.pk} (Teil #{part.pk}): kein festgehaltener Stand" in text
+
+
+def test_m22_component_and_its_record_changed_together(make_part: MakePart) -> None:
+    component = make_part(year_of_manufacture=2015).components.get()
+    record = component.records.get()
+    tamper(
+        "inventory_componentrecord",
+        "UPDATE inventory_componentrecord SET values = %s WHERE id = %s",
+        [json.dumps({**record.values, "year_of_manufacture": "2024"}), record.pk],
+    )
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE inventory_component SET year_of_manufacture = 2024 WHERE id = %s",
+            [component.pk],
+        )
+
+    code, text = check()
+    assert code == 1
+    assert f"(inventory.ComponentRecord #{record.pk}): Vorgang wurde geändert." in text
+
+
+def test_m23_tampering_is_not_laundered_by_a_later_edit(make_part: MakePart) -> None:
+    """Manipulation, danach eine erlaubte Änderung: Die App lehnt ab, der Befund bleibt."""
+    component = make_part(year_of_manufacture=2015).components.get()
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE inventory_component SET year_of_manufacture = 2024 WHERE id = %s",
+            [component.pk],
+        )
+
+    with pytest.raises(InventoryError, match="passt nicht zum festgehaltenen Stand"):
+        update_component(component, actor=make_inspector(), serial_number="SN-NEU")
+
+    code, text = check()
+    assert code == 1
+    assert "Herstellungsjahr weicht vom festgehaltenen Stand ab" in text
+
+
+def test_every_catalog_entry_has_a_numbered_test() -> None:
+    """#20: Je Katalogeintrag eine Testfunktion, die Katalognummer steht im Namen."""
+    root = Path(__file__).resolve().parents[2]
+    catalog = (root / "docs" / "manipulationen.md").read_text()
+    numbers = {int(n) for n in re.findall(r"^\| M(\d+) \|", catalog, re.MULTILINE)}
+    tests = {int(n) for n in re.findall(r"^def test_m(\d+)_", Path(__file__).read_text(), re.M)}
+
+    assert numbers == set(range(1, max(numbers) + 1))
+    assert numbers == tests, sorted(numbers ^ tests)
 
 
 def test_catalog_names_existing_tests() -> None:

@@ -233,6 +233,51 @@ class Component(models.Model):
         return f"{self.ei} ({self.designation or self.model_name or 'Bauteil'})"
 
 
+class RecordKind(models.TextChoices):
+    CREATED = "created", "angelegt"
+    CHANGED = "changed", "geändert"
+
+
+class ComponentRecord(AppendOnlyModel):
+    """Festgehaltener Stand eines Bauteils nach dem Anlegen und nach jeder Änderung (#20).
+
+    Nur anhängen, Teil der Hash-Kette. `values` hält alle Felder als Text
+    (`inventory.services.component_values`), `changed` nennt die geänderten Felder. Passt ein
+    Bauteil nicht zu seinem letzten Stand, wurde es an der App vorbei geändert
+    (`inventory.services.component_problems`, Prüfwerkzeug). Bauteile beschreiben nur
+    Ausrüstung; Personendaten stehen hier nicht.
+    """
+
+    component = models.ForeignKey(
+        Component, on_delete=models.PROTECT, related_name="records", verbose_name="Bauteil"
+    )
+    kind = models.CharField("Art", max_length=10, choices=RecordKind.choices)
+    changed = models.JSONField("geänderte Felder", default=list, blank=True)
+    values = models.JSONField("Stand")
+    at = models.DateTimeField("Zeitpunkt", default=timezone.now)
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="durch",
+    )
+
+    class Meta:
+        verbose_name = "festgehaltener Stand eines Bauteils"
+        verbose_name_plural = "festgehaltene Stände der Bauteile"
+        ordering = ("at", "id")
+        constraints = (
+            models.CheckConstraint(
+                condition=Q(kind__in=RecordKind.values), name="inventory_record_kind_valid"
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.get_kind_display()}: Bauteil #{self.component_id} ({self.at:%d.%m.%Y %H:%M})"
+
+
 class PartEvent(AppendOnlyModel):
     """Vorgang am Teil. Wird nur angehängt; daraus ergibt sich der Status."""
 

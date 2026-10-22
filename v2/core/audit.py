@@ -5,6 +5,7 @@
 1. die ganze Hash-Kette, gegen alle bekannten Köpfe: festgehaltene (`WitnessHead`), die aus den
    signierten Prüfprotokollen, die mit `--kopf` angegebenen und die aus den Zeugen-Dateien,
 2. die Zeitstempel der festgehaltenen Köpfe und ob sie aktuell sind,
+   dazu jedes Bauteil gegen seinen letzten festgehaltenen Stand (`ComponentRecord`, #20),
 3. Zeugen-Dateien (`--zeugen`): gespeicherte Zeugen-Mails (`.eml`) oder die Kopf-Dateien von
    Unraid (`.txt`). Jeder Kopf darin muss in der Kette stehen, sein Zeitstempel muss zum Hash
    passen und die angegebene Zeit tragen,
@@ -172,6 +173,19 @@ def _signed_heads() -> list[chain.Head]:
     return [anchor.head for entry in signed if (anchor := reports.anchor_of(entry)) is not None]
 
 
+def _check_components(result: CheckResult) -> None:
+    """Jedes Bauteil passt zu seinem letzten festgehaltenen Stand (#20)."""
+    from inventory.models import Component
+    from inventory.services import component_problems
+
+    problems = component_problems()
+    result.findings.extend(f"Stammdaten: {problem}" for problem in problems)
+    if not problems:
+        result.confirmed.append(
+            f"Stammdaten: alle {Component.objects.count()} Bauteile wie festgehalten"
+        )
+
+
 def _check_reports(result: CheckResult) -> None:
     from inspections.models import SignedProtocol
     from legacy.models import LegacyReport
@@ -254,6 +268,7 @@ def run(
         result.findings.extend(f"Festgehaltene Köpfe: {problem}" for problem in stamps)
     if records:
         _check_witnesses(records, result)
+    _check_components(result)
     _check_reports(result)
     if listed is not None:
         _check_fingerprints(listed, result)

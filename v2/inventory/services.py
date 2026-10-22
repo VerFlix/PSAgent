@@ -11,7 +11,8 @@ Verleiher; Teile anlegen und pflegen ab Trainer/Materialwart (Rechtetabelle, `ac
 """
 
 import hashlib
-from datetime import datetime
+from datetime import date, datetime
+from itertools import pairwise
 from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ValidationError
@@ -26,11 +27,13 @@ from accounts.rights import Right, require
 from inventory.models import (
     EVENTS_WITH_COMMENT,
     Component,
+    ComponentRecord,
     Document,
     EventKind,
     Part,
     PartEvent,
     PartKind,
+    RecordKind,
     normalize_ei,
 )
 
@@ -69,9 +72,95 @@ class InventoryError(ValueError):
     """Ein Vorgang verstößt gegen eine Fachregel der Stammdaten."""
 
 
-def _add_components(part: Part, components: list[dict[str, Any]]) -> None:
+# Felder, die `ComponentRecord` festhält (#20): Zuordnung zum Teil und alle Bauteilfelder.
+RECORDED_FIELDS = ("part", "position", *COMPONENT_FIELDS)
+
+
+def component_values(component: Component) -> dict[str, str]:
+    """Stand eines Bauteils als Text: Datum ISO 8601, leer statt fehlend."""
+    values = {}
+    for name in RECORDED_FIELDS:
+        value = getattr(component, "part_id" if name == "part" else name)
+        if value is None:
+            values[name] = ""
+        elif isinstance(value, date):
+            values[name] = value.isoformat()
+        else:
+            values[name] = str(value)
+    return values
+
+
+def _record(
+    component: Component, kind: RecordKind, *, actor: User | None, changed: list[str] | None = None
+) -> None:
+    component.refresh_from_db()  # so, wie es in der Datenbank steht
+    ComponentRecord.objects.create(
+        component=component,
+        kind=kind,
+        actor=actor,
+        changed=sorted(changed or []),
+        values=component_values(component),
+    )
+
+
+def _require_recorded(component: Component) -> None:
+    """Vor einer Änderung: Das Bauteil steht noch so in der Datenbank, wie zuletzt festgehalten.
+
+    Sonst würde die Änderung einen Wert, den jemand an der App vorbei geändert hat, als neuen
+    Stand festhalten und die Manipulation damit verdecken.
+    """
+    stored = Component.objects.select_for_update().get(pk=component.pk)
+    latest = component.records.order_by("-id").first()
+    if latest is None or component_values(stored) != latest.values:
+        raise InventoryError(
+            f"{component} passt nicht zum festgehaltenen Stand und wird nicht geändert. "
+            "Bitte das Prüfwerkzeug ausführen (kette_pruefen) und den Admin informieren."
+        )
+
+
+def _label(name: str) -> str:
+    return str(getattr(Component._meta.get_field(name), "verbose_name", name))
+
+
+def component_problems() -> list[str]:
+    """Bauteile, die nicht zu ihrer festgehaltenen Geschichte passen (#20); leer = in Ordnung.
+
+    Geprüft wird: Der erste Stand ist die Anlage, zwischen zwei Ständen ändern sich nur die
+    vermerkten Felder, und das Bauteil steht so in der Datenbank wie im letzten Stand. Die
+    Meldungen nennen Bauteil, Teil und Feld, keine Werte.
+    """
+    history: dict[int, list[ComponentRecord]] = {}
+    for entry in ComponentRecord.objects.order_by("id").iterator():
+        history.setdefault(entry.component_id, []).append(entry)
+    problems = []
+    for component in Component.objects.order_by("pk").iterator():
+        where = f"Bauteil #{component.pk} (Teil #{component.part_id})"
+        records = history.get(component.pk)
+        if not records:
+            problems.append(f"{where}: kein festgehaltener Stand (an der App vorbei angelegt).")
+            continue
+        if records[0].kind != RecordKind.CREATED:
+            problems.append(f"{where}: Der erste festgehaltene Stand ist keine Anlage.")
+        for before, after in pairwise(records):
+            problems.extend(
+                f"{where}: {_label(name)} hat sich bis Stand #{after.pk} ohne Vermerk geändert."
+                for name in RECORDED_FIELDS
+                if name not in after.changed and before.values.get(name) != after.values.get(name)
+            )
+        current = component_values(component)
+        problems.extend(
+            f"{where}: {_label(name)} weicht vom festgehaltenen Stand ab "
+            "(an der App vorbei geändert)."
+            for name in RECORDED_FIELDS
+            if current[name] != records[-1].values.get(name)
+        )
+    return problems
+
+
+def _add_components(part: Part, components: list[dict[str, Any]], *, actor: User | None) -> None:
     for position, fields in enumerate(components, start=1):
-        Component.objects.create(part=part, position=position, **fields)
+        created = Component.objects.create(part=part, position=position, **fields)
+        _record(created, RecordKind.CREATED, actor=actor)
 
 
 @transaction.atomic
@@ -95,7 +184,7 @@ def create_product(
         legacy_kind=legacy_kind,
         legacy_id=legacy_id,
     )
-    _add_components(part, [component])
+    _add_components(part, [component], actor=actor)
     return part
 
 
@@ -119,7 +208,7 @@ def create_system(
         legacy_kind=legacy_kind,
         legacy_id=legacy_id,
     )
-    _add_components(part, components)
+    _add_components(part, components, actor=actor)
     return part
 
 
@@ -218,10 +307,11 @@ def update_component(component: Component, *, actor: User | None, **fields: Any)
         require(actor, Right.MANAGE_PARTS)
     if component.part.is_retired():
         raise InventoryError(f"{component.part} ist ausgesondert; Änderungen sind nicht möglich.")
+    _require_recorded(component)
     for name in changed:
         setattr(component, name, fields[name])
     component.save(update_fields=changed)
-    component.refresh_from_db(fields=["ei_key"])
+    _record(component, RecordKind.CHANGED, actor=actor, changed=changed)
     return component
 
 
