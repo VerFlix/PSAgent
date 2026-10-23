@@ -36,7 +36,15 @@ from inventory.forms import (
     SystemForm,
     lock_ppe_fields,
 )
-from inventory.models import Component, Document, EventKind, Part, PartStatus, normalize_ei
+from inventory.models import (
+    Component,
+    Document,
+    EventKind,
+    Part,
+    PartEvent,
+    PartStatus,
+    normalize_ei,
+)
 from inventory.services import (
     InventoryError,
     attach_document,
@@ -49,7 +57,7 @@ from inventory.services import (
     store_document_file,
     update_component,
 )
-from inventory.timeline import timeline
+from inventory.timeline import actor_name, timeline
 
 COMPONENTS = "bauteile"
 
@@ -84,6 +92,40 @@ def part_list(request: HttpRequest) -> HttpResponse:
         "may_create": has_right(request.user, Right.MANAGE_PARTS),
     }
     return render(request, "inventory/part_list.html", context)
+
+
+@requires(Right.VIEW_AVAILABILITY)
+@require_GET
+def part_archive(request: HttpRequest) -> HttpResponse:
+    """Parität 10: ausgesonderte Teile, neueste zuerst, mit Datum und Grund.
+
+    Wer ausgesondert hat, sehen Rollen ab Verleiher (Felix, 22.10.2026). Historie und
+    Haftungsausschluss stehen auf der Teileseite.
+    """
+    query = request.GET.get("q", "").strip()
+    with_names = has_right(request.user, Right.LEND)
+    events = (
+        PartEvent.objects.filter(kind=EventKind.RETIRED, part__in=search_parts(_parts(), query))
+        .select_related("part", "actor")
+        .prefetch_related(
+            Prefetch("part__components", queryset=Component.objects.order_by("position"))
+        )
+        .order_by("-at", "-id")
+    )
+    rows = [
+        {
+            "part": event.part,
+            "at": event.at,
+            "reason": event.comment,
+            "actor": actor_name(event.actor, "Altsystem") if with_names else "",
+        }
+        for event in events
+    ]
+    return render(
+        request,
+        "inventory/part_archive.html",
+        {"rows": rows, "query": query, "with_names": with_names},
+    )
 
 
 @requires(Right.VIEW_AVAILABILITY)

@@ -77,6 +77,9 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
   Nach dem Ausfall: Formulare mit Nummer, Scan (PDF oder Fotos) und Originaldatum nacherfassen
   (Sperrungen sowie Ausgaben und Rückgaben); fehlende Nummern, Doppelbuchungen und Ausgaben
   gegen die Regeln stehen auf der Klärungsliste für PSA-Sachkundige und Admin.
+- Archiv ausgesonderter Teile (Parität 10, `/teile/archiv/`, jede Rolle): ausgesonderte Teile,
+  neueste zuerst, mit Datum, Grund und Suche; wer ausgesondert hat, sehen Rollen ab Verleiher.
+  Historie und Haftungsausschluss stehen auf der Teileseite; gelöscht wird nichts.
 - QR-Etiketten (ab Trainer): auf der Teileseite oder für markierte bzw. alle Teile in der
   Teileliste, als PDF für A4-Bögen mit 65 Etiketten 38 x 21,2 mm (z. B. Avery Zweckform 3666).
   Der QR-Code enthält `PSAGENT_BASE_URL/q/<EI>`; die Kamera-App öffnet damit nach der Anmeldung

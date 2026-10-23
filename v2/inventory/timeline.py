@@ -19,7 +19,8 @@ class Entry:
     booking_id: int | None = None
 
 
-def _name(user: object, fallback: str = "") -> str:
+def actor_name(user: object, fallback: str = "") -> str:
+    """Anzeigename der Person, die einen Vorgang erfasst hat; sonst `fallback`."""
     if user is None:
         return fallback
     full = getattr(user, "get_full_name", lambda: "")()
@@ -37,7 +38,7 @@ def timeline(part: Part, *, with_names: bool) -> list[Entry]:
             "teil",
             event.get_kind_display(),
             event.comment,
-            _name(event.actor, "Altsystem"),
+            actor_name(event.actor, "Altsystem"),
         )
         for event in part.events.select_related("actor")
     ]
@@ -78,7 +79,7 @@ def timeline(part: Part, *, with_names: bool) -> list[Entry]:
                 "verleih",
                 f"Verleih: {event.get_kind_display()}",
                 detail,
-                _name(event.actor, event.actor_name or "Altsystem"),
+                actor_name(event.actor, event.actor_name or "Altsystem"),
                 loan.booking_id if with_names else None,
             )
         )

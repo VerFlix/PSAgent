@@ -8,6 +8,7 @@ app_name = "inventory"
 
 urlpatterns = [
     path("", views.part_list, name="part_list"),
+    path("archiv/", views.part_archive, name="part_archive"),
     path("neu/produkt/", views.product_create, name="product_create"),
     path("neu/system/", views.system_create, name="system_create"),
     path("neu/system/bauteilzeile/", views.system_component_row, name="system_component_row"),

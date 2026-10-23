@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Archiv ausgesonderter Teile{% endblock %}
+{% block content %}
+<h1>Archiv ausgesonderter Teile</h1>
+<p class="hint">Ausgesonderte Teile bleiben mit ihrer Historie erhalten. Historie und Haftungsausschluss stehen auf der Teileseite. <a href="{% url 'inventory:part_list' %}">Zur Teileliste</a></p>
+<form method="get" class="card search">
+  <label for="q">Suche (Bezeichnung, EI, Hersteller, Seriennummer)</label>
+  <input id="q" name="q" value="{{ query }}" type="search">
+  <button type="submit">Suchen</button>
+</form>
+{% if rows %}
+<div class="table-scroll"><table class="list">
+  <thead><tr><th>Ausgesondert am</th><th>Teil</th><th>EI</th><th>Grund</th>{% if with_names %}<th>durch</th>{% endif %}</tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td>{{ row.at|date:"d.m.Y" }}</td>
+      <td><a href="{% url 'inventory:part_detail' row.part.pk %}">{{ row.part.name }}</a></td>
+      <td class="break">{% for component in row.part.components.all %}{{ component.ei }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+      <td>{{ row.reason|default:"–" }}</td>
+      {% if with_names %}<td>{{ row.actor }}</td>{% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p>Keine ausgesonderten Teile{% if query %} für diese Suche{% endif %}.</p>
+{% endif %}
+{% endblock %}
