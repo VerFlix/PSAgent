@@ -29,8 +29,9 @@ Das Tool braucht keine Zugangsdaten zu PSAgent. Hochgeladen wird im Browser.
 
    Danach gibt es den Befehl `signieren` in jeder neuen Eingabeaufforderung. Das Skript
    installiert genau die Versionen aus `v2/signiertool/requirements.txt` (erzeugt aus
-   `v2/uv.lock`, in CI mit geprüft) und prüft dabei jede Prüfsumme (#105). `uv tool install`
-   nicht mehr verwenden: Es nähme die Versionen, prüfte die Prüfsummen aber nicht.
+   `v2/uv.lock`, in CI mit geprüft) und prüft dabei jede Prüfsumme (#105). Das Tool selbst
+   kopiert es als Python-Code, ohne Build; so läuft kein ungeprüftes Build-Werkzeug. `uv tool
+   install` nicht mehr verwenden: Es nähme die Versionen, prüfte die Prüfsummen aber nicht.
    **Noch nicht unter Windows erprobt** (lokal mit Felix).
 4. **Schlüssel und Zertifikat** im YubiKey (Slot 9c) wie im Runbook `zertifikate.md` erzeugen,
    am besten mit `--algorithm ECCP256`. Das Zertifikat in PSAgent aufnehmen lassen (Admin).

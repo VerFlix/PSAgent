@@ -65,6 +65,10 @@ def test_install_script_requires_hashes() -> None:
     lines = SCRIPT.read_text(encoding="utf-8").splitlines()
     script = "\n".join(line for line in lines if not line.lstrip().startswith("#"))
 
-    assert "--require-hashes" in script and "requirements.txt" in script
-    assert "--no-deps" in script  # das Tool selbst: ohne weitere Abhängigkeiten
-    assert "uv tool install" not in script  # prüft keine Hashes (#105)
+    installs = [line for line in script.splitlines() if '"pip", "install"' in line]
+    assert installs and all('"--require-hashes"' in line for line in installs), installs
+    assert "requirements.txt" in script
+    assert "uv tool install" not in script  # prüft keine Prüfsummen (#105)
+    # Das Tool selbst wird kopiert, nicht gebaut: kein Build-Werkzeug ohne Prüfsumme.
+    assert not any("$Source" in line for line in installs), installs
+    assert "-m psagent_signieren.cli" in script
