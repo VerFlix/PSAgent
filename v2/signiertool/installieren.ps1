@@ -30,19 +30,21 @@ Run @("uv", "venv", "--python", "3.13", $Target)
 Run @("uv", "pip", "install", "--python", $Target, "--require-hashes", "-r", $Requirements)
 
 # Den Code des Tools in die Umgebung kopieren (nur .py-Dateien, kein Build).
-$SitePackages = & $Python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
+$SitePackages = & $Python -I -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
 if ($LASTEXITCODE -ne 0) { throw "Python der neuen Umgebung startet nicht." }
 $Package = Join-Path $SitePackages "psagent_signieren"
 New-Item -ItemType Directory -Force -Path $Package | Out-Null
 Copy-Item -Path (Join-Path $Source "psagent_signieren\*.py") -Destination $Package
 
-# Starter im Ordner, den uv ohnehin in den Suchpfad legt (`uv tool update-shell`).
+# Starter im Ordner, den uv ohnehin in den Suchpfad legt (`uv tool update-shell`). `-I`: Python
+# isoliert starten, ohne den aktuellen Ordner und ohne PYTHON*-Variablen im Suchpfad; sonst liefe
+# eine untergeschobene .py-Datei im Ordner des PDFs (z. B. Downloads) mit.
 New-Item -ItemType Directory -Force -Path $Bin | Out-Null
 Set-Content -Path (Join-Path $Bin "signieren.cmd") `
-    -Value "@`"$Python`" -m psagent_signieren.cli %*" -Encoding ASCII
+    -Value "@`"$Python`" -I -m psagent_signieren.cli %*" -Encoding ASCII
 Run @("uv", "tool", "update-shell")
 
 Write-Host ""
 Write-Host "Signier-Tool installiert: $Target"
 Write-Host "Befehl: signieren (in einer neuen Eingabeaufforderung)"
-& $Python -m psagent_signieren.cli --help | Select-Object -First 1
+& $Python -I -m psagent_signieren.cli --help | Select-Object -First 1
