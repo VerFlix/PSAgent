@@ -9,3 +9,5 @@ After=docker.service
 [Service]
 Type=oneshot
 ExecStart=/opt/psagent/v2/deploy/manage.sh %I
+# Herzschlag an Uptime Kuma, auch nach einem Fehler (#24, monitoring.env).
+ExecStopPost=/opt/psagent/v2/deploy/melden.sh %i %n

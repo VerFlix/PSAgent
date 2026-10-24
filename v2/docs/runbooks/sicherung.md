@@ -107,8 +107,9 @@ sudo systemctl daemon-reload && sudo systemctl enable --now psagent-sicherung.ti
 
 ## 4. Im Betrieb
 
-- Fehler stehen im Journal: `journalctl -u psagent-sicherung`. Das Skript endet dann mit 1;
-  das Monitoring (#24) meldet es später. Ist die Vollsicherung gescheitert, wird nichts gelöscht.
+- Fehler stehen im Journal: `journalctl -u psagent-sicherung`. Das Skript endet dann mit 1, und
+  Uptime Kuma meldet es sofort (`monitoring.md`). Ist die Vollsicherung gescheitert, wird nichts
+  gelöscht. Ein hängendes WAL-Archiv meldet der stündliche Zustand.
 - Ist Unraid nicht erreichbar, bleiben die WAL-Abschnitte auf dem Pi, und PostgreSQL versucht es
   weiter. Bei langem Ausfall wächst `/var/lib/psagent/postgres/pg_wal`; Speicherplatz im Blick
   behalten.

@@ -1,0 +1,11 @@
+# Stündlicher Zustand für das Monitoring (docs/runbooks/monitoring.md).
+[Unit]
+Description=PSAgent: Zustand (stündlich, *:17)
+
+[Timer]
+OnCalendar=*-*-* *:17:00
+Persistent=true
+Unit=psagent-zustand.service
+
+[Install]
+WantedBy=timers.target

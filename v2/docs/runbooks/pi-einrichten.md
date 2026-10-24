@@ -17,7 +17,7 @@ einem echten Pi.
   `ghcr.io/verflix/psagent-db:sha-<commit>` (PostgreSQL mit WAL-G) ab.
 - Tägliche Befehle laufen als systemd-Timer (`deploy/systemd/`).
 - Sicherung nach Unraid und Wiederherstellung: `docs/runbooks/sicherung.md` (#23, #25).
-  Monitoring folgt mit #24.
+  Monitoring mit Uptime Kuma auf Unraid: `docs/runbooks/monitoring.md` (#24).
 
 | Ort auf dem Pi | Inhalt |
 | --- | --- |
@@ -204,6 +204,7 @@ Die App läuft im Container als Benutzer 10001; PostgreSQL richtet seinen Ordner
 | `psagent-loeschfristen.timer` | `loeschfristen` | täglich 03:00 |
 | `psagent-erinnerungen.timer` | `erinnerungen` | täglich 09:00 |
 | `psagent-notfallmappe.timer` | `notfallmappe` | montags 06:00 |
+| `psagent-zustand.timer` | `zustand.sh` (App, Datenbank, WAL-Archiv, Platz) | stündlich, :17 |
 
 Verpasste Läufe (Pi aus) holt systemd nach dem Start nach. Vor dem Einschalten jeden Befehl
 einmal von Hand laufen lassen, die Löschfristen zuerst als Probelauf
@@ -218,12 +219,13 @@ sudo cp /opt/psagent/v2/deploy/systemd/psagent-* /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now psagent-kettenkopf.timer psagent-kette-pruefen.timer \
     psagent-sicherung.timer psagent-loeschfristen.timer psagent-erinnerungen.timer \
-    psagent-notfallmappe.timer
+    psagent-notfallmappe.timer psagent-zustand.timer
 systemctl list-timers 'psagent-*'
 ```
 
-Fehler stehen im Journal: `journalctl -u 'psagent-befehl@*'` und `journalctl -u psagent-sicherung`. Ein Lauf mit Rückgabewert
-ungleich 0 geht später ans Monitoring (#24).
+Fehler stehen im Journal: `journalctl -u 'psagent-befehl@*'`, `journalctl -u psagent-sicherung`
+und `journalctl -u psagent-zustand`. Jeder Timer meldet nach dem Lauf einen Herzschlag an Uptime
+Kuma, ein Fehler sofort (`deploy/melden.sh`, `docs/runbooks/monitoring.md`).
 
 ## 8. Neue Version einspielen
 
@@ -249,6 +251,7 @@ dann bitte Felix fragen.
 - [ ] SSH mit Passwort wird abgewiesen
 - [ ] Anmeldung mit Passkey funktioniert
 - [ ] Fehlversuch zeigt die Tailscale-Adresse des Geräts (Schritt 6.7)
-- [ ] `systemctl list-timers 'psagent-*'` zeigt sechs Timer
+- [ ] `systemctl list-timers 'psagent-*'` zeigt sieben Timer
+- [ ] Monitoring abgenommen (`monitoring.md`, Abschnitt 4)
 - [ ] Erste Sicherung vollständig (`sicherung.md`, Abschnitt 3), `failed_count` steigt nicht
 - [ ] Nach `sudo reboot` laufen App, Datenbank und `tailscale serve` wieder

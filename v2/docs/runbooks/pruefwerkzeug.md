@@ -42,7 +42,8 @@ Fehlt eine davon, endet der Lauf mit „nicht prüfbar“ und nennt die Einstell
 uv run python manage.py kette_pruefen
 ```
 
-Täglich nach `kettenkopf` per Timer; ein Rückgabewert ungleich 0 geht ans Monitoring (#24).
+Täglich nach `kettenkopf` per Timer; ein Rückgabewert ungleich 0 meldet Uptime Kuma sofort
+(`docs/runbooks/monitoring.md`).
 
 ## 3. Einmal im Quartal mit dem Zeugen
 
