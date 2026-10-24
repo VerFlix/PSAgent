@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Version des Images einspielen (#22): holen, Datenbank migrieren, starten, prüfen.
+# Version der Images einspielen (#22): holen, Datenbank migrieren, starten, prüfen.
 #
 #     sudo ./update.sh sha-<commit>
 #
@@ -23,7 +23,7 @@ fi
 umask 077
 printf 'PSAGENT_IMAGE_TAG=%s\n' "$tag" > "$image_env"
 
-"${compose[@]}" pull app
+"${compose[@]}" pull app db
 "${compose[@]}" up -d db
 "${compose[@]}" run --rm app python manage.py migrate --noinput
 "${compose[@]}" up -d app

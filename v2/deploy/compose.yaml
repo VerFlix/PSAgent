@@ -4,19 +4,41 @@
 #   Nie `tailscale funnel`: Das stellte die App ins Internet.
 # - Die Datenbank hat keinen Port nach außen.
 # - Geheimnisse stehen nur in /etc/psagent/psagent.env (Vorlage: psagent.env.example), die
-#   Version des Images in /etc/psagent/image.env (PSAGENT_IMAGE_TAG=sha-…).
+#   Version der Images in /etc/psagent/image.env (PSAGENT_IMAGE_TAG=sha-…).
+# - Sicherung nach Unraid: docs/runbooks/sicherung.md; Schlüssel in /etc/psagent/sicherung/.
 name: psagent
 
 services:
   db:
-    image: postgres:17
+    # PostgreSQL 17 mit WAL-G (db/Dockerfile), dieselbe Version wie die App.
+    image: ghcr.io/verflix/psagent-db:${PSAGENT_IMAGE_TAG:?PSAGENT_IMAGE_TAG fehlt (/etc/psagent/image.env)}
     restart: unless-stopped
+    # Jeder WAL-Abschnitt geht verschlüsselt nach Unraid, spätestens nach 60 Sekunden (#23). Im
+    # Probebetrieb (Datei /etc/psagent/sicherung/probe, siehe wiederherstellen.sh) verwirft
+    # PostgreSQL die Abschnitte, damit eine Probe nie in die echte Sicherung schreibt.
+    command:
+      - postgres
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=test -e /etc/psagent/sicherung/probe || wal-g wal-push %p
+      - -c
+      - archive_timeout=60
     env_file: [/etc/psagent/psagent.env]
     environment:
       POSTGRES_DB: psagent
       POSTGRES_USER: psagent
+      # WAL-G im Container: Datenbank über den Socket; verschlüsselt wird mit dem öffentlichen
+      # Schlüssel, den privaten hat der Pi nicht. Ziel und Zugang stehen in psagent.env.
+      PGHOST: /var/run/postgresql
+      PGUSER: psagent
+      PGDATABASE: psagent
+      WALG_PGP_KEY_PATH: /etc/psagent/sicherung/public.asc
+      SSH_PRIVATE_KEY_PATH: /etc/psagent/sicherung/ssh_key
+      WALG_COMPRESSION_METHOD: zstd
     volumes:
       - /var/lib/psagent/postgres:/var/lib/postgresql/data
+      - /etc/psagent/sicherung:/etc/psagent/sicherung:ro
     networks: [psagent]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U psagent -d psagent"]

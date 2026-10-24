@@ -10,3 +10,4 @@ staticfiles/
 media/
 tests/
 docs/
+deploy/

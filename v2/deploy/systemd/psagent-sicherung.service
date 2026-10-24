@@ -1,0 +1,11 @@
+# Nächtliche Sicherung nach Unraid (#23): Datenbank, Dateien, Kettenköpfe, Aufräumen.
+# Gestartet von psagent-sicherung.timer; Fehler stehen im Journal:
+#     journalctl -u psagent-sicherung
+[Unit]
+Description=PSAgent: Sicherung nach Unraid
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/psagent/v2/deploy/sicherung.sh

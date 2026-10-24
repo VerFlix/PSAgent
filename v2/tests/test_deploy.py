@@ -91,8 +91,10 @@ def test_example_covers_every_required_variable() -> None:
 def test_example_names_only_known_variables() -> None:
     every, _ = settings_variables("base.py", "prod.py")
     database = {"POSTGRES_PASSWORD"}  # gilt auch für den PostgreSQL-Container
+    backup = {"WALG_SSH_PREFIX", "SSH_USERNAME", "SSH_PORT"}  # WAL-G im DB-Container (#23)
+    known = every | database | backup
 
-    assert set(example_variables()) <= every | database, sorted(set(example_variables()) - every)
+    assert set(example_variables()) <= known, sorted(set(example_variables()) - known)
 
 
 def test_example_holds_no_secrets() -> None:
@@ -115,7 +117,9 @@ def unit(path: Path) -> configparser.ConfigParser:
 def test_every_scheduled_command_has_a_timer() -> None:
     commands = get_commands()
     timed = set()
-    for path in (DEPLOY / "systemd").glob("*.timer"):
+    for path in sorted((DEPLOY / "systemd").glob("psagent-*.timer")):
+        if path.name == "psagent-sicherung.timer":
+            continue  # kein Verwaltungsbefehl; tests/test_sicherung.py
         timer = unit(path)
         target = timer["Timer"]["Unit"]
         match = re.fullmatch(r"psagent-befehl@([a-z_]+)\.service", target)

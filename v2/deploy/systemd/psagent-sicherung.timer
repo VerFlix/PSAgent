@@ -1,0 +1,11 @@
+# Nächtliche Sicherung nach Unraid (docs/runbooks/sicherung.md).
+[Unit]
+Description=PSAgent: Sicherung (*-*-* 02:00:00)
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+Unit=psagent-sicherung.service
+
+[Install]
+WantedBy=timers.target
