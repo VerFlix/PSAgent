@@ -1,0 +1,11 @@
+# Erinnerungen bei überfälligen Ausleihen (docs/runbooks/mail-m365.md).
+[Unit]
+Description=PSAgent: erinnerungen (*-*-* 09:00:00)
+
+[Timer]
+OnCalendar=*-*-* 09:00:00
+Persistent=true
+Unit=psagent-befehl@erinnerungen.service
+
+[Install]
+WantedBy=timers.target

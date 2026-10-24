@@ -232,7 +232,7 @@ def test_command_rejects_unknown_user(db: None) -> None:
         call_command("passkey_einrichtung", "gibt-es-nicht")
 
 
-# --- Client-IP hinter Caddy ---
+# --- Client-IP hinter dem Proxy ---
 
 
 @override_settings(PSAGENT_TRUSTED_PROXIES=["10.0.0.2"])

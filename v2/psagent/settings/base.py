@@ -69,6 +69,8 @@ AUTH_USER_MODEL = "accounts.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Statische Dateien im Betrieb ohne eigenen Webserver (#22, `tailscale serve`).
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.csp.ContentSecurityPolicyMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -98,7 +100,8 @@ AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
 AXES_RESET_ON_SUCCESS = True
 AXES_LOCKOUT_TEMPLATE = "accounts/locked.html"
 AXES_CLIENT_IP_CALLABLE = "accounts.net.client_ip"
-# Nur hinter diesen Proxys (z. B. Caddy) gilt X-Forwarded-For; sonst die Verbindungsadresse.
+# Nur hinter diesen Proxys (auf dem Pi `tailscale serve`) gilt X-Forwarded-For; sonst die
+# Verbindungsadresse.
 PSAGENT_TRUSTED_PROXIES = env_list("PSAGENT_TRUSTED_PROXIES")
 
 # Passkeys: Relying Party = Hostname, unter dem die App läuft; Origins mit Schema und Port.
@@ -198,6 +201,11 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+# Im Betrieb (prod) und beim Image-Bau (collect): komprimiert, mit Prüfsumme im Dateinamen (#22).
+WHITENOISE_STORAGES: dict[str, dict[str, Any]] = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
 
 # Hochgeladene Dateien (GAL); liegen nie im Repo (.gitignore: v2/media/).
 MEDIA_URL = "media/"

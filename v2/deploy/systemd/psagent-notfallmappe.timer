@@ -1,0 +1,11 @@
+# Wöchentliche Notfallmappe (Parität 22).
+[Unit]
+Description=PSAgent: notfallmappe (Mon *-*-* 06:00:00)
+
+[Timer]
+OnCalendar=Mon *-*-* 06:00:00
+Persistent=true
+Unit=psagent-befehl@notfallmappe.service
+
+[Install]
+WantedBy=timers.target

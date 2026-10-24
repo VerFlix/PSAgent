@@ -1,0 +1,11 @@
+# Personendaten nach Ablauf der Löschfrist löschen (docs/runbooks/loeschfristen.md); vorher einmal von Hand mit --probelauf.
+[Unit]
+Description=PSAgent: loeschfristen (*-*-* 03:00:00)
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+Unit=psagent-befehl@loeschfristen.service
+
+[Install]
+WantedBy=timers.target

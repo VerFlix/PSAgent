@@ -63,7 +63,7 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
 - Vereinsgerät (z. B. Tablet an der Ausgabe): Ein Admin legt es unter „Konto“ fest. Dort endet
   die Sitzung nach 3 Minuten ohne Eingabe und nach jedem abgeschlossenen Vorgang; sonst gilt
   sie 8 Stunden.
-- Einstellungen: `PSAGENT_WEBAUTHN_RP_ID`, `PSAGENT_WEBAUTHN_ORIGINS`, im Betrieb hinter Caddy
+- Einstellungen: `PSAGENT_WEBAUTHN_RP_ID`, `PSAGENT_WEBAUTHN_ORIGINS`, im Betrieb hinter `tailscale serve`
   `PSAGENT_TRUSTED_PROXIES`, der Verein als Besitzer auf der Einsatzdokumentation
   `PSAGENT_CLUB_NAME` (siehe `.env.example`).
 - Notbetrieb (`/notbetrieb/`, ab Verleiher): Notfallmappe als PDF mit allen Teilen, anstehenden
@@ -148,6 +148,23 @@ uv run pytest -m e2e
 Jeder Oberflächen-PR bringt seinen Browser-Test mit. Hilfen in `tests/e2e/conftest.py`:
 `sign_in` meldet eine Person einer Rolle direkt an, `device_page` läuft als Desktop, Handy
 (Pixel 7) und Tablet (iPad Mini), `assert_fits_width` prüft, dass nichts seitlich übersteht.
+
+## Betrieb
+
+Auf einem Raspberry Pi 5 im DAV, erreichbar nur über Tailscale unter
+`https://psagent.<tailnet>.ts.net` (#22). HTTPS macht `tailscale serve`, statische Dateien liefert
+die App selbst aus (WhiteNoise). Nach jedem Merge auf `v2` mit grünen Prüfungen legt die CI das
+Image unter `ghcr.io/verflix/psagent:sha-<commit>` ab (amd64 und arm64). Die Dateien für den Pi
+liegen in `deploy/`:
+
+- `compose.yaml`: App (nur auf `127.0.0.1:8000`) und PostgreSQL, Geheimnisse aus
+  `/etc/psagent/psagent.env` (Vorlage `psagent.env.example`)
+- `update.sh sha-<commit>`: Version holen, migrieren, starten, auf `/healthz` warten
+- `manage.sh <befehl>`: Verwaltungsbefehl im laufenden Container
+- `systemd/`: Timer für `kettenkopf`, `kette_pruefen`, `loeschfristen`, `erinnerungen` und
+  `notfallmappe`
+
+Einrichtung, Update und Prüfliste: `docs/runbooks/pi-einrichten.md`.
 
 ## Testdaten im Format des Altsystems
 

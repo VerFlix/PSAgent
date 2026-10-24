@@ -1,0 +1,11 @@
+# Führt einen Verwaltungsbefehl von PSAgent im laufenden Container aus (#22).
+# Gestartet von den Timern psagent-*.timer; Fehler stehen im Journal:
+#     journalctl -u 'psagent-befehl@*'
+[Unit]
+Description=PSAgent: manage.py %I
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/psagent/v2/deploy/manage.sh %I

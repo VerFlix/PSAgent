@@ -1,0 +1,11 @@
+# Kettenkopf festhalten, stempeln, ablegen und an den Zeugen schicken (docs/runbooks/kettenkopf.md).
+[Unit]
+Description=PSAgent: kettenkopf (*-*-* 23:50:00)
+
+[Timer]
+OnCalendar=*-*-* 23:50:00
+Persistent=true
+Unit=psagent-befehl@kettenkopf.service
+
+[Install]
+WantedBy=timers.target
