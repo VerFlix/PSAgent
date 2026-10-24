@@ -106,8 +106,8 @@ Einrichten (einmalig):
 1. **uv** installieren: `winget install astral-sh.uv`
 2. Das Repo holen: `git clone https://github.com/VerFlix/PSAgent.git`, ohne Git auf GitHub
    „Code“ → „Download ZIP“ und entpacken.
-3. Im Repo-Ordner: `uv tool install .\v2\signiertool`. Das Yubico PIV Tool braucht man zum
-   Prüfen nicht. Feste Versionen der Bibliotheken folgen mit #105.
+3. Im Repo-Ordner: `powershell -ExecutionPolicy Bypass -File .\v2\signiertool\installieren.ps1`
+   (feste Versionen und Prüfsummen, #105). Das Yubico PIV Tool braucht man zum Prüfen nicht.
 4. Die Zertifizierungsstelle des Zeitstempeldienstes als PEM-Datei ablegen, dieselbe wie
    `PSAGENT_TSA_CA_PATH` auf dem Server (`docs/runbooks/kettenkopf.md`, Abschnitt 1). Am besten
    selbst von der Webseite des Dienstes laden und den Fingerabdruck mit der Angabe dort
