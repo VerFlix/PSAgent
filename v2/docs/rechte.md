@@ -143,6 +143,6 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   ungültig, ein auf vorher zurückdatierter Widerruf schon.
 - Archiv ausgesonderter Teile (Parität 10, #40, Felix, 22.10.2026): gehört zu „Verfügbarkeit und
   Kalender sehen“ (jede Rolle). Wer ausgesondert hat, zeigt das Archiv erst ab Verleiher, wie das
-  Recht „Reservieren, ausgeben, zurücknehmen“. Hinweis: Die Historie auf der Teileseite nennt
-  Sperren und Aussondern bisher für jede Rolle mit Namen; nur die Entleiher blendet sie für
-  Viewer aus.
+  Recht „Reservieren, ausgeben, zurücknehmen“. Die Historie auf der Teileseite hält es
+  genauso (Felix, 24.10.2026): Viewer sehen dort weder Entleiher noch, wer einen Vorgang erfasst
+  hat. Ausnahme bleiben die Prüfberichte mit dem Namen der prüfenden Person.

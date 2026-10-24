@@ -103,7 +103,7 @@
     <ol class="timeline">
     {% for entry in timeline %}
       <li class="timeline-{{ entry.kind }}">
-        <span class="hint">{{ entry.at|date:"d.m.Y H:i" }} · {{ entry.actor }}</span><br>
+        <span class="hint">{{ entry.at|date:"d.m.Y H:i" }}{% if entry.actor %} · {{ entry.actor }}{% endif %}</span><br>
         <strong>{{ entry.title }}</strong>{% if entry.detail %} – {{ entry.detail }}{% endif %}
         {% if entry.booking_id %} · <a href="{% url 'lending:booking_detail' entry.booking_id %}">Vorgang</a>{% endif %}
       </li>
