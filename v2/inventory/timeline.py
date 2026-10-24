@@ -1,9 +1,11 @@
 """Zeitleiste je Teil (Parität 6): Vorgänge am Teil, wirksame Prüfungen und Verleih.
 
-Entleiher stehen nur drin, wenn die Person verleihen darf; sonst nur der Vorgang.
+Namen stehen nur drin, wenn die Person verleihen darf (`with_names`), sonst nur der Vorgang:
+Entleiher und, wer einen Vorgang erfasst hat (Felix, 24.10.2026). Den Namen der prüfenden Person
+zeigen die Prüfberichte trotzdem jeder Rolle (bewusste Ausnahme, docs/rechte.md).
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 from inventory.models import Part
@@ -83,5 +85,7 @@ def timeline(part: Part, *, with_names: bool) -> list[Entry]:
                 loan.booking_id if with_names else None,
             )
         )
+    if not with_names:
+        entries = [replace(entry, actor="") for entry in entries]
     entries.sort(key=lambda entry: entry.at, reverse=True)
     return entries

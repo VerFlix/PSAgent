@@ -151,5 +151,22 @@ def test_parity_6_timeline_hides_names_from_viewers(client: Client) -> None:
     assert "Kim Beispiel" not in html and "/verleih/" not in html.split('id="zeitleiste"')[1]
 
 
+@pytest.mark.parametrize(("role", "shown"), [(Role.VIEWER, False), (Role.LENDER, True)])
+def test_timeline_shows_who_locked_from_lender_on(client: Client, role: Role, shown: bool) -> None:
+    """Felix, 24.10.2026: Viewer sehen in der Historie nicht, wer einen Vorgang erfasst hat."""
+    part = create_product({"designation": "Helm", "ei": f"TST-Z3{role}"})
+    staff = make_inspector()
+    staff.last_name = "Sperrende"
+    staff.save(update_fields=["last_name"])
+    record_event(part, EventKind.LOCKED, actor=staff, comment="Kratzer")
+    login(client, role)
+
+    html = client.get(reverse("inventory:part_detail", args=[part.pk])).content.decode()
+    timeline = html.split('id="zeitleiste"')[1]
+
+    assert "gesperrt" in timeline and "Kratzer" in timeline
+    assert ("Testperson Sperrende" in timeline) is shown
+
+
 def test_parity_6_list_needs_login(client: Client) -> None:
     assert client.get(reverse("inspections:next_due")).status_code == 302
