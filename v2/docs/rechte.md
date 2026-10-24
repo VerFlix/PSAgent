@@ -141,3 +141,8 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   beurteilt das Zertifikat im Rückblick: Zählt, was beim Hochladen galt; eine später widerrufene
   Sachkunde, eine entzogene Rolle oder ein gestrichener YubiKey machen alte Berichte nicht
   ungültig, ein auf vorher zurückdatierter Widerruf schon.
+- Archiv ausgesonderter Teile (Parität 10, #40, Felix, 22.10.2026): gehört zu „Verfügbarkeit und
+  Kalender sehen“ (jede Rolle). Wer ausgesondert hat, zeigt das Archiv erst ab Verleiher, wie das
+  Recht „Reservieren, ausgeben, zurücknehmen“. Hinweis: Die Historie auf der Teileseite nennt
+  Sperren und Aussondern bisher für jede Rolle mit Namen; nur die Entleiher blendet sie für
+  Viewer aus.
