@@ -24,10 +24,14 @@ Das Tool braucht keine Zugangsdaten zu PSAgent. Hochgeladen wird im Browser.
 3. Das Repo holen (`git clone …`) und im Repo-Ordner das Tool installieren:
 
    ```powershell
-   uv tool install .\v2\signiertool
+   powershell -ExecutionPolicy Bypass -File .\v2\signiertool\installieren.ps1
    ```
 
-   Danach gibt es den Befehl `signieren` in jeder Eingabeaufforderung.
+   Danach gibt es den Befehl `signieren` in jeder neuen Eingabeaufforderung. Das Skript
+   installiert genau die Versionen aus `v2/signiertool/requirements.txt` (erzeugt aus
+   `v2/uv.lock`, in CI mit geprüft) und prüft dabei jede Prüfsumme (#105). `uv tool install`
+   nicht mehr verwenden: Es nähme die Versionen, prüfte die Prüfsummen aber nicht.
+   **Noch nicht unter Windows erprobt** (lokal mit Felix).
 4. **Schlüssel und Zertifikat** im YubiKey (Slot 9c) wie im Runbook `zertifikate.md` erzeugen,
    am besten mit `--algorithm ECCP256`. Das Zertifikat in PSAgent aufnehmen lassen (Admin).
 5. **Unterschrift als Bild** einmal hinterlegen, z. B. ein Scan der Unterschrift auf weißem
@@ -75,10 +79,10 @@ Hochladen nicht gilt. Der Grund steht in der Meldung.
 
 ## 4. Aktualisieren
 
-Nach einem `git pull`:
+Nach einem `git pull` dasselbe Skript noch einmal ausführen; es ersetzt die alte Installation:
 
 ```powershell
-uv tool install --reinstall .\v2\signiertool
+powershell -ExecutionPolicy Bypass -File .\v2\signiertool\installieren.ps1
 ```
 
 ## Signierte Berichte prüfen

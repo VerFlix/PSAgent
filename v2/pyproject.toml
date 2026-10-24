@@ -33,9 +33,14 @@ dev = [
 # Django-Projekt, kein installierbares Paket.
 package = false
 
+[tool.uv.workspace]
+# Das Signier-Tool ist Mitglied, damit `uv export --package psagent-signieren` seine festen
+# Versionen aus uv.lock ausgeben kann (#105).
+members = ["signiertool"]
+
 [tool.uv.sources]
 # Signier-Tool für den PC (#38): eigenes Paket ohne Django, in den Tests mit geprüft.
-psagent-signieren = { path = "signiertool", editable = true }
+psagent-signieren = { workspace = true }
 
 [tool.ruff]
 line-length = 100

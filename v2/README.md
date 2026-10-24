@@ -128,7 +128,10 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
   im Prüfmodus hoch; der Server prüft Datei, Zertifikatsliste und Sachkunde, ergänzt den
   Zeitstempel, und erst dann wirkt die Runde. Einrichtung: `docs/runbooks/signieren.md`. Die Tests
   des Tools brauchen SoftHSM und OpenSC (`softhsm2`, `opensc`; in Cloud-Sitzungen und CI
-  installiert).
+  installiert). Das Tool ist Mitglied des uv-Workspace; seine festen Versionen mit Prüfsummen
+  stehen in `signiertool/requirements.txt` (#105). Ändert sich `uv.lock`, die Liste neu erzeugen:
+  `uv export --frozen --package psagent-signieren --no-dev --no-emit-workspace --format
+  requirements-txt -o signiertool/requirements.txt` (ein Test prüft, dass sie passt).
 - Prüfberichte (Parität 9, #39, `/pruefung/berichte/`, alle Rollen): Liste mit Filtern nach
   Zeitraum, sachkundiger Person und Teil/EI, Details, signiertes PDF und der Knopf
   „Unverändert?“. Er prüft Dateien, Ergebnisse der Runde, Hash-Kette samt Kettenkopf aus dem
