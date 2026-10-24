@@ -31,8 +31,9 @@ Kostenlose Dienste sind z. B. DigiCert, Sectigo oder FreeTSA. Für den gewählte
 
 - `PSAGENT_WITNESS_TO`: Postfach des Vorstands (#4), z. B. `zeuge@<domain>`; mehrere Adressen
   mit Komma. Der Versand läuft über Microsoft 365 (`docs/runbooks/mail-m365.md`).
-- `PSAGENT_WITNESS_DIR`: Ordner für die tägliche Datei, z. B. `/var/lib/psagent/kettenkopf`;
-  diesen Ordner mit dem Backup nach Unraid spiegeln.
+- `PSAGENT_WITNESS_DIR`: Ordner für die tägliche Datei, z. B. `/var/lib/psagent/kettenkopf`.
+  Neue Dateien legt die nächtliche Sicherung unverschlüsselt unter `kettenkopf/` auf Unraid ab
+  (`docs/runbooks/sicherung.md`).
 
 ## 3. Täglicher Timer
 

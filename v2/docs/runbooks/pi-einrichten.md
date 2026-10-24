@@ -12,10 +12,12 @@ einem echten Pi.
 - HTTPS macht `tailscale serve` auf dem Pi, mit Zertifikat von Tailscale (Let's Encrypt).
   `tailscale serve` leitet an die App auf `127.0.0.1:8000` weiter. Einen eigenen Webserver gibt
   es nicht; CSS und JavaScript liefert die App selbst aus (WhiteNoise).
-- App und PostgreSQL laufen in Docker (`deploy/compose.yaml`). Das Image baut die CI nach jedem
-  Merge auf `v2` und legt es unter `ghcr.io/verflix/psagent:sha-<commit>` ab.
+- App und PostgreSQL laufen in Docker (`deploy/compose.yaml`). Die Images baut die CI nach jedem
+  Merge auf `v2` und legt sie unter `ghcr.io/verflix/psagent:sha-<commit>` und
+  `ghcr.io/verflix/psagent-db:sha-<commit>` (PostgreSQL mit WAL-G) ab.
 - Tägliche Befehle laufen als systemd-Timer (`deploy/systemd/`).
-- Backups nach Unraid und Monitoring folgen mit #23, #25 und #24.
+- Sicherung nach Unraid und Wiederherstellung: `docs/runbooks/sicherung.md` (#23, #25).
+  Monitoring folgt mit #24.
 
 | Ort auf dem Pi | Inhalt |
 | --- | --- |
@@ -23,6 +25,7 @@ einem echten Pi.
 | `/etc/psagent/psagent.env` | Geheimnisse und Einstellungen (Vorlage `deploy/psagent.env.example`) |
 | `/etc/psagent/image.env` | Laufende Version, schreibt `update.sh` |
 | `/etc/psagent/certs/` | Zertifikate der Vertrauensstellen, Graph-Schlüssel |
+| `/etc/psagent/sicherung/` | Öffentlicher Sicherungsschlüssel, SSH-Schlüssel für Unraid |
 | `/var/lib/psagent/postgres` | Datenbank |
 | `/var/lib/psagent/media` | Hochgeladene Dateien (GAL, Scans, signierte PDFs) |
 | `/var/lib/psagent/kettenkopf` | Tägliche Kopf-Dateien der Hash-Kette |
@@ -141,6 +144,9 @@ Die App läuft im Container als Benutzer 10001; PostgreSQL richtet seinen Ordner
    sudo chmod 640 /etc/psagent/certs/graph.pem
    ```
 
+4. Sicherung einrichten, **bevor** die Datenbank zum ersten Mal startet:
+   `docs/runbooks/sicherung.md`, Abschnitte 1–3 (ohne den Timer, der kommt in Schritt 7).
+
 ## 6. Image holen und starten
 
 1. Version wählen: GitHub → Repository → Packages → `psagent`, oder in GitHub Actions der Lauf
@@ -194,6 +200,7 @@ Die App läuft im Container als Benutzer 10001; PostgreSQL richtet seinen Ordner
 | --- | --- | --- |
 | `psagent-kettenkopf.timer` | `kettenkopf` | täglich 23:50 |
 | `psagent-kette-pruefen.timer` | `kette_pruefen` | täglich 00:10 |
+| `psagent-sicherung.timer` | `sicherung.sh` (Sicherung nach Unraid) | täglich 02:00 |
 | `psagent-loeschfristen.timer` | `loeschfristen` | täglich 03:00 |
 | `psagent-erinnerungen.timer` | `erinnerungen` | täglich 09:00 |
 | `psagent-notfallmappe.timer` | `notfallmappe` | montags 06:00 |
@@ -210,24 +217,27 @@ sudo /opt/psagent/v2/deploy/manage.sh kette_pruefen
 sudo cp /opt/psagent/v2/deploy/systemd/psagent-* /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now psagent-kettenkopf.timer psagent-kette-pruefen.timer \
-    psagent-loeschfristen.timer psagent-erinnerungen.timer psagent-notfallmappe.timer
+    psagent-sicherung.timer psagent-loeschfristen.timer psagent-erinnerungen.timer \
+    psagent-notfallmappe.timer
 systemctl list-timers 'psagent-*'
 ```
 
-Fehler stehen im Journal: `journalctl -u 'psagent-befehl@*'`. Ein Lauf mit Rückgabewert
+Fehler stehen im Journal: `journalctl -u 'psagent-befehl@*'` und `journalctl -u psagent-sicherung`. Ein Lauf mit Rückgabewert
 ungleich 0 geht später ans Monitoring (#24).
 
 ## 8. Neue Version einspielen
 
 1. Nach dem Merge auf `v2` den grünen Lauf von „v2-ci“ abwarten (Job „Image veröffentlichen“).
-2. Vorher ein Backup ziehen (#23, sobald eingerichtet).
+2. Vorher sichern: `sudo /opt/psagent/v2/deploy/sicherung.sh`.
 3. Wie in Schritt 6.3: Klon auf den Commit, dann `sudo v2/deploy/update.sh sha-<commit>`.
 4. Haben sich Dateien unter `deploy/systemd/` geändert, sie erneut kopieren und
    `sudo systemctl daemon-reload`.
 
 **Zurück auf die vorige Version:** `cat /etc/psagent/image.env.vorher`, dann Klon und
 `update.sh` mit diesem Tag. Das geht nur, wenn die neue Version keine Migration mitgebracht hat:
-Migrationen laufen nur vorwärts. Sonst das Backup von vor dem Update einspielen (#25).
+Migrationen laufen nur vorwärts. Zurück über eine Migration hinweg heißt: Stand von vor dem Update
+wiederherstellen. Das kann `wiederherstellen.sh` noch nicht (es holt immer den neuesten Stand);
+dann bitte Felix fragen.
 
 ## 9. Prüfliste nach der Einrichtung
 
@@ -239,5 +249,6 @@ Migrationen laufen nur vorwärts. Sonst das Backup von vor dem Update einspielen
 - [ ] SSH mit Passwort wird abgewiesen
 - [ ] Anmeldung mit Passkey funktioniert
 - [ ] Fehlversuch zeigt die Tailscale-Adresse des Geräts (Schritt 6.7)
-- [ ] `systemctl list-timers 'psagent-*'` zeigt fünf Timer
+- [ ] `systemctl list-timers 'psagent-*'` zeigt sechs Timer
+- [ ] Erste Sicherung vollständig (`sicherung.md`, Abschnitt 3), `failed_count` steigt nicht
 - [ ] Nach `sudo reboot` laufen App, Datenbank und `tailscale serve` wieder
