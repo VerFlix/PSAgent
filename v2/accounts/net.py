@@ -7,9 +7,9 @@ from django.http import HttpRequest
 def client_ip(request: HttpRequest) -> str:
     """Adresse des Clients.
 
-    Hinter einem vertrauenswürdigen Proxy (Caddy) zählt der letzte Eintrag in
-    X-Forwarded-For, den der Proxy selbst anhängt. Alles davor kann der Client fälschen. Ohne
-    eingetragenen Proxy gilt die Verbindungsadresse.
+    Hinter einem vertrauenswürdigen Proxy (auf dem Pi `tailscale serve`) zählt der letzte
+    Eintrag in X-Forwarded-For, den der Proxy selbst setzt. Alles davor kann der Client
+    fälschen. Ohne eingetragenen Proxy gilt die Verbindungsadresse.
     """
     remote = str(request.META.get("REMOTE_ADDR", ""))
     if remote in settings.PSAGENT_TRUSTED_PROXIES:

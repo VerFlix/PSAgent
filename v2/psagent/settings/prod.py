@@ -1,4 +1,4 @@
-"""Betrieb auf dem Pi hinter Caddy (HTTPS) im Tailnet.
+"""Betrieb auf dem Pi hinter `tailscale serve` (HTTPS) im Tailnet (#22).
 
 Alle Geheimnisse kommen aus Umgebungsvariablen. Fehlt eine Pflichtvariable,
 startet die Anwendung nicht.
@@ -14,7 +14,10 @@ CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
 DATABASES = {"default": postgres(env("POSTGRES_PASSWORD"))}
 
-# Caddy beendet TLS und meldet das Protokoll per Header.
+# Statische Dateien liefert die App selbst aus (WhiteNoise); eingesammelt beim Image-Bau.
+STORAGES = WHITENOISE_STORAGES
+
+# `tailscale serve` beendet TLS und setzt X-Forwarded-Proto: https (überschreibt mitgeschickte).
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_SSL_REDIRECT = True
 SECURE_REDIRECT_EXEMPT = [r"^healthz$"]

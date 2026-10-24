@@ -1,0 +1,11 @@
+# Prüfwerkzeug über Kette, Zeugen und Berichte nach dem Kettenkopf (docs/runbooks/pruefwerkzeug.md).
+[Unit]
+Description=PSAgent: kette_pruefen (*-*-* 00:10:00)
+
+[Timer]
+OnCalendar=*-*-* 00:10:00
+Persistent=true
+Unit=psagent-befehl@kette_pruefen.service
+
+[Install]
+WantedBy=timers.target

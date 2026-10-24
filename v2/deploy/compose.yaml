@@ -1,0 +1,69 @@
+# Betrieb auf dem Pi (#22). Einrichtung: docs/runbooks/pi-einrichten.md.
+#
+# - Die App lauscht nur auf 127.0.0.1:8000; HTTPS im Tailnet macht `tailscale serve` auf dem Pi.
+#   Nie `tailscale funnel`: Das stellte die App ins Internet.
+# - Die Datenbank hat keinen Port nach außen.
+# - Geheimnisse stehen nur in /etc/psagent/psagent.env (Vorlage: psagent.env.example), die
+#   Version des Images in /etc/psagent/image.env (PSAGENT_IMAGE_TAG=sha-…).
+name: psagent
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    env_file: [/etc/psagent/psagent.env]
+    environment:
+      POSTGRES_DB: psagent
+      POSTGRES_USER: psagent
+    volumes:
+      - /var/lib/psagent/postgres:/var/lib/postgresql/data
+    networks: [psagent]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U psagent -d psagent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    image: ghcr.io/verflix/psagent:${PSAGENT_IMAGE_TAG:?PSAGENT_IMAGE_TAG fehlt (/etc/psagent/image.env)}
+    restart: unless-stopped
+    env_file: [/etc/psagent/psagent.env]
+    environment:
+      DJANGO_SETTINGS_MODULE: psagent.settings.prod
+      POSTGRES_HOST: db
+      PSAGENT_MEDIA_ROOT: /var/lib/psagent/media
+      PSAGENT_WITNESS_DIR: /var/lib/psagent/kettenkopf
+      # Anfragen von `tailscale serve` kommen über das Gateway des Docker-Netzes (unten).
+      PSAGENT_TRUSTED_PROXIES: 172.30.0.1
+    volumes:
+      - /var/lib/psagent/media:/var/lib/psagent/media
+      - /var/lib/psagent/kettenkopf:/var/lib/psagent/kettenkopf
+      # Zertifikate der Vertrauensstellen und der Graph-Schlüssel, nur lesbar.
+      - /etc/psagent/certs:/etc/psagent/certs:ro
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [psagent]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import os, urllib.request;
+          host = os.environ["DJANGO_ALLOWED_HOSTS"].split(",")[0].strip();
+          urllib.request.urlopen(urllib.request.Request(
+          "http://127.0.0.1:8000/healthz", headers={"Host": host}), timeout=5)
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  psagent:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+          gateway: 172.30.0.1

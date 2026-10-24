@@ -21,6 +21,8 @@ COPY signiertool/pyproject.toml signiertool/
 RUN if [ -f uv.lock ]; then uv sync --locked --no-dev; else uv sync --no-dev; fi
 
 COPY . .
+# Statische Dateien einsammeln (WhiteNoise, #22); ohne Geheimnisse und ohne Datenbank.
+RUN DJANGO_SETTINGS_MODULE=psagent.settings.collect .venv/bin/python manage.py collectstatic --noinput
 
 RUN useradd --system --uid 10001 --no-create-home psagent
 USER psagent
