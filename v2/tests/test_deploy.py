@@ -118,8 +118,8 @@ def test_every_scheduled_command_has_a_timer() -> None:
     commands = get_commands()
     timed = set()
     for path in sorted((DEPLOY / "systemd").glob("psagent-*.timer")):
-        if path.name == "psagent-sicherung.timer":
-            continue  # kein Verwaltungsbefehl; tests/test_sicherung.py
+        if path.name in {"psagent-sicherung.timer", "psagent-zustand.timer"}:
+            continue  # kein Verwaltungsbefehl; tests/test_sicherung.py, tests/test_monitoring.py
         timer = unit(path)
         target = timer["Timer"]["Unit"]
         match = re.fullmatch(r"psagent-befehl@([a-z_]+)\.service", target)

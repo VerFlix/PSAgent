@@ -8,6 +8,9 @@ es dabei die Standardeingabe ganz mit; so fallen Schleifen auf, die ihre Liste v
 - `FAKE_FAIL`: Aufrufe, die diesen Text enthalten, enden mit 1
 - `FAKE_RUNNING`: Ausgabe von `docker compose ps -q`
 - `FAKE_KETTE`: Rückgabewert von `kette_pruefen`
+- `FAKE_HEALTH`: Zustand für `docker inspect`, z. B. `psagent-app-1=unhealthy psagent-db-1=`
+  (leer: Container fehlt); nicht genannte Container sind gesund
+- `FAKE_ARCHIV`: Ausgabe der Abfrage auf `pg_stat_archiver`
 """
 
 import json
@@ -38,8 +41,14 @@ def main() -> int:
         sys.stdout.write("f\n")
     elif "pg_control_checkpoint()" in joined:
         sys.stdout.write("2\n")
+    elif "pg_stat_archiver" in joined:
+        sys.stdout.write(os.environ.get("FAKE_ARCHIV", "f|0") + "\n")
     elif args[:1] == ["inspect"]:
-        sys.stdout.write("healthy\n")
+        states = dict(item.split("=", 1) for item in os.environ.get("FAKE_HEALTH", "").split())
+        state = states.get(args[-1], "healthy")
+        if not state:
+            return 1
+        sys.stdout.write(state + "\n")
     elif "kette_pruefen" in args:
         return int(os.environ.get("FAKE_KETTE", "0"))
     elif "st get" in joined:

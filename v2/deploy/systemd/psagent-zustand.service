@@ -1,0 +1,13 @@
+# Stündlicher Zustand für das Monitoring (#24): App, Datenbank, WAL-Archiv, Speicherplatz.
+# Gestartet von psagent-zustand.timer; Gründe für Fehler stehen im Journal:
+#     journalctl -u psagent-zustand
+[Unit]
+Description=PSAgent: Zustand für das Monitoring
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/psagent/v2/deploy/zustand.sh
+# Herzschlag an Uptime Kuma, auch nach einem Fehler (monitoring.env).
+ExecStopPost=/opt/psagent/v2/deploy/melden.sh zustand %n

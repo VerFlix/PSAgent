@@ -38,7 +38,8 @@ Kostenlose Dienste sind z. B. DigiCert, Sectigo oder FreeTSA. Für den gewählte
 ## 3. Täglicher Timer
 
 Einmal täglich `uv run python manage.py kettenkopf`, z. B. um 23:50 Uhr. Scheitert ein
-Schritt, laufen die anderen trotzdem, und der Befehl endet mit Fehler (Monitoring, #24).
+Schritt, laufen die anderen trotzdem, und der Befehl endet mit Fehler; Uptime Kuma meldet das
+sofort, auch eine nicht versandte Zeugen-Mail (`docs/runbooks/monitoring.md`).
 
 Fällt der Zeitstempeldienst einen Tag aus, geht der Kopf trotzdem per Mail raus. Der nächste
 Stempel deckt alles davor mit ab. Ab 2 Tagen ohne gültigen Stempel meldet `kette_pruefen` einen

@@ -165,11 +165,15 @@ Images unter `ghcr.io/verflix/psagent:sha-<commit>` und `ghcr.io/verflix/psagent
   alles mit dem öffentlichen PGP-Schlüssel verschlüsselt, Kettenköpfe lesbar
 - `wiederherstellen.sh --probe|--ernstfall <privater-schluessel>`: Wiederherstellung mit
   Prüfung der Hash-Kette (#25); überschreibt nichts
+- `zustand.sh`: stündlich App, Datenbank, WAL-Archiv und Speicherplatz (#24)
+- `melden.sh`: Herzschlag jedes Timers an Uptime Kuma auf Unraid, ein Fehler sofort; Adressen
+  in `/etc/psagent/monitoring.env` (Vorlage `monitoring.env.example`)
 - `systemd/`: Timer für `kettenkopf`, `kette_pruefen`, die Sicherung, `loeschfristen`,
-  `erinnerungen` und `notfallmappe`
+  `erinnerungen`, `notfallmappe` und den Zustand
 
 Einrichtung, Update und Prüfliste: `docs/runbooks/pi-einrichten.md`. Sicherung, Probe und
-Ernstfall: `docs/runbooks/sicherung.md`. Den ganzen Ablauf spielt der CI-Job „Sicherung und
+Ernstfall: `docs/runbooks/sicherung.md`. Monitoring mit Uptime Kuma und ntfy:
+`docs/runbooks/monitoring.md`. Den ganzen Ablauf spielt der CI-Job „Sicherung und
 Wiederherstellung (Probe)“ mit Wegwerf-Schlüsseln einmal echt durch.
 
 ## Testdaten im Format des Altsystems
