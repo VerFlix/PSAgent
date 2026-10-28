@@ -260,9 +260,9 @@ pyhanko-certvalidator==0.33.0 \
     --hash=sha256:72d3b830c0427a7aae45873ba7b4e34cb86caed451eff9dfb4394a69e93bb169 \
     --hash=sha256:a4c3309f99c77cdcad24532f75340bd8cc8b108aa8992b8102d44f250ebd449c
     # via pyhanko
-pypdf==6.21.1 \
-    --hash=sha256:2d62c383acd6e0dff0a96322ba8b1135229343b084d73c6f6cfd947fd291afcb \
-    --hash=sha256:553e2d42f5bb3bb2a785a7d3de8ef90bb7df74b5413eff5a7b4388007ea9254b
+pypdf==6.21.2 \
+    --hash=sha256:0a3e1c5c886a1be03646c16a04827cc166c2a0575c971b26a4bf89686551c2d4 \
+    --hash=sha256:1d44d1a3a200f25062adff0085b02040e4646431ac2ccac22e42679e91466084
     # via psagent-signieren
 python-barcode==0.16.1 \
     --hash=sha256:5776567478c9a0dae473374bb86631ba0b5ea99aaf302763b364e367ac51f367 \
