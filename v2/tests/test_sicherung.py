@@ -1,7 +1,7 @@
 """Sicherung nach Unraid (#23): DB-Image mit WAL-G, Compose, nächtliches Skript.
 
 Festlegungen (Felix, 24.10.2026): eigenes DB-Image mit dem offiziellen WAL-G-Build, Dateien als
-nächtliches tar-Archiv mit demselben Schlüssel, der Pi löscht nach 30 Vollsicherungen; die
+nächtliches tar-Archiv mit demselben Schlüssel, der Server löscht nach 30 Vollsicherungen; die
 Monatsstände halten die Snapshots auf Unraid. Den echten Durchlauf mit WAL-G, SFTP und
 Wiederherstellung macht der CI-Job „Sicherung und Wiederherstellung (Probe)“.
 """
@@ -77,7 +77,7 @@ def test_a_restore_probe_never_writes_into_the_real_backup() -> None:
 
 
 def test_the_server_can_write_backups_but_not_read_them() -> None:
-    """Nur der öffentliche Schlüssel liegt auf dem Pi; kein privater, keine Passphrase."""
+    """Nur der öffentliche Schlüssel liegt auf dem Server; kein privater, keine Passphrase."""
     db = compose()["services"]["db"]
     environment = db["environment"]
     example = (DEPLOY / "psagent.env.example").read_text()

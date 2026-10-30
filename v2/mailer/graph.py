@@ -5,7 +5,7 @@ Ende 2026 standardmäßig ab. Graph mit einer App-Registrierung braucht kein Pas
 
 - **Anmeldung:** App-Registrierung in Entra, Anmeldung mit Zertifikat über `msal` (Microsofts
   Bibliothek; signiert die Anmeldung mit dem privaten Schlüssel). Schlüssel und IDs kommen nur
-  aus der Umgebung (`.env.example`); der Schlüssel liegt als Datei auf dem Pi, nie im Repo.
+  aus der Umgebung (`.env.example`); der Schlüssel liegt als Datei auf dem Server, nie im Repo.
 - **Nur ein Postfach:** Gesendet wird immer als `DEFAULT_FROM_EMAIL`. Das Recht dafür gibt
   „RBAC for Applications“ in Exchange Online, beschränkt auf dieses Postfach; in Entra bekommt
   die App kein `Mail.Send` (Runbook `docs/runbooks/mail-m365.md`).

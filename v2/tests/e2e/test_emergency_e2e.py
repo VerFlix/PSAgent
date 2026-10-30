@@ -90,7 +90,7 @@ def test_club_device_opens_binder_offline(
     page.wait_for_function(CONTROLLED)
 
     # Server nicht erreichbar: Jede Netzanfrage nach der Mappe scheitert, wie bei einem
-    # ausgefallenen Pi. Antworten kann dann nur noch der Service Worker aus dem Speicher.
+    # ausgefallenen Server. Antworten kann dann nur noch der Service Worker aus dem Speicher.
     page.context.route("**/notbetrieb/mappe/neueste.pdf", lambda route: route.abort())
     status, content_type, size = page.evaluate(FETCH)
 

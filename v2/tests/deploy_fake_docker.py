@@ -11,6 +11,7 @@ es dabei die Standardeingabe ganz mit; so fallen Schleifen auf, die ihre Liste v
 - `FAKE_HEALTH`: Zustand für `docker inspect`, z. B. `psagent-app-1=unhealthy psagent-db-1=`
   (leer: Container fehlt); nicht genannte Container sind gesund
 - `FAKE_ARCHIV`: Ausgabe der Abfrage auf `pg_stat_archiver`
+- `FAKE_IMAGES`: Tags für `docker image ls`, durch Leerzeichen getrennt
 """
 
 import json
@@ -43,6 +44,8 @@ def main() -> int:
         sys.stdout.write("2\n")
     elif "pg_stat_archiver" in joined:
         sys.stdout.write(os.environ.get("FAKE_ARCHIV", "f|0") + "\n")
+    elif args[:2] == ["image", "ls"]:
+        sys.stdout.write("".join(f"{tag}\n" for tag in os.environ.get("FAKE_IMAGES", "").split()))
     elif args[:1] == ["inspect"]:
         states = dict(item.split("=", 1) for item in os.environ.get("FAKE_HEALTH", "").split())
         state = states.get(args[-1], "healthy")

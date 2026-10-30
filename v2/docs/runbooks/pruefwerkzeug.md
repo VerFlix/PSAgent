@@ -76,9 +76,9 @@ Einzelne Köpfe gehen auch ohne Datei: `--kopf <Nummer>:<Hash>` (steht in jeder 
 
 ## 4. Auf einem anderen Rechner
 
-Das Konzept sieht vor, auch unabhängig vom Pi zu prüfen. Dafür:
+Das Konzept sieht vor, auch unabhängig vom Server zu prüfen. Dafür:
 
-1. Den Code aus dem Repo nehmen (`git clone`), nicht vom Pi.
+1. Den Code aus dem Repo nehmen (`git clone`), nicht vom Server.
 2. Eine Datenbanksicherung (#23) in ein lokales PostgreSQL einspielen. Die ZIP-Sicherung aus der
    Oberfläche reicht nicht: Sie enthält die Hash-Kette nicht.
 3. Eigene Kopien der beiden Zertifikate aus Abschnitt 1 eintragen, `PSAGENT_TSA_URL` leer
@@ -112,7 +112,7 @@ Einrichten (einmalig):
 4. Die Zertifizierungsstelle des Zeitstempeldienstes als PEM-Datei ablegen, dieselbe wie
    `PSAGENT_TSA_CA_PATH` auf dem Server (`docs/runbooks/kettenkopf.md`, Abschnitt 1). Am besten
    selbst von der Webseite des Dienstes laden und den Fingerabdruck mit der Angabe dort
-   vergleichen, nicht vom Pi kopieren.
+   vergleichen, nicht vom Server kopieren.
 5. Die Papierliste der Fingerabdrücke als Textdatei abtippen (Format wie in Abschnitt 3).
 
 Prüfen: Den Bericht in PSAgent unter „Prüfberichte“ → Bericht → „Signiertes Prüfprotokoll

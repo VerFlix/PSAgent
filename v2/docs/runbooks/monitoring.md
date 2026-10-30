@@ -1,26 +1,26 @@
 # Runbook: Monitoring mit Uptime Kuma und ntfy
 
-Gilt ab #24. **Einrichten und abnehmen lokal mit Felix** (Unraid, Pi, Handy). In der Cloud geprüft
+Gilt ab #24. **Einrichten und abnehmen lokal mit Felix** (Unraid, Server, Handy). In der Cloud geprüft
 sind die Skripte und Timer (`tests/test_monitoring.py`) und die Abfrage des WAL-Archivs gegen ein
 echtes PostgreSQL 17, auch im Fehlerfall.
 
 ## Überblick
 
-Uptime Kuma auf Unraid überwacht den Pi auf zwei Wegen und meldet per ntfy aufs Handy:
+Uptime Kuma auf Unraid überwacht den Server auf zwei Wegen und meldet per ntfy aufs Handy:
 
 - **Von außen:** Uptime Kuma ruft `https://psagent.<tailnet>.ts.net/healthz` auf. Das zeigt, ob
-  Pi, Tailscale, App und Datenbank laufen und ob das HTTPS-Zertifikat bald abläuft.
-- **Herzschlag je Prüfung:** Jeder Timer auf dem Pi meldet nach seinem Lauf an eine eigene
+  Server, Tailscale, App und Datenbank laufen und ob das HTTPS-Zertifikat bald abläuft.
+- **Herzschlag je Prüfung:** Jeder Timer auf dem Server meldet nach seinem Lauf an eine eigene
   Push-Adresse in Uptime Kuma (`deploy/melden.sh`, `ExecStopPost=`). Erfolg heißt „up“, ein
-  Fehler sofort „down“. Bleibt der Herzschlag aus (Pi aus, Timer aus), meldet Uptime Kuma das
+  Fehler sofort „down“. Bleibt der Herzschlag aus (Server aus, Timer aus), meldet Uptime Kuma das
   nach dem eingestellten Abstand.
 
 | Was | Gemeldet von | Wann spätestens |
 | --- | --- | --- |
-| Pi, Netz, App oder Datenbank aus | Monitor „PSAgent erreichbar“ | nach etwa 3 Minuten |
+| Server, Netz, App oder Datenbank aus | Monitor „PSAgent erreichbar“ | nach etwa 3 Minuten |
 | HTTPS-Zertifikat läuft ab | Monitor „PSAgent erreichbar“ | 14 Tage vorher |
 | Sicherung gescheitert | Herzschlag „Sicherung“ | sofort |
-| WAL-Archiv hängt (Unraid weg), Platte fast voll, Container ungesund | Herzschlag „Zustand“ | nach etwa einer Stunde |
+| WAL-Archiv hängt (Unraid weg), Platte fast voll, Container ungesund, SSD meldet Defekt (SMART) | Herzschlag „Zustand“ | nach etwa einer Stunde |
 | Zeugen-Mail oder Zeitstempel gescheitert | Herzschlag „Kettenkopf“ | sofort |
 | Hash-Kette verändert oder nicht prüfbar | Herzschlag „Kette prüfen“ | sofort |
 | Löschfristen, Erinnerungen, Notfallmappe gescheitert | je ein Herzschlag | sofort |
@@ -56,10 +56,10 @@ zufälliges Thema wählen (unten) oder ntfy selbst auf Unraid betreiben.
 | Erinnerungen | Push | 90000 s |
 | Notfallmappe | Push | 608400 s (7 Tage plus 1 Stunde) |
 
-Bei jedem Push-Monitor zeigt Uptime Kuma eine „Push URL“. Für den Pi wird nur der Teil vor dem
+Bei jedem Push-Monitor zeigt Uptime Kuma eine „Push URL“. Für den Server wird nur der Teil vor dem
 `?` gebraucht, z. B. `http://<unraid>.<tailnet>.ts.net:3001/api/push/AbCd1234`.
 
-## 3. Pi einrichten
+## 3. Server einrichten
 
 ```bash
 sudo install -m 600 /opt/psagent/v2/deploy/monitoring.env.example /etc/psagent/monitoring.env
@@ -117,7 +117,7 @@ Abnahme von #24: Jeder Fehler führt zu einer Meldung auf dem Handy. Ergebnis un
 | Monitor | Erster Schritt |
 | --- | --- |
 | PSAgent erreichbar | `sudo docker compose --env-file /etc/psagent/image.env ps` und `logs app`. Sind nur Strom oder Netz weg, warten statt wiederherstellen; bis dahin Notbetrieb (Notfallmappe). Sonst `sicherung.md`, Ernstfall. |
-| Zustand | `journalctl -u psagent-zustand -n 20` nennt den Grund (Container, WAL-Archiv, Platz) |
+| Zustand | `journalctl -u psagent-zustand -n 20` nennt den Grund (Container, WAL-Archiv, Platz, SMART). Meldet die SSD einen Defekt: Ersatz-SSD einbauen, neu installieren, aus der Sicherung wiederherstellen (`sicherung.md`, Ernstfall). |
 | Sicherung | `journalctl -u psagent-sicherung`; `sicherung.md` |
 | Kettenkopf | Zeitstempeldienst und Mail prüfen; `kettenkopf.md` |
 | Kette prüfen | **Sicherheitsvorfall:** nichts ändern; `pruefwerkzeug.md` |

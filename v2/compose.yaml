@@ -1,5 +1,5 @@
 # Nur für die lokale Entwicklung: PostgreSQL auf 127.0.0.1.
-# Der Betrieb auf dem Pi (Caddy, gunicorn, WAL-G) folgt in Phase 4 und wird lokal eingerichtet.
+# Betrieb auf dem Server: deploy/compose.yaml und docs/runbooks/server-einrichten.md.
 services:
   db:
     image: postgres:17

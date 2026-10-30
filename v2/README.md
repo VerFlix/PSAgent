@@ -38,7 +38,7 @@ Einmalig im Repo-Wurzelverzeichnis: `uv run --project v2 pre-commit install`. Da
 Formatierung, Linter und der Schutz gegen eingecheckte Schlüssel vor jedem Commit.
 
 Dieselben Prüfungen laufen in GitHub Actions für jeden Pull Request nach `v2`, dazu ein
-Secret-Scan mit gitleaks und ein Docker-Build für amd64 und arm64 (Pi).
+Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
 
 ## Anmeldung
 
@@ -151,11 +151,11 @@ Jeder Oberflächen-PR bringt seinen Browser-Test mit. Hilfen in `tests/e2e/conft
 
 ## Betrieb
 
-Auf einem Raspberry Pi 5 im DAV, erreichbar nur über Tailscale unter
+Auf einem Mini-PC (Fujitsu Futro S740) im DAV, erreichbar nur über Tailscale unter
 `https://psagent.<tailnet>.ts.net` (#22). HTTPS macht `tailscale serve`, statische Dateien liefert
 die App selbst aus (WhiteNoise). Nach jedem Merge auf `v2` mit grünen Prüfungen legt die CI die
 Images unter `ghcr.io/verflix/psagent:sha-<commit>` und `ghcr.io/verflix/psagent-db:sha-<commit>`
-(PostgreSQL 17 mit WAL-G) ab, je für amd64 und arm64. Die Dateien für den Pi liegen in `deploy/`:
+(PostgreSQL 17 mit WAL-G) ab, je für amd64 und arm64. Die Dateien für den Server liegen in `deploy/`:
 
 - `compose.yaml`: App (nur auf `127.0.0.1:8000`) und PostgreSQL, Geheimnisse aus
   `/etc/psagent/psagent.env` (Vorlage `psagent.env.example`)
@@ -165,13 +165,13 @@ Images unter `ghcr.io/verflix/psagent:sha-<commit>` und `ghcr.io/verflix/psagent
   alles mit dem öffentlichen PGP-Schlüssel verschlüsselt, Kettenköpfe lesbar
 - `wiederherstellen.sh --probe|--ernstfall <privater-schluessel>`: Wiederherstellung mit
   Prüfung der Hash-Kette (#25); überschreibt nichts
-- `zustand.sh`: stündlich App, Datenbank, WAL-Archiv und Speicherplatz (#24)
+- `zustand.sh`: stündlich App, Datenbank, WAL-Archiv, Speicherplatz und SMART der SSD (#24)
 - `melden.sh`: Herzschlag jedes Timers an Uptime Kuma auf Unraid, ein Fehler sofort; Adressen
   in `/etc/psagent/monitoring.env` (Vorlage `monitoring.env.example`)
 - `systemd/`: Timer für `kettenkopf`, `kette_pruefen`, die Sicherung, `loeschfristen`,
   `erinnerungen`, `notfallmappe` und den Zustand
 
-Einrichtung, Update und Prüfliste: `docs/runbooks/pi-einrichten.md`. Sicherung, Probe und
+Einrichtung, Update und Prüfliste: `docs/runbooks/server-einrichten.md`. Sicherung, Probe und
 Ernstfall: `docs/runbooks/sicherung.md`. Monitoring mit Uptime Kuma und ntfy:
 `docs/runbooks/monitoring.md`. Den ganzen Ablauf spielt der CI-Job „Sicherung und
 Wiederherstellung (Probe)“ mit Wegwerf-Schlüsseln einmal echt durch.

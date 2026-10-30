@@ -12,7 +12,7 @@
 #   4. wiederherstellen.sh --probe; prüfen: Daten, Datei, Kette, nichts zurückgeschrieben
 #   5. noch einmal löschen, wiederherstellen.sh --ernstfall; prüfen: neue Zeitlinie gesichert
 #
-# Nie auf dem Pi ausführen: Das Skript legt /etc/psagent und /var/lib/psagent neu an. Es bricht
+# Nie auf dem Server ausführen: Das Skript legt /etc/psagent und /var/lib/psagent neu an. Es bricht
 # ab, wenn es dort etwas findet, das nicht von einer früheren Probe stammt.
 set -euo pipefail
 
@@ -35,7 +35,7 @@ shell() { "${manage[@]}" shell -c "$1" </dev/null | tail -n 1; }
 
 for path in /etc/psagent /var/lib/psagent; do
     if [[ -e "$path" && ! -e "$work/marke" ]]; then
-        die "$path gibt es schon und stammt nicht von einer Probe. Nie auf dem Pi ausführen."
+        die "$path gibt es schon und stammt nicht von einer Probe. Nie auf dem Server ausführen."
     fi
 done
 if [[ -e "$work/marke" ]]; then

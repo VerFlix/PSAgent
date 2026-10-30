@@ -74,7 +74,7 @@ def test_rhythm_1_7_14_and_at_most_three(
 def test_one_mail_per_run_after_a_gap(
     make_part: MakePart, borrower: Borrower, lender: User
 ) -> None:
-    """War der Pi tagelang aus, kommt nicht alles auf einmal."""
+    """War der Server tagelang aus, kommt nicht alles auf einmal."""
     lent(make_part, borrower, lender)
 
     run(END + 20 * DAY)

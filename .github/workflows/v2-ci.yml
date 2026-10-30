@@ -222,7 +222,7 @@ jobs:
 
   # Betrieb (#22): Nach jedem Merge auf v2, wenn alle Prüfungen grün sind, kommen die Images nach
   # ghcr.io/verflix/psagent und psagent-db (#23), getaggt mit dem Commit (sha-…) und als „v2“. Im Image stecken keine
-  # Geheimnisse; der Pi holt eine bestimmte Version (docs/runbooks/pi-einrichten.md).
+  # Geheimnisse; der Server holt eine bestimmte Version (docs/runbooks/server-einrichten.md).
   publish:
     name: Image veröffentlichen (GHCR)
     if: github.event_name == 'push' && github.ref == 'refs/heads/v2'

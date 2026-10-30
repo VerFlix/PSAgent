@@ -4,8 +4,8 @@
 #     ExecStopPost=/opt/psagent/v2/deploy/melden.sh <name> %n
 #
 # systemd übergibt das Ergebnis in $SERVICE_RESULT: „success“ meldet status=up, alles andere
-# sofort status=down. Bleibt der Herzschlag ganz aus (Pi oder Timer aus), schlägt Uptime Kuma nach
-# dem eingestellten Abstand Alarm. Von Hand zum Ausprobieren:
+# sofort status=down. Bleibt der Herzschlag ganz aus (Server oder Timer aus), schlägt Uptime Kuma
+# nach dem eingestellten Abstand Alarm. Von Hand zum Ausprobieren:
 #
 #     sudo ./melden.sh sicherung                          # meldet „ok“
 #     sudo SERVICE_RESULT=exit-code ./melden.sh sicherung # meldet einen Fehler

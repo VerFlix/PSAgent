@@ -25,7 +25,7 @@ ein Funktionspostfach, z. B. `material@<domain>` (`PSAGENT_MAIL_REPLY_TO`).
 
 ## 2. Zertifikat erzeugen (nur Felix)
 
-Auf dem eigenen Rechner oder direkt auf dem Pi:
+Auf dem eigenen Rechner oder direkt auf dem Server:
 
 ```bash
 openssl req -x509 -newkey rsa:3072 -nodes -days 730 \
@@ -35,7 +35,7 @@ openssl x509 -in graph.crt -noout -fingerprint -sha1 | cut -d= -f2 | tr -d :
 
 Die zweite Zeile gibt den Fingerabdruck aus (`PSAGENT_GRAPH_CERT_THUMBPRINT`).
 
-- `graph.pem` (privater Schlüssel) auf den Pi, z. B. `/etc/psagent/graph.pem`, Eigentümer der
+- `graph.pem` (privater Schlüssel) auf den Server, z. B. `/etc/psagent/graph.pem`, Eigentümer der
   Dienstnutzer, Rechte `600`.
 - Nur `graph.crt` geht zu Microsoft.
 - Ablauf nach 2 Jahren im Kalender eintragen; vorher ein neues Zertifikat hochladen.
@@ -87,7 +87,7 @@ zweiten `False`.
 
 ## 6. PSAgent konfigurieren
 
-Umgebungsvariablen auf dem Pi (Vorlage `.env.example`):
+Umgebungsvariablen auf dem Server (Vorlage `.env.example`):
 
 ```
 PSAGENT_MAIL_BACKEND=mailer.graph.GraphEmailBackend
@@ -99,7 +99,7 @@ PSAGENT_GRAPH_CERT_PATH=/etc/psagent/graph.pem
 PSAGENT_GRAPH_CERT_THUMBPRINT=<Fingerabdruck>
 ```
 
-Ausgehend braucht der Pi nur HTTPS zu `login.microsoftonline.com` und `graph.microsoft.com`.
+Ausgehend braucht der Server nur HTTPS zu `login.microsoftonline.com` und `graph.microsoft.com`.
 
 ## 7. Testversand
 
@@ -129,4 +129,4 @@ Ausleihen“.
 | `HTTP 403` | RBAC-Zuweisung fehlt, gilt noch nicht (Zwischenspeicher) oder der Absender ist ein anderes Postfach |
 | `HTTP 404` | `PSAGENT_MAIL_FROM` gibt es nicht als Postfach |
 | `… fehlt für den Versand über Microsoft 365` | Umgebungsvariable nicht gesetzt |
-| `Microsoft 365 ist nicht erreichbar.` | Netz oder DNS auf dem Pi |
+| `Microsoft 365 ist nicht erreichbar.` | Netz oder DNS auf dem Server |

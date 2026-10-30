@@ -1,25 +1,28 @@
-# Runbook: Pi einrichten und PSAgent betreiben
+# Runbook: Server einrichten und PSAgent betreiben
 
-Gilt ab #22. **Einrichten lokal mit Felix**, Schritt für Schritt auf dem Pi. Was hier steht, ist
-in der Cloud nur gegen die Dateien in `deploy/` geprüft (`tests/test_deploy.py`), noch nicht auf
-einem echten Pi.
+Gilt ab #22. **Einrichten lokal mit Felix**, Schritt für Schritt am Gerät. Was hier steht, ist in
+der Cloud nur gegen die Dateien in `deploy/` geprüft (`tests/test_deploy.py`), noch nicht auf dem
+echten Gerät.
 
 ## Überblick
 
-- Raspberry Pi 5 (4 GB) mit NVMe-SSD an einem abschließbaren Ort im DAV.
+- Server ist ein Mini-PC **Fujitsu Futro S740** (Celeron J4105, 4 GB RAM, M.2-SATA-SSD, TPM 2.0)
+  an einem abschließbaren Ort im DAV, mit **Debian 13** ohne Desktop. Die SSD ist mit LUKS
+  verschlüsselt und wird beim Start über das TPM entsperrt (Festlegung Felix, 30.10.2026).
 - Zugriff **nur über Tailscale** unter `https://psagent.<tailnet>.ts.net`. Kein Port ins
   Internet, keine Portfreigabe am Router.
-- HTTPS macht `tailscale serve` auf dem Pi, mit Zertifikat von Tailscale (Let's Encrypt).
+- HTTPS macht `tailscale serve` auf dem Server, mit Zertifikat von Tailscale (Let's Encrypt).
   `tailscale serve` leitet an die App auf `127.0.0.1:8000` weiter. Einen eigenen Webserver gibt
   es nicht; CSS und JavaScript liefert die App selbst aus (WhiteNoise).
 - App und PostgreSQL laufen in Docker (`deploy/compose.yaml`). Die Images baut die CI nach jedem
-  Merge auf `v2` und legt sie unter `ghcr.io/verflix/psagent:sha-<commit>` und
-  `ghcr.io/verflix/psagent-db:sha-<commit>` (PostgreSQL mit WAL-G) ab.
+  Merge auf `v2` für amd64 und arm64 und legt sie unter `ghcr.io/verflix/psagent:sha-<commit>`
+  und `ghcr.io/verflix/psagent-db:sha-<commit>` (PostgreSQL mit WAL-G) ab.
 - Tägliche Befehle laufen als systemd-Timer (`deploy/systemd/`).
 - Sicherung nach Unraid und Wiederherstellung: `docs/runbooks/sicherung.md` (#23, #25).
   Monitoring mit Uptime Kuma auf Unraid: `docs/runbooks/monitoring.md` (#24).
+- Ein Raspberry Pi 5 kann als Ersatzgerät dienen (Anhang).
 
-| Ort auf dem Pi | Inhalt |
+| Ort auf dem Server | Inhalt |
 | --- | --- |
 | `/opt/psagent` | Klon des Repos, Stand passend zum Image |
 | `/etc/psagent/psagent.env` | Geheimnisse und Einstellungen (Vorlage `deploy/psagent.env.example`) |
@@ -30,30 +33,109 @@ einem echten Pi.
 | `/var/lib/psagent/media` | Hochgeladene Dateien (GAL, Scans, signierte PDFs) |
 | `/var/lib/psagent/kettenkopf` | Tägliche Kopf-Dateien der Hash-Kette |
 
-## 1. Betriebssystem
+## 1. Gerät und Betriebssystem
 
-1. Raspberry Pi OS Lite (64-bit) mit dem Raspberry Pi Imager **auf die NVMe-SSD** schreiben,
-   nicht auf die microSD-Karte. Im Imager: Hostname `psagent`, eigener Benutzer, SSH mit
-   öffentlichem Schlüssel (kein Passwort).
-2. Vom Pi aus die Bootreihenfolge auf NVMe stellen, falls er nicht von selbst davon startet:
-   `sudo raspi-config` → Advanced Options → Boot Order.
-3. Zeitzone (die Timer laufen in Ortszeit):
+### 1.1 Gerät prüfen
 
-   ```bash
-   sudo timedatectl set-timezone Europe/Berlin
-   sudo apt update && sudo apt full-upgrade -y
-   ```
+Das vorinstallierte System eines gebrauchten Geräts bekommt kein Netz; es wird ohnehin ersetzt.
 
-4. Sicherheitsupdates automatisch:
+- SSD: im vorinstallierten System mit „Laufwerke“ (gnome-disks) → ⋮ → „SMART-Werte und
+  Selbsttests“: neu zugewiesene Sektoren müssen 0 sein. Viele SSDs melden ihre Abnutzung nicht;
+  dann überwacht der stündliche Zustand die übrigen Werte (`monitoring.md`).
+- Größe: Der Start mit 32 GB geht (Festlegung Felix). Später auf 128–256 GB tauschen: nur
+  **M.2 SATA** (2242 oder 2280), kein NVMe. Der Tausch heißt neu installieren und aus der Sicherung
+  wiederherstellen (`sicherung.md`, Ernstfall) und ist damit zugleich eine echte Probe.
+- TPM: `ls /dev/tpm0` und `cat /sys/class/tpm/tpm0/tpm_version_major` (muss `2` sein).
 
-   ```bash
-   sudo apt install -y unattended-upgrades
-   sudo dpkg-reconfigure -plow unattended-upgrades
-   ```
+### 1.2 BIOS (F2 beim Einschalten)
+
+- **TPM löschen** („Clear“), damit nichts vom Vorbesitzer bleibt, danach TPM bzw. PTT
+  **einschalten**.
+- **Secure Boot ein**. Debian startet signiert über `shim`; das TPM-Entsperren hängt daran.
+- **Nach Stromausfall einschalten** („Power on after AC loss“ oder ähnlich).
+- Nur UEFI; Netzwerk-Boot (PXE) aus; USB-Boot nur für die Installation, danach aus.
+- **BIOS-Passwort** setzen (Tresor). Eine WLAN-Karte, falls vorhanden, abschalten oder ausbauen.
+
+### 1.3 Debian 13 installieren
+
+1. Auf dem eigenen Rechner das Abbild „netinst“ (amd64) von <https://www.debian.org/distrib/>
+   laden, gegen `SHA512SUMS` samt Signatur prüfen und auf einen USB-Stick schreiben.
+2. **Felix, nicht Claude:** eine lange LUKS-Passphrase erzeugen und in den Tresor legen. Sie ist
+   der Rückfall, wenn das TPM einmal nicht entsperrt.
+3. Installation:
+   - Hostname `psagent`; kein Root-Passwort, ein eigener Benutzer mit `sudo`.
+   - Partitionierung: **„Geführt – gesamte Platte mit verschlüsseltem LVM“**, alle Dateien auf
+     eine Partition, die Passphrase aus Schritt 2.
+   - Softwareauswahl: nur **„SSH-Server“** und **„Standard-Systemwerkzeuge“**, kein Desktop.
+4. Nach dem ersten Start (fragt noch nach der Passphrase) den eigenen öffentlichen SSH-Schlüssel
+   hinterlegen (`ssh-copy-id`, solange noch Passwörter gehen; Schritt 3 schaltet sie ab).
+
+### 1.4 Entsperren über das TPM
+
+Debians Standard-Initramfs (`initramfs-tools`) kann TPM-Token von `systemd-cryptenroll` nicht
+nutzen; Clevis hängt sich dort ein. Gebunden wird an **PCR 7** (Secure-Boot-Zustand): Das übersteht
+Kernel-Updates, sodass nächtliche Neustarts ohne Passphrase gehen.
+
+```bash
+sudo apt update && sudo apt full-upgrade -y
+sudo apt install -y tpm2-tools clevis clevis-luks clevis-tpm2 clevis-initramfs
+mokutil --sb-state                     # muss „SecureBoot enabled“ zeigen
+lsblk -f                               # Partition mit crypto_LUKS, meist /dev/sda3
+sudo clevis luks bind -d /dev/sda3 tpm2 '{"pcr_bank":"sha256","pcr_ids":"7"}'
+sudo update-initramfs -u -k all
+sudo clevis luks list -d /dev/sda3     # zeigt die Bindung (Slot 1)
+sudo reboot                            # startet jetzt ohne Passphrase
+```
+
+**Mit Bildschirm und Tastatur am Gerät erproben;** die Passphrase bleibt immer als Rückfall.
+
+- Fragt das Gerät nach einem BIOS-Update oder einer Änderung an Secure Boot wieder nach der
+  Passphrase: einmal eingeben, dann `sudo clevis luks regen -d /dev/sda3 -s 1`.
+- **Schutzwirkung:** Geschützt sind eine ausgebaute SSD und ein ausgemustertes Gerät. Bei
+  Diebstahl des ganzen Geräts schützt das nur eingeschränkt: Wer ein anderes signiertes System
+  startet, kommt bei reinem PCR 7 womöglich an den Schlüssel. BIOS-Passwort und abgeschalteter
+  USB-Boot erschweren das. Im Betrieb ist die SSD offen; dagegen helfen Tailscale, SSH nur mit
+  Schlüssel und die Anmeldung der App.
+
+### 1.5 Zeitzone, Updates, SMART
+
+```bash
+sudo timedatectl set-timezone Europe/Berlin   # die Timer laufen in Ortszeit
+sudo apt install -y unattended-upgrades smartmontools
+sudo smartctl -a /dev/sda                     # Werte für die Akte
+```
+
+Sicherheitsupdates spielt `unattended-upgrades` automatisch ein, Debian und Docker. Braucht ein
+Update einen Neustart (Kernel), startet der Server um 04:30 neu, nach Sicherung (02:00) und
+Löschfristen (03:00); das TPM entsperrt dabei ohne Eingabe.
+
+```bash
+sudo tee /etc/apt/apt.conf.d/52psagent >/dev/null <<'EOF'
+// PSAgent (#22): auch Docker automatisch, Neustart bei Bedarf nachts, alte Kernel weg (32-GB-SSD).
+Unattended-Upgrade::Origins-Pattern { "origin=Docker,label=Docker CE"; };
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-Time "04:30";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+EOF
+# Updates um 04:00 statt irgendwann am Morgen; ein Docker-Update startet die Container neu.
+sudo mkdir -p /etc/systemd/system/apt-daily-upgrade.timer.d
+sudo tee /etc/systemd/system/apt-daily-upgrade.timer.d/psagent.conf >/dev/null <<'EOF'
+[Timer]
+OnCalendar=
+OnCalendar=*-*-* 04:00
+RandomizedDelaySec=0
+EOF
+sudo systemctl daemon-reload
+sudo unattended-upgrade --dry-run --debug 2>&1 | grep -i "allowed origins"
+```
+
+Startet der Server nach einem Neustart nicht (z. B. Passphrase verlangt), meldet das Monitoring
+„PSAgent erreichbar“ nach wenigen Minuten (`monitoring.md`).
 
 ## 2. Tailscale
 
-1. Tailscale nach der Anleitung für Raspberry Pi OS installieren
+1. Tailscale nach der Anleitung für Debian installieren
    (<https://tailscale.com/download/linux>) und anmelden:
 
    ```bash
@@ -62,7 +144,7 @@ einem echten Pi.
    ```
 
 2. In der Tailscale-Verwaltung:
-   - beim Gerät `psagent` **„Disable key expiry“**, sonst fällt der Pi nach 180 Tagen aus dem
+   - beim Gerät `psagent` **„Disable key expiry“**, sonst fällt der Server nach 180 Tagen aus dem
      Tailnet;
    - unter DNS **MagicDNS** und **HTTPS Certificates** einschalten. Hinweis: Der Name
      `psagent.<tailnet>.ts.net` steht danach in den öffentlichen Certificate-Transparency-Logs;
@@ -76,7 +158,7 @@ einem echten Pi.
 
 Nur HTTPS und SSH aus dem Tailnet, SSH nur mit Schlüssel. **Erst prüfen, dass SSH über
 Tailscale geht** (`ssh <benutzer>@psagent.<tailnet>.ts.net`), dann sperren; Tastatur und
-Bildschirm am Pi bereithalten.
+Bildschirm am Server bereithalten.
 
 ```bash
 sudo tee /etc/ssh/sshd_config.d/psagent.conf >/dev/null <<'EOF'
@@ -165,6 +247,7 @@ Die App läuft im Container als Benutzer 10001; PostgreSQL richtet seinen Ordner
 
    `update.sh` holt das Image, startet die Datenbank, migriert, startet die App und wartet, bis
    `/healthz` antwortet. Die vorige Version steht danach in `/etc/psagent/image.env.vorher`.
+   Ältere Images löscht es; die laufende und die vorige Version bleiben für ein Zurück.
 4. HTTPS im Tailnet einschalten (bleibt nach Neustarts bestehen):
 
    ```bash
@@ -206,7 +289,7 @@ Die App läuft im Container als Benutzer 10001; PostgreSQL richtet seinen Ordner
 | `psagent-notfallmappe.timer` | `notfallmappe` | montags 06:00 |
 | `psagent-zustand.timer` | `zustand.sh` (App, Datenbank, WAL-Archiv, Platz) | stündlich, :17 |
 
-Verpasste Läufe (Pi aus) holt systemd nach dem Start nach. Vor dem Einschalten jeden Befehl
+Verpasste Läufe (Server aus) holt systemd nach dem Start nach. Vor dem Einschalten jeden Befehl
 einmal von Hand laufen lassen, die Löschfristen zuerst als Probelauf
 (`docs/runbooks/loeschfristen.md`):
 
@@ -244,7 +327,7 @@ dann bitte Felix fragen.
 ## 9. Prüfliste nach der Einrichtung
 
 - [ ] `https://psagent.<tailnet>.ts.net/healthz` aus dem Tailnet erreichbar, aus dem LAN ohne
-      Tailscale **nicht** (`http://<LAN-IP-des-Pi>:8000` und `:443` scheitern)
+      Tailscale **nicht** (`http://<LAN-IP-des-Servers>:8000` und `:443` scheitern)
 - [ ] `tailscale serve status` zeigt nur `https://psagent.<tailnet>.ts.net` → `127.0.0.1:8000`,
       kein Funnel
 - [ ] `sudo ufw status` zeigt nur 22 und 443 auf `tailscale0`
@@ -254,4 +337,22 @@ dann bitte Felix fragen.
 - [ ] `systemctl list-timers 'psagent-*'` zeigt sieben Timer
 - [ ] Monitoring abgenommen (`monitoring.md`, Abschnitt 4)
 - [ ] Erste Sicherung vollständig (`sicherung.md`, Abschnitt 3), `failed_count` steigt nicht
-- [ ] Nach `sudo reboot` laufen App, Datenbank und `tailscale serve` wieder
+- [ ] Nach `sudo reboot` startet der Server **ohne Passphrase** (TPM), und App, Datenbank und
+      `tailscale serve` laufen wieder
+- [ ] `sudo clevis luks list -d /dev/sda3` zeigt die TPM-Bindung; die Passphrase liegt im Tresor
+- [ ] `systemctl list-timers apt-daily-upgrade.timer` zeigt 04:00; Docker steht in den
+      „Allowed origins“ von `unattended-upgrade --dry-run --debug`
+
+## Anhang: Raspberry Pi 5 als Ersatzgerät
+
+Die Images gibt es auch für arm64. Statt Schritt 1:
+
+1. Raspberry Pi OS Lite (64-bit) mit dem Raspberry Pi Imager **auf eine NVMe-SSD** schreiben,
+   nicht auf die microSD-Karte. Im Imager: Hostname (z. B. `psagent-probe`), eigener Benutzer, SSH
+   mit öffentlichem Schlüssel.
+2. Bootreihenfolge auf NVMe stellen, falls er nicht von selbst davon startet:
+   `sudo raspi-config` → Advanced Options → Boot Order.
+3. Zeitzone und Updates wie in 1.5; die Docker-Zeile gilt genauso. Ohne TPM bleibt die SSD des Pi
+   unverschlüsselt (Konzept, Stufe 1).
+
+Ab Schritt 2 gilt alles wie oben.

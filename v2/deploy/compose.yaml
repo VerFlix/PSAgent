@@ -1,6 +1,6 @@
-# Betrieb auf dem Pi (#22). Einrichtung: docs/runbooks/pi-einrichten.md.
+# Betrieb auf dem Server (#22). Einrichtung: docs/runbooks/server-einrichten.md.
 #
-# - Die App lauscht nur auf 127.0.0.1:8000; HTTPS im Tailnet macht `tailscale serve` auf dem Pi.
+# - Die App lauscht nur auf 127.0.0.1:8000; HTTPS im Tailnet macht `tailscale serve` auf dem Server.
 #   Nie `tailscale funnel`: Das stellte die App ins Internet.
 # - Die Datenbank hat keinen Port nach außen.
 # - Geheimnisse stehen nur in /etc/psagent/psagent.env (Vorlage: psagent.env.example), die
@@ -29,7 +29,7 @@ services:
       POSTGRES_DB: psagent
       POSTGRES_USER: psagent
       # WAL-G im Container: Datenbank über den Socket; verschlüsselt wird mit dem öffentlichen
-      # Schlüssel, den privaten hat der Pi nicht. Ziel und Zugang stehen in psagent.env.
+      # Schlüssel, den privaten hat der Server nicht. Ziel und Zugang stehen in psagent.env.
       PGHOST: /var/run/postgresql
       PGUSER: psagent
       PGDATABASE: psagent

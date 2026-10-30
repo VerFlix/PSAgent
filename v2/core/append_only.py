@@ -10,7 +10,7 @@ Zwei Schichten:
 Korrekturen sind neue Einträge mit Verweis auf den alten. Jede neue Zeile bekommt in derselben
 Transaktion ein Glied der Hash-Kette (`core/chain.py`, #15). TRUNCATE blockiert der Trigger
 nicht, weil die Testumgebung Tabellen damit leert. Im Betrieb entzieht die Rechtevergabe des
-Datenbanknutzers TRUNCATE (Einrichtung des Pi, Phase 4).
+Datenbanknutzers TRUNCATE (Einrichtung des Servers, Phase 4).
 """
 
 from collections.abc import Iterable
