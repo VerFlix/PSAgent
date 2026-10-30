@@ -7,7 +7,7 @@ from django.http import HttpRequest
 def client_ip(request: HttpRequest) -> str:
     """Adresse des Clients.
 
-    Hinter einem vertrauenswürdigen Proxy (auf dem Pi `tailscale serve`) zählt der letzte
+    Hinter einem vertrauenswürdigen Proxy (auf dem Server `tailscale serve`) zählt der letzte
     Eintrag in X-Forwarded-For, den der Proxy selbst setzt. Alles davor kann der Client
     fälschen. Ohne eingetragenen Proxy gilt die Verbindungsadresse.
     """

@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Stündlicher Zustand des Pi für das Monitoring (#24), gestartet von psagent-zustand.timer:
+# Stündlicher Zustand des Servers für das Monitoring (#24), gestartet von psagent-zustand.timer:
 #
 #   - App und Datenbank melden sich gesund (Healthcheck in compose.yaml)
 #   - das WAL-Archiv nach Unraid läuft: letzter Versuch nicht gescheitert, kein Rückstau
 #   - auf /var/lib/psagent ist genug Platz frei
+#   - die SSD meldet sich gesund (SMART-Gesamturteil, keine neu zugewiesenen oder schwebenden
+#     Sektoren); viele SSDs melden ihre Abnutzung nicht, darum zählen diese Werte
 #
 #     sudo ./zustand.sh
 #
@@ -46,6 +48,25 @@ if [[ -z "$used" ]]; then
     problems+=("Platte: Belegung von $var nicht lesbar")
 elif ((100 - used < min_free)); then
     problems+=("Platte: nur noch $((100 - used)) % frei auf $var")
+fi
+
+if ! command -v smartctl >/dev/null; then
+    problems+=("SMART: smartctl fehlt (apt install smartmontools)")
+else
+    disks="$(smartctl --scan 2>/dev/null)" || disks=""
+    [[ -n "$disks" ]] || problems+=("SMART: kein Laufwerk gefunden")
+    while read -r disk _ type _; do
+        [[ -n "$disk" ]] || continue
+        # Der Rückgabewert von smartctl setzt Bits schon für alte Einträge im Fehlerprotokoll;
+        # es zählt nur das ausgegebene Gesamturteil.
+        verdict="$({ smartctl -H -d "$type" "$disk" 2>/dev/null || true; } \
+            | grep -E 'overall-health|Health Status')" || verdict=""
+        [[ "$verdict" =~ PASSED|OK ]] || problems+=("SMART $disk: ${verdict:-kein Gesamturteil}")
+        while read -r name raw; do
+            [[ "$raw" == 0 ]] || problems+=("SMART $disk: $name $raw")
+        done < <(smartctl -A -d "$type" "$disk" 2>/dev/null | awk '
+            $2 ~ /^(Reallocated_Sector_Ct|Current_Pending_Sector|Offline_Uncorrectable)$/ { print $2, $10 }')
+    done <<<"$disks"
 fi
 
 if ((${#problems[@]})); then

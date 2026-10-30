@@ -31,7 +31,7 @@ Nie gelöscht wird bei:
 - einem offenen Fall auf der Klärungsliste
 - einer Löschsperre
 
-## Einrichten (lokal mit Felix, auf dem Pi)
+## Einrichten (lokal mit Felix, auf dem Server)
 
 1. Wert setzen: `PSAGENT_RETENTION_YEARS` (Standard 3). Der Wert muss zum Beschluss des
    Vorstands passen.

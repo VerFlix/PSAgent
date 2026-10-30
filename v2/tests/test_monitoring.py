@@ -2,10 +2,11 @@
 
 Festlegungen (Felix, 24.10.2026): Uptime Kuma auf Unraid, Herzschlag je Prüfung, Meldung per
 ntfy aufs Handy, Zustand stündlich. Erreichbarkeit und HTTPS-Zertifikat prüft Uptime Kuma selbst
-(`/healthz`). Erprobt wird auf Pi und Unraid (lokal); hier wird geprüft, was ohne beide geht.
+(`/healthz`). Erprobt wird auf Server und Unraid (lokal); hier wird geprüft, was ohne beide geht.
 """
 
 import configparser
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -16,6 +17,7 @@ V2 = Path(__file__).resolve().parents[1]
 DEPLOY = V2 / "deploy"
 SYSTEMD = DEPLOY / "systemd"
 FAKE_DOCKER = Path(__file__).with_name("deploy_fake_docker.py")
+BASH = shutil.which("bash") or "/bin/bash"  # fester Pfad: ein Test läuft mit knappem PATH
 URL = "http://unraid.probe.ts.net:3001/api/push/nur-fuer-den-test"
 
 
@@ -181,6 +183,24 @@ def test_failed_report_does_not_fail_the_service(curl: Path) -> None:
 # --- zustand.sh ---
 
 
+# Falsches `smartctl` mit der Ausgabe einer SATA-SSD wie der im Futro S740.
+SMARTCTL = """#!/bin/sh
+case "$1" in
+--scan) printf '%s\\n' "${FAKE_SMART_SCAN-/dev/sda -d sat # /dev/sda [SAT], ATA device}" ;;
+-H)
+    echo "SMART overall-health self-assessment test result: ${FAKE_SMART_URTEIL:-PASSED}"
+    exit "${FAKE_SMART_RUECKGABE:-0}"
+    ;;
+-A)
+    echo 'ID# ATTRIBUTE_NAME FLAG VALUE WORST THRESH TYPE UPDATED WHEN_FAILED RAW_VALUE'
+    echo "  5 Reallocated_Sector_Ct 0x0032 100 100 000 Old_age Always - ${FAKE_SMART_NEU:-0}"
+    echo '  9 Power_On_Hours 0x0032 100 100 000 Old_age Always - 25600'
+    echo '197 Current_Pending_Sector 0x0032 100 100 000 Old_age Always - 0'
+    ;;
+esac
+"""
+
+
 @pytest.fixture
 def host(tmp_path: Path) -> Path:
     bin_dir = tmp_path / "bin"
@@ -191,6 +211,9 @@ def host(tmp_path: Path) -> Path:
     df = bin_dir / "df"
     df.write_text('#!/bin/sh\nprintf "Use%%\\n %s%%\\n" "$FAKE_DF"\n')
     df.chmod(0o755)
+    smartctl = bin_dir / "smartctl"
+    smartctl.write_text(SMARTCTL)
+    smartctl.chmod(0o755)
     return tmp_path
 
 
@@ -198,7 +221,7 @@ def status(base: Path, **env: str) -> subprocess.CompletedProcess[str]:
     log = base / "aufrufe.jsonl"
     log.touch()
     return subprocess.run(  # noqa: S603
-        ["bash", str(DEPLOY / "zustand.sh")],  # noqa: S607
+        [BASH, str(DEPLOY / "zustand.sh")],
         env={
             "PATH": f"{base / 'bin'}:/usr/bin:/bin",
             "FAKE_LOG": str(log),
@@ -231,6 +254,12 @@ def test_status_is_fine_when_everything_is_healthy(host: Path) -> None:
         ({"FAKE_ARCHIV": "f|25"}, "WAL-Archiv: 25 Abschnitte warten auf Unraid"),
         ({"FAKE_ARCHIV": "Fehler"}, "WAL-Archiv: Zustand nicht lesbar"),
         ({"FAKE_DF": "90"}, "Platte: nur noch 10 % frei"),
+        (
+            {"FAKE_SMART_URTEIL": "FAILED!"},
+            "SMART /dev/sda: SMART overall-health self-assessment test result: FAILED!",
+        ),
+        ({"FAKE_SMART_NEU": "8"}, "SMART /dev/sda: Reallocated_Sector_Ct 8"),
+        ({"FAKE_SMART_SCAN": ""}, "SMART: kein Laufwerk gefunden"),
     ],
 )
 def test_status_names_what_is_wrong(host: Path, env: dict[str, str], reason: str) -> None:
@@ -246,3 +275,28 @@ def test_status_skips_the_archive_while_the_database_is_down(host: Path) -> None
     assert result.returncode == 1
     assert "WAL-Archiv" not in result.stderr
     assert "pg_stat_archiver" not in (host / "aufrufe.jsonl").read_text()
+
+
+def test_old_entries_in_the_error_log_are_no_alarm(host: Path) -> None:
+    """smartctl setzt Bit 6 (Fehlerprotokoll) auch bei „PASSED“; das ist kein Ausfall."""
+    result = status(host, FAKE_SMART_RUECKGABE="64")
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_status_reports_a_missing_smartctl(host: Path) -> None:
+    """Ohne smartmontools fiele eine sterbende SSD nicht auf; das meldet der Zustand selbst."""
+    (host / "bin" / "smartctl").unlink()
+    tools = host / "nur"
+    tools.mkdir()
+    for name in ("dirname", "grep", "awk", "tr", "tail"):
+        found = shutil.which(name)
+        assert found, name
+        (tools / name).symlink_to(found)
+    for name in ("docker", "df"):
+        (tools / name).symlink_to(host / "bin" / name)
+
+    result = status(host, PATH=str(tools))
+
+    assert result.returncode == 1
+    assert "SMART: smartctl fehlt" in result.stderr

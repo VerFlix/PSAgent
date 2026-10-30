@@ -4,14 +4,14 @@
 #     sudo ./wiederherstellen.sh --probe     <privater-schluessel.asc> [--kopf <Nummer>:<Hash>]…
 #     sudo ./wiederherstellen.sh --ernstfall <privater-schluessel.asc> [--kopf <Nummer>:<Hash>]…
 #
-# --probe      Wiederherstellungsprobe auf einem anderen Gerät (Ersatz-Pi). Die Datenbank schreibt
-#              danach nichts in die echte Sicherung (Marke /etc/psagent/sicherung/probe).
-# --ernstfall  Dieses Gerät übernimmt den Betrieb. Der alte Pi muss aus und aus dem Tailnet
+# --probe      Wiederherstellungsprobe auf einem anderen Gerät (Ersatzgerät). Die Datenbank
+#              schreibt danach nichts in die echte Sicherung (Marke /etc/psagent/sicherung/probe).
+# --ernstfall  Dieses Gerät übernimmt den Betrieb. Der alte Server muss aus und aus dem Tailnet
 #              entfernt sein, sonst schreiben zwei Server in dieselbe Sicherung.
 # --kopf       Kettenkopf aus der letzten Zeugen-Mail; `kette_pruefen` prüft, ob er noch passt.
 #
-# Voraussetzungen: docs/runbooks/pi-einrichten.md, Schritte 1–5 (Docker, Tailscale, /etc/psagent
-# mit psagent.env, image.env und sicherung/), leere Ordner postgres/ und media/ unter
+# Voraussetzungen: docs/runbooks/server-einrichten.md, Schritte 1–5 (Docker, Tailscale,
+# /etc/psagent mit psagent.env, image.env und sicherung/), leere Ordner postgres/ und media/ unter
 # /var/lib/psagent. Nichts wird überschrieben. Die Passphrase fragt das Skript ab (oder aus
 # WALG_PGP_KEY_PASSPHRASE); der private Schlüssel bleibt nur in kurzlebigen Containern.
 #
@@ -55,10 +55,10 @@ started="$(date +%s)"
 [[ -f "$key" && -r "$key" ]] || die "Schlüsseldatei nicht lesbar: $key"
 key="$(cd "$(dirname "$key")" && pwd)/$(basename "$key")"
 for file in image.env psagent.env sicherung/public.asc; do
-    [[ -f "$etc/$file" ]] || die "$etc/$file fehlt (Runbook pi-einrichten.md, Schritt 5)."
+    [[ -f "$etc/$file" ]] || die "$etc/$file fehlt (Runbook server-einrichten.md, Schritt 5)."
 done
 for dir in postgres media; do
-    [[ -d "$var/$dir" ]] || die "$var/$dir fehlt (Runbook pi-einrichten.md, Schritt 5)."
+    [[ -d "$var/$dir" ]] || die "$var/$dir fehlt (Runbook server-einrichten.md, Schritt 5)."
     [[ -z "$(ls -A "$var/$dir")" ]] || die "$var/$dir ist nicht leer; es wird nichts überschrieben."
 done
 [[ -z "$("${compose[@]}" ps -q)" ]] || die "PSAgent läuft noch; erst: docker compose down"

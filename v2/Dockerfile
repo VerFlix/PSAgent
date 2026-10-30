@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Image für den Betrieb (arm64 auf dem Pi, amd64 für Tests).
+# Image für den Betrieb (amd64 auf dem Server, arm64 für einen Pi 5 als Ersatzgerät).
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

@@ -1,6 +1,6 @@
 """Verwaltungsbefehl: Kettenkopf täglich festhalten, stempeln und bezeugen (#16, #17).
 
-Für den täglichen Timer auf dem Pi. Scheitert ein Schritt (Zeitstempel, Datei, Mail), laufen die
+Für den täglichen Timer auf dem Server. Scheitert ein Schritt (Zeitstempel, Datei, Mail), laufen die
 übrigen trotzdem; am Ende meldet der Befehl einen Fehler, damit das Monitoring es sieht.
 """
 

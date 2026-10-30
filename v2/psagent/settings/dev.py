@@ -1,4 +1,4 @@
-"""Lokale Entwicklung. Niemals auf dem Pi verwenden."""
+"""Lokale Entwicklung. Niemals auf dem Server verwenden."""
 
 from .base import *
 

@@ -1,14 +1,16 @@
-"""Dateien für den Betrieb auf dem Pi (#22): Compose, Umgebungsvorlage, Timer, Update-Skript.
+"""Dateien für den Betrieb auf dem Server (#22): Compose, Umgebungsvorlage, Timer, Update-Skript.
 
 Festlegungen (Felix, 24.10.2026): Image aus der CI von GHCR, HTTPS mit `tailscale serve` (ohne
-Caddy), tägliche Befehle als systemd-Timer. Erprobt wird auf dem Pi (lokal); hier wird geprüft,
-was sich ohne Pi prüfen lässt.
+Caddy), tägliche Befehle als systemd-Timer. Erprobt wird auf dem Server (lokal); hier wird geprüft,
+was sich ohne Server prüfen lässt.
 """
 
 import configparser
+import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -41,7 +43,7 @@ def settings_variables(*names: str) -> tuple[set[str], set[str]]:
 
 
 def test_app_listens_on_localhost_only() -> None:
-    """Nur `tailscale serve` auf dem Pi erreicht die App; kein Port ins LAN oder Internet."""
+    """Nur `tailscale serve` auf dem Server erreicht die App; kein Port ins LAN oder Internet."""
     services = compose()["services"]
 
     assert services["app"]["ports"] == ["127.0.0.1:8000:8000"]
@@ -190,3 +192,69 @@ def test_update_script_rejects_unknown_versions(tag: str) -> None:
 
     assert result.returncode != 0
     assert "docker" not in result.stderr.lower() or "Version" in result.stderr
+
+
+NEW = "sha-" + "c" * 40
+PREVIOUS = "sha-" + "b" * 40
+OLDER = "sha-" + "a" * 40
+
+
+@pytest.fixture
+def update_host(tmp_path: Path) -> Path:
+    """Server mit laufender Version PREVIOUS und falschem `docker` (kein Warten: `sleep` leer)."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake = Path(__file__).with_name("deploy_fake_docker.py")
+    (bin_dir / "docker").write_text(f'#!/bin/sh\nexec "{sys.executable}" "{fake}" "$@"\n')
+    (bin_dir / "sleep").write_text("#!/bin/sh\n")
+    for tool in ("docker", "sleep"):
+        (bin_dir / tool).chmod(0o755)
+    (tmp_path / "image.env").write_text(f"PSAGENT_IMAGE_TAG={PREVIOUS}\n")
+    return tmp_path
+
+
+def run_update(base: Path, **env: str) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+    log = base / "aufrufe.jsonl"
+    log.touch()
+    result = subprocess.run(  # noqa: S603
+        ["bash", str(DEPLOY / "update.sh"), NEW],  # noqa: S607
+        env={
+            "PATH": f"{base / 'bin'}:/usr/bin:/bin",
+            "FAKE_LOG": str(log),
+            "PSAGENT_ETC": str(base),
+            **env,
+        },
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    calls = [" ".join(json.loads(line)["args"]) for line in log.read_text().splitlines()]
+    return result, calls
+
+
+def test_update_removes_old_images_but_keeps_the_previous_version(update_host: Path) -> None:
+    """Kleine SSD (Futro S740): nach einem gelungenen Update nur laufende und vorige Version."""
+    result, calls = run_update(update_host, FAKE_IMAGES=f"{NEW} {PREVIOUS} {OLDER} <none>")
+
+    assert result.returncode == 0, result.stderr
+    assert (update_host / "image.env").read_text() == f"PSAGENT_IMAGE_TAG={NEW}\n"
+    assert (update_host / "image.env.vorher").read_text() == f"PSAGENT_IMAGE_TAG={PREVIOUS}\n"
+    removed = sorted(
+        call.removeprefix("image rm ") for call in calls if call.startswith("image rm")
+    )
+    assert removed == [f"ghcr.io/verflix/psagent-db:{OLDER}", f"ghcr.io/verflix/psagent:{OLDER}"]
+    assert "image prune -f" in calls
+    assert calls.index(next(c for c in calls if c.startswith("inspect"))) < calls.index(
+        "image prune -f"
+    )
+
+
+def test_update_keeps_every_image_when_the_new_version_is_unhealthy(update_host: Path) -> None:
+    result, calls = run_update(
+        update_host, FAKE_IMAGES=f"{NEW} {PREVIOUS} {OLDER}", FAKE_HEALTH="psagent-app-1=unhealthy"
+    )
+
+    assert result.returncode == 1
+    assert "nicht gesund" in result.stderr
+    assert not any(call.startswith(("image rm", "image prune")) for call in calls)

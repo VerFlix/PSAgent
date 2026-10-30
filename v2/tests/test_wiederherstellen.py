@@ -22,7 +22,7 @@ HEAD = "7:" + "ab" * 32
 
 @pytest.fixture
 def host(tmp_path: Path) -> Path:
-    """Frisches Gerät nach pi-einrichten.md, Schritt 5, mit falschem `docker`."""
+    """Frisches Gerät nach server-einrichten.md, Schritt 5, mit falschem `docker`."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     wrapper = bin_dir / "docker"

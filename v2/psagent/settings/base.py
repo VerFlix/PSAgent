@@ -100,7 +100,7 @@ AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
 AXES_RESET_ON_SUCCESS = True
 AXES_LOCKOUT_TEMPLATE = "accounts/locked.html"
 AXES_CLIENT_IP_CALLABLE = "accounts.net.client_ip"
-# Nur hinter diesen Proxys (auf dem Pi `tailscale serve`) gilt X-Forwarded-For; sonst die
+# Nur hinter diesen Proxys (auf dem Server `tailscale serve`) gilt X-Forwarded-For; sonst die
 # Verbindungsadresse.
 PSAGENT_TRUSTED_PROXIES = env_list("PSAGENT_TRUSTED_PROXIES")
 

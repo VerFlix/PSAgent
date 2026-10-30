@@ -5,12 +5,13 @@
 #   2. Dateien (GAL, Scans, Notfallmappen) als ein tar-Archiv, verschlüsselt, unter dateien/.
 #   3. Neue Kettenköpfe unverschlüsselt unter kettenkopf/ (nur Prüfsummen, für den Zeugen).
 #   4. Aufräumen: Es bleiben die letzten 30 Vollsicherungen samt WAL und die letzten 30
-#      Datei-Archive. Ältere Stände halten die Snapshots auf Unraid, die der Pi nicht löschen kann.
+#      Datei-Archive. Ältere Stände halten die Snapshots auf Unraid, die der Server nicht
+#      löschen kann.
 #
 #     sudo ./sicherung.sh
 #
-# Verschlüsselt wird mit dem öffentlichen Schlüssel; den privaten hat der Pi nicht. Scheitert ein
-# Schritt, laufen die übrigen weiter (aufgeräumt wird dann nicht), und das Skript endet mit 1.
+# Verschlüsselt wird mit dem öffentlichen Schlüssel; den privaten hat der Server nicht. Scheitert
+# ein Schritt, laufen die übrigen weiter (aufgeräumt wird dann nicht), und das Skript endet mit 1.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

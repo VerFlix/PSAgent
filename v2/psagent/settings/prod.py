@@ -1,4 +1,4 @@
-"""Betrieb auf dem Pi hinter `tailscale serve` (HTTPS) im Tailnet (#22).
+"""Betrieb auf dem Server hinter `tailscale serve` (HTTPS) im Tailnet (#22).
 
 Alle Geheimnisse kommen aus Umgebungsvariablen. Fehlt eine Pflichtvariable,
 startet die Anwendung nicht.
