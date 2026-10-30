@@ -54,7 +54,15 @@ Das vorinstallierte System eines gebrauchten Geräts bekommt kein Netz; es wird 
 - **Secure Boot ein**. Debian startet signiert über `shim`; das TPM-Entsperren hängt daran.
 - **Nach Stromausfall einschalten** („Power on after AC loss“ oder ähnlich).
 - Nur UEFI; Netzwerk-Boot (PXE) aus; USB-Boot nur für die Installation, danach aus.
-- **BIOS-Passwort** setzen (Tresor). Eine WLAN-Karte, falls vorhanden, abschalten oder ausbauen.
+- **Administrator Password** setzen (Tresor); es schützt die BIOS-Einstellungen. **Kein User
+  Password** und kein Passwort beim Start („Password on boot“ aus): Sonst bleibt der Server nach
+  jedem Stromausfall und Update-Neustart stehen.
+- **Password Severity: Strong.** Das Administrator Password lässt sich dann nicht mehr über die
+  Brücke „Password skip“ auf der Hauptplatine löschen, nur noch über den Fujitsu-Service; Fujitsu
+  empfiehlt diese Stufe. „Standard“ ließe jeden, der das Gehäuse öffnet, das Passwort löschen,
+  USB-Start erlauben und so womöglich an den TPM-Schlüssel kommen. „Stringent“ schließt auch den
+  Service aus; geht das Passwort dann verloren, lässt sich das BIOS nie mehr ändern.
+- Eine WLAN-Karte, falls vorhanden, abschalten oder ausbauen.
 
 ### 1.3 Debian 13 installieren
 
@@ -93,8 +101,9 @@ sudo reboot                            # startet jetzt ohne Passphrase
   Passphrase: einmal eingeben, dann `sudo clevis luks regen -d /dev/sda3 -s 1`.
 - **Schutzwirkung:** Geschützt sind eine ausgebaute SSD und ein ausgemustertes Gerät. Bei
   Diebstahl des ganzen Geräts schützt das nur eingeschränkt: Wer ein anderes signiertes System
-  startet, kommt bei reinem PCR 7 womöglich an den Schlüssel. BIOS-Passwort und abgeschalteter
-  USB-Boot erschweren das. Im Betrieb ist die SSD offen; dagegen helfen Tailscale, SSH nur mit
+  startet, kommt bei reinem PCR 7 womöglich an den Schlüssel. Administrator Password mit
+  Severity „Strong“ und abgeschalteter USB-Boot erschweren das; das Siegel am Schrank zeigt, ob
+  jemand am Gerät war. Im Betrieb ist die SSD offen; dagegen helfen Tailscale, SSH nur mit
   Schlüssel und die Anmeldung der App.
 
 ### 1.5 Zeitzone, Updates, SMART
