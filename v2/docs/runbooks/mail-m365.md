@@ -121,6 +121,13 @@ mit `--probelauf` prüfen. Die Ausgabe nennt nur Vorgangsnummern. Schlägt ein V
 versucht es der nächste Lauf erneut. Ausschalten für alle: Admin auf der Seite „Anstehende
 Ausleihen“.
 
+**Sammelmail an Vereinsadressen (#128):** Derselbe Lauf schickt, wenn eingeschaltet, eine Liste
+aller überfälligen Vorgänge an die eingetragenen Adressen (je Adresse eine eigene Mail).
+Einrichten als Admin unter „Anstehende Ausleihen“ → „Sammelmail an Vereinsadressen einstellen“:
+Adressen eintragen, „Sammelmail senden“ anhaken, mit YubiKey speichern, dann „Testmail senden“.
+Nur Postfächer des Vereins eintragen: Die Mail enthält Namen von Entleihern. Scheitert der
+Versand, endet `erinnerungen` mit Fehler, und Uptime Kuma meldet das.
+
 ## Fehlerbilder
 
 | Meldung | Ursache |

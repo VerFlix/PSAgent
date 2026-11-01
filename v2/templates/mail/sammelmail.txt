@@ -1,0 +1,12 @@
+{% autoescape off %}Überfällige Ausleihen am {{ on|date:"d.m.Y" }}{% if club %} ({{ club }}){% endif %}: {{ count_text }}
+
+{% for entry in entries %}{% if entry.new %}[NEU] {% endif %}Vorgang #{{ entry.booking.pk }} · {{ entry.name }} · {{ entry.days }} Tag{{ entry.days|pluralize:"e" }} überfällig
+{% for item in entry.items %}  - {{ item.name }}{% if item.eis %} (EI {{ item.eis }}){% endif %}, zurück bis {{ item.end|date:"d.m.Y" }}
+{% endfor %}  {{ entry.link }}
+
+{% endfor %}[NEU] = seit gestern überfällig. Telefon und E-Mail stehen in PSAgent beim Vorgang
+(nach der Anmeldung).
+
+Diese Mail enthält Namen von Entleihern: bitte nicht weiterleiten und nach Erledigung löschen.
+Empfänger und Schalter: {{ settings_link }}
+{% endautoescape %}

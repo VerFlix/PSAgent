@@ -446,3 +446,48 @@ class ReminderSwitch(AppendOnlyModel):
     def __str__(self) -> str:
         scope = f"Vorgang #{self.booking_id}" if self.booking_id else "alle"
         return f"Erinnerungen {'an' if self.enabled else 'aus'} ({scope})"
+
+
+class DigestSetting(AppendOnlyModel):
+    """Sammelmail über überfällige Ausleihen an Vereinsadressen (#128): Schalter und Empfänger.
+
+    Es gilt der jüngste Eintrag; ohne Eintrag ist die Sammelmail aus. Jede Änderung bestätigt der
+    Admin mit dem YubiKey, denn eine neue Adresse leitet Namen von Entleihern weiter.
+    """
+
+    enabled = models.BooleanField("Sammelmail an")
+    recipients = models.JSONField("Empfänger", default=list, blank=True)
+    at = models.DateTimeField("Zeitpunkt", default=timezone.now)
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="durch",
+    )
+
+    class Meta:
+        verbose_name = "Einstellung der Sammelmail"
+        verbose_name_plural = "Einstellungen der Sammelmail"
+        ordering = ("-at", "-id")
+
+    def __str__(self) -> str:
+        return f"Sammelmail {'an' if self.enabled else 'aus'} ({len(self.recipients)} Adressen)"
+
+
+class DigestRun(AppendOnlyModel):
+    """Eine gesendete Sammelmail (#128): nur Tag und Anzahlen, kein Inhalt, keine Adresse."""
+
+    day = models.DateField("Stichtag", unique=True)
+    bookings = models.PositiveIntegerField("Vorgänge")
+    recipients = models.PositiveSmallIntegerField("Empfänger")
+    sent_at = models.DateTimeField("gesendet am", default=timezone.now)
+
+    class Meta:
+        verbose_name = "Gesendete Sammelmail"
+        verbose_name_plural = "Gesendete Sammelmails"
+        ordering = ("-day",)
+
+    def __str__(self) -> str:
+        return f"Sammelmail {self.day:%d.%m.%Y}: {self.bookings} Vorgänge"

@@ -50,6 +50,7 @@ class Right(StrEnum):
     CLARIFY = "clarify"
     ERASURE_HOLD = "erasure_hold"
     REMINDERS = "reminders"
+    OVERDUE_DIGEST = "overdue_digest"
     MANAGE_USERS = "manage_users"
     MODIFY_SIGNED = "modify_signed"
 
@@ -157,6 +158,9 @@ RIGHTS: dict[Right, Rule] = {
     ),
     Right.REMINDERS: Rule(
         "E-Mail-Erinnerungen bei Überfälligkeit für alle ein- und ausschalten", Role.ADMIN
+    ),
+    Right.OVERDUE_DIGEST: Rule(
+        "Sammelmail zu überfälligen Ausleihen: schalten, Empfänger pflegen, Testmail", Role.ADMIN
     ),
     Right.MANAGE_USERS: Rule("Nutzer, Rollen, Sachkunde-Zertifikate verwalten", Role.ADMIN),
     Right.MODIFY_SIGNED: Rule("Signierte Einträge ändern oder löschen", None),

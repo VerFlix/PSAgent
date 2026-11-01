@@ -20,4 +20,6 @@ urlpatterns = [
     path("<int:pk>/quittung/", views.booking_receipt, name="booking_receipt"),
     path("<int:pk>/erinnerungen/", views.booking_reminders, name="booking_reminders"),
     path("erinnerungen/", views.reminder_switch, name="reminder_switch"),
+    path("sammelmail/", views.digest_settings, name="digest_settings"),
+    path("sammelmail/testmail/", views.digest_test, name="digest_test"),
 ]

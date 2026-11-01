@@ -8,6 +8,7 @@
     <input type="hidden" name="an" value="{{ reminders_on|yesno:"0,1" }}">
     <button type="submit" class="link">{% if reminders_on %}Erinnerungen für alle ausschalten{% else %}Erinnerungen für alle einschalten{% endif %}</button>
   </form>{% endif %}</p>
+{% if may_configure_digest %}<p class="hint"><a href="{% url 'lending:digest_settings' %}">Sammelmail an Vereinsadressen einstellen</a></p>{% endif %}
 <section class="card">
   <h2>Überfällig ({{ overdue|length }})</h2>
   {% include "lending/_loan_rows.html" with loans=overdue empty="Nichts überfällig." %}
