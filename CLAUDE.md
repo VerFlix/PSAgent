@@ -18,7 +18,7 @@ sag das Felix, bevor du anfängst, und nenne den vorgesehenen Ort.
 | Wo | Was |
 | --- | --- |
 | Cloud-Sitzung mit Schreibrechten aufs Repo | Reine Software: Datenmodell, Import, Testdaten-Generator, Web-App, Rechteprüfung, Browser-Tests, Formulare, Notfallmappe, Runbooks, CI, Issues, Nachbessern bei Test-Fehlern |
-| Lokal (Claude Code auf Felix' Rechner) | Hardware, Netz, Geheimnisse: YubiKey-Signatur und Signier-Tool erproben, Pi einrichten und ausrollen, Backups nach Unraid, Wiederherstellungsprobe, Zeitstempeldienste testen |
+| Lokal (Claude Code auf Felix' Rechner) | Hardware, Netz, Geheimnisse: YubiKey-Signatur und Signier-Tool erproben, Server (Futro S740, Ersatz Pi) einrichten und ausrollen, Backups nach Unraid, Wiederherstellungsprobe, Zeitstempeldienste testen |
 | Nur Felix, ohne Claude | Schlüssel und PINs erzeugen, echte Altdaten importieren (Claude liest sie nicht), Pull Requests prüfen und mergen, Branch-Schutz einstellen |
 
 ## Harte Regeln

@@ -67,16 +67,66 @@ Das vorinstallierte System eines gebrauchten Geräts bekommt kein Netz; es wird 
 ### 1.3 Debian 13 installieren
 
 1. Auf dem eigenen Rechner das Abbild „netinst“ (amd64) von <https://www.debian.org/distrib/>
-   laden, gegen `SHA512SUMS` samt Signatur prüfen und auf einen USB-Stick schreiben.
+   laden, gegen `SHA512SUMS` samt Signatur prüfen und auf einen USB-Stick schreiben. Das Abbild
+   ist kleiner als 1 GB.
+   - **Kein Ventoy.** Mit Ventoy meldet das Gerät „Secure Boot Violation“. Das Abbild direkt auf
+     den Stick schreiben, z. B. mit Rufus im Modus „DD-Abbild“ (Windows) oder `dd` (Linux).
+   - Secure Boot nicht dauerhaft abschalten: Das Entsperren über das TPM hängt daran (1.4).
 2. **Felix, nicht Claude:** eine lange LUKS-Passphrase erzeugen und in den Tresor legen. Sie ist
    der Rückfall, wenn das TPM einmal nicht entsperrt.
 3. Installation:
+   - **Mit LAN-Kabel installieren.** Nur dann richtet der Installer das Netz und die
+     Paketquellen ein. Ohne Kabel bleibt die Schnittstelle nach dem Start aus, und `apt` findet
+     keine Pakete, auch nicht `openssh-server` (Nachholen: Kasten unten).
    - Hostname `psagent`; kein Root-Passwort, ein eigener Benutzer mit `sudo`.
    - Partitionierung: **„Geführt – gesamte Platte mit verschlüsseltem LVM“**, alle Dateien auf
      eine Partition, die Passphrase aus Schritt 2.
    - Softwareauswahl: nur **„SSH-Server“** und **„Standard-Systemwerkzeuge“**, kein Desktop.
 4. Nach dem ersten Start (fragt noch nach der Passphrase) den eigenen öffentlichen SSH-Schlüssel
-   hinterlegen (`ssh-copy-id`, solange noch Passwörter gehen; Schritt 3 schaltet sie ab).
+   hinterlegen, solange noch Passwörter gehen; Schritt 3 schaltet sie ab. Die Adresse ist
+   zunächst die LAN-Adresse des Servers (`ip -4 addr` am Gerät), ab Schritt 2 sein Name im
+   Tailnet. Für SSH immer nur den Namen oder die Adresse, ohne `https://`.
+   - **Linux/macOS:** `ssh-copy-id <benutzer>@<adresse>`
+   - **Windows (PowerShell)**, dort gibt es kein `ssh-copy-id`:
+
+     ```powershell
+     ssh-keygen -t ed25519      # nur, wenn es noch keinen Schlüssel gibt
+     type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh <benutzer>@<adresse> "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+     ```
+
+   Tipp: Lange Befehle mit `|`, `>` oder `<<` lieber per SSH vom eigenen Rechner aus einfügen
+   als am Gerät tippen. Fehlt an der Tastatur die Taste `<>|`, Dateien am Gerät mit `sudo nano`
+   bearbeiten.
+
+> **Nachholen, wenn ohne LAN-Kabel installiert wurde** (am Gerät, als root bzw. mit `sudo`):
+>
+> 1. Name der Schnittstelle mit `ip link` nachsehen (beim Futro S740 `eno1`) und in
+>    `/etc/network/interfaces` ergänzen:
+>
+>    ```
+>    allow-hotplug eno1
+>    iface eno1 inet dhcp
+>    ```
+>
+>    Danach `ifup eno1`.
+> 2. In `/etc/apt/sources.list` die Zeile `deb cdrom:…` mit `#` auskommentieren und die
+>    Paketquellen als `/etc/apt/sources.list.d/debian.sources` anlegen:
+>
+>    ```
+>    Types: deb
+>    URIs: http://deb.debian.org/debian
+>    Suites: trixie trixie-updates
+>    Components: main non-free-firmware
+>    Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+>
+>    Types: deb
+>    URIs: http://security.debian.org/debian-security
+>    Suites: trixie-security
+>    Components: main non-free-firmware
+>    Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+>    ```
+>
+> 3. `apt update && apt install -y openssh-server`
 
 ### 1.4 Entsperren über das TPM
 
@@ -163,6 +213,36 @@ Startet der Server nach einem Neustart nicht (z. B. Passphrase verlangt), meldet
 3. Der Name `psagent.<tailnet>.ts.net` darf sich danach **nicht mehr ändern**: Passkeys,
    QR-Etiketten und Links in Mails hängen daran.
 
+**Welches Tailnet?** Wer sich mit einem Konto einer Organisation anmeldet, landet womöglich in
+deren bestehendem Tailnet („User approval required“). Für ein eigenes Tailnet mit einem eigenen
+Konto anmelden. **Tailnet oder Tailnet-Namen nur wechseln, bevor** Passkeys eingerichtet,
+Etiketten gedruckt und Vereinsgeräte festgelegt sind; danach ändert sich mit dem Namen die
+Adresse, und alle Passkeys müssen neu eingerichtet werden. Wechseln auf dem Server:
+
+```bash
+sudo tailscale logout
+sudo tailscale up --hostname=psagent      # mit dem Konto des neuen Tailnets anmelden
+```
+
+Danach die Punkte aus 2. im neuen Tailnet wiederholen, in `/etc/psagent/psagent.env` alle
+Zeilen mit `psagent.<tailnet>.ts.net` anpassen (`DJANGO_ALLOWED_HOSTS`,
+`DJANGO_CSRF_TRUSTED_ORIGINS`, `PSAGENT_WEBAUTHN_RP_ID`, `PSAGENT_WEBAUTHN_ORIGINS`,
+`PSAGENT_BASE_URL`) und alle Geräte (Unraid, PCs, Tablet) ebenfalls umziehen.
+
+**Name wird nicht gefunden** („Could not resolve hostname psagent.<tailnet>.ts.net“), auf dem
+eigenen Rechner prüfen:
+
+1. `tailscale status`: Steht der Rechner im richtigen Tailnet, und gibt es eine Zeile mit
+   `psagent`? `tailscale status --json` zeigt unter `MagicDNSSuffix` das Tailnet. Unter Windows
+   ggf. `& "C:\Program Files\Tailscale\tailscale.exe" status`.
+2. `ssh <benutzer>@100.x.y.z` mit der Adresse aus `tailscale status`: Geht das, liegt es nur an
+   der Namensauflösung.
+3. `nslookup psagent.<tailnet>.ts.net 100.100.100.100`: Antwortet das, nutzt der Rechner die
+   DNS-Einstellungen von Tailscale nicht. Im Tailscale-Menü „Use Tailscale DNS settings“
+   einschalten (oder `tailscale set --accept-dns=true`), unter Windows danach
+   `ipconfig /flushdns`. Antwortet es nicht, heißt das Gerät anders (Tailscale-Verwaltung,
+   „Machines“).
+
 ## 3. Firewall und SSH
 
 Nur HTTPS und SSH aus dem Tailnet, SSH nur mit Schlüssel. **Erst prüfen, dass SSH über
@@ -193,7 +273,8 @@ gebundene erreicht aus dem Netz niemand.
 ## 4. Docker
 
 Docker Engine mit Compose-Plugin nach der offiziellen Anleitung für Debian installieren
-(<https://docs.docker.com/engine/install/debian/>, arm64). Danach:
+(<https://docs.docker.com/engine/install/debian/>; amd64 auf dem Futro, arm64 auf dem Pi).
+Danach:
 
 ```bash
 docker compose version
@@ -234,6 +315,19 @@ Die App läuft im Container als Benutzer 10001; PostgreSQL richtet seinen Ordner
    sudo chown root:10001 /etc/psagent/certs/graph.pem
    sudo chmod 640 /etc/psagent/certs/graph.pem
    ```
+
+   **Microsoft 365 darf später kommen.** Die App startet ohne die `PSAGENT_GRAPH_*`-Werte und
+   liest sie erst beim Senden. Bis dahin:
+   - Eine Quittung per Mail scheitert mit Hinweis; die Ausgabe selbst klappt.
+   - `kettenkopf` schreibt Kopf-Datei und Zeitstempel, die Zeugen-Mail fehlt. Der Befehl endet
+     deshalb mit Fehler, und Uptime Kuma meldet das jede Nacht (ab Schritt 7).
+   - Erinnerungen gehen nicht raus; das betrifft erst überfällige Ausleihen.
+
+   Vor dem Parallelbetrieb (#28) muss der Versand laufen: Die Zeugen-Mail gehört zum Schutz
+   gegen Manipulation.
+
+   Die Zertifikate der Zeitstempeldienste und von Yubico sind öffentlich und gehen jederzeit.
+   `PSAGENT_YUBIKEY_SERIALS` bleibt leer, bis die YubiKeys da sind (`zertifikate.md`).
 
 4. Sicherung einrichten, **bevor** die Datenbank zum ersten Mal startet:
    `docs/runbooks/sicherung.md`, Abschnitte 1–3 (ohne den Timer, der kommt in Schritt 7).
