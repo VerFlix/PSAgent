@@ -49,6 +49,7 @@ def overview(request: HttpRequest) -> HttpResponse:
         "reserved": reserved,
         "reminders_on": reminders.enabled(),
         "may_switch_reminders": has_right(request.user, Right.REMINDERS),
+        "may_configure_digest": has_right(request.user, Right.OVERDUE_DIGEST),
     }
     return render(request, "lending/overview.html", context)
 
