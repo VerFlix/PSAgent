@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Sammelmail zu überfälligen Ausleihen{% endblock %}
+{% block content %}
+<h1>Sammelmail zu überfälligen Ausleihen</h1>
+<p>Jeden Morgen um 9 Uhr geht eine Mail mit allen überfälligen Ausleihen an die Adressen unten,
+  nur wenn etwas überfällig ist. Sie nennt Vorgangsnummer, Namen des Entleihers, Teile und Tage,
+  aber keine Telefonnummer, E-Mail oder Adresse. Je Adresse geht eine eigene Mail raus.</p>
+<p class="hint">Die Namen liegen danach in den Postfächern der Empfänger; dort greift die Löschfrist
+  von PSAgent nicht. Bitte nur Postfächer des Vereins eintragen. Jede Änderung bestätigst du mit
+  deinem YubiKey.</p>
+
+<section class="card">
+  <h2>Einstellung</h2>
+  <p>Stand: {% if setting %}{{ setting.enabled|yesno:"an,aus" }}, geändert am {{ setting.at|date:"d.m.Y H:i" }}{% if setting.actor %} von {{ setting.actor }}{% endif %}{% else %}aus (noch nie eingestellt){% endif %}</p>
+  <form method="post" data-yubikey="{% url 'accounts:yubikey_options' %}">{% csrf_token %}
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+    <p><label><input type="checkbox" name="an"{% if on %} checked{% endif %}> Sammelmail senden</label></p>
+    <p><label for="empfaenger">Empfänger, eine Adresse je Zeile (höchstens {{ maximum }})</label><br>
+      <textarea id="empfaenger" name="empfaenger" rows="5" cols="40" autocomplete="off">{{ text }}</textarea></p>
+    <button type="submit" class="primary">Speichern (mit YubiKey)</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Testmail</h2>
+  <p>Schickt eine kurze Mail ohne Personendaten an die gespeicherten Empfänger.</p>
+  <form method="post" action="{% url 'lending:digest_test' %}">{% csrf_token %}
+    <button type="submit">Testmail senden</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Zuletzt gesendet</h2>
+  {% if runs %}
+    <ul class="plain">{% for run in runs %}<li>{{ run.day|date:"d.m.Y" }}: {{ run.bookings }} Vorgang/Vorgänge an {{ run.recipients }} Adresse(n)</li>{% endfor %}</ul>
+  {% else %}<p>Noch keine Sammelmail gesendet.</p>{% endif %}
+</section>
+<p><a href="{% url 'lending:overview' %}">Zurück zu „Anstehende Ausleihen“</a></p>
+{% endblock %}

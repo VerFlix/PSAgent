@@ -21,17 +21,19 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
+from accounts.confirm import requires_yubikey
 from accounts.devices import finish_operation
 from accounts.models import User
 from accounts.rights import Right, has_right, requires
 from inventory.models import Component, Part, PartStatus
 from inventory.services import search_parts
-from lending import receipts, reminders, services
+from lending import digest, receipts, reminders, services
 from lending.forms import BorrowerForm, CancelForm, CheckoutForm, PeriodForm, ReturnForm
 from lending.models import (
     Booking,
     Borrower,
     BorrowerContact,
+    DigestRun,
     Loan,
     LoanEvent,
     LoanStatus,
@@ -533,6 +535,49 @@ def reminder_switch(request: HttpRequest) -> HttpResponse:
     reminders.set_enabled(on, actor=_actor(request))
     messages.success(request, f"E-Mail-Erinnerungen für alle {'an' if on else 'aus'}.")
     return redirect("lending:overview")
+
+
+@requires(Right.OVERDUE_DIGEST)
+@requires_yubikey
+@require_http_methods(["GET", "POST"])
+def digest_settings(request: HttpRequest) -> HttpResponse:
+    """Sammelmail zu überfälligen Ausleihen (#128): Schalter und Empfänger, nur mit YubiKey."""
+    setting = digest.current()
+    error = ""
+    on = setting.enabled if setting else False
+    text = "\n".join(setting.recipients) if setting else ""
+    if request.method == "POST":
+        on = request.POST.get("an") == "on"
+        text = request.POST.get("empfaenger", "")
+        try:
+            digest.configure(on, text.splitlines(), actor=_actor(request))
+        except digest.DigestError as problem:
+            error = str(problem)
+        else:
+            messages.success(request, f"Sammelmail {'an' if on else 'aus'}, Empfänger gespeichert.")
+            return redirect("lending:digest_settings")
+    context = {
+        "setting": setting,
+        "on": on,
+        "text": text,
+        "error": error,
+        "maximum": digest.MAX_RECIPIENTS,
+        "runs": DigestRun.objects.all()[:10],
+    }
+    return render(request, "lending/digest_settings.html", context)
+
+
+@requires(Right.OVERDUE_DIGEST)
+@require_POST
+def digest_test(request: HttpRequest) -> HttpResponse:
+    """Testmail ohne Personendaten an die eingetragenen Empfänger."""
+    try:
+        count = digest.send_test(actor=_actor(request))
+    except digest.DigestError as problem:
+        messages.error(request, str(problem))
+    else:
+        messages.success(request, f"Testmail an {count} Adresse(n) gesendet.")
+    return redirect("lending:digest_settings")
 
 
 @requires(Right.LEND)

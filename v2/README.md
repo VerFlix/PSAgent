@@ -99,6 +99,10 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
   Erinnerung bei Überfälligkeit: `uv run python manage.py erinnerungen` täglich per Timer (am Tag
   nach der geplanten Rückgabe, dann nach 7 und 14 Tagen, höchstens 3); abschaltbar für alle
   (Admin, Seite „Anstehende Ausleihen“) und je Vorgang (Detailansicht).
+  Sammelmail (#128): Derselbe Befehl schickt täglich eine Liste aller überfälligen Vorgänge an
+  Vereinsadressen (Name des Entleihers, Teile, Tage, Link; ohne Kontaktdaten), je Adresse eine
+  Mail. Schalter, Empfänger und Testmail: Admin unter `/verleih/sammelmail/`, Änderungen mit
+  YubiKey. Scheitert der Versand, endet der Befehl mit Fehler (Monitoring).
 - Hash-Kette (#15): Jede neue Zeile einer Tabelle, die nur angehängt wird, bekommt in derselben
   Transaktion ein Kettenglied mit ihrer Prüfsumme und dem Hash des Vorgängers (`core/chain.py`).
   `uv run python manage.py kette_pruefen` zeigt den Kettenkopf und meldet geänderte, gelöschte,

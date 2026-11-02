@@ -24,6 +24,7 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 | Klärungsliste nach dem Notbetrieb bearbeiten | ✓ | ✓ | – | – | – |
 | Löschsperre für Entleiherdaten setzen und aufheben (mit Pflichtgrund) | ✓ | ✓ | – | – | – |
 | E-Mail-Erinnerungen bei Überfälligkeit für alle ein- und ausschalten | ✓ | – | – | – | – |
+| Sammelmail zu überfälligen Ausleihen: schalten, Empfänger pflegen, Testmail | ✓ | – | – | – | – |
 | Nutzer, Rollen, Sachkunde-Zertifikate verwalten | ✓ | – | – | – | – |
 | Signierte Einträge ändern oder löschen | niemand | niemand | niemand | niemand | niemand |
 
@@ -72,6 +73,11 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   erfasst. Nachsenden darf, wer die Kontaktdaten des Vorgangs sehen darf, oder wer den Vorgang
   selbst erfasst hat, innerhalb von 24 Stunden. Erinnerungen für einen Vorgang schaltet ab
   Verleiher ab; für alle nur Admin.
+- Sammelmail (#128, Felix, 01.11.2026): Schalter und Empfänger pflegt nur der Admin; jede Änderung
+  bestätigt er mit dem YubiKey, weil eine neue Adresse Namen von Entleihern weiterleitet. Die
+  Mail nennt Namen, aber keine Telefonnummer, E-Mail oder Adresse. Der Schalter „Erinnerungen
+  für diesen Vorgang aus“ unterdrückt sie nicht. Die Testmail enthält keine Personendaten und
+  braucht keine Bestätigung.
 - Löschsperre (Felix, 17.10.2026): Admin und PSA-Sachkundige, für einen konkreten Schadensfall
   oder Rechtsstreit, mit Pflichtgrund; Setzen und Aufheben werden nur angehängt.
 - Eine Reservierung ausgeben, die jemand anderes angelegt hat, ist Verleihen, kein Ändern.

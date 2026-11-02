@@ -1,0 +1,8 @@
+{% autoescape off %}Das ist eine Testmail{% if club %} von PSAgent ({{ club }}){% else %} von PSAgent{% endif %}.
+
+An diese Adresse geht künftig jeden Morgen eine Sammelmail, wenn Ausleihen überfällig sind:
+mit Vorgangsnummer, Name des Entleihers, Teilen und Tagen, aber ohne Telefon, E-Mail oder
+Adresse.
+
+Empfänger und Schalter: {{ settings_link }}
+{% endautoescape %}

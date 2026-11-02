@@ -33,6 +33,8 @@ pytestmark = pytest.mark.django_db
 CONFIRMED = [(name, url) for name, url, _ in PROTECTED if needs_confirmation(url)]
 # Lesen und die Optionen selbst brauchen keine Bestätigung; die Sicherung (ZIP) schon.
 NOT_CONFIRMED = {"accounts:users", "accounts:user_detail", "accounts:yubikey_options"}
+# Außerhalb der Nutzerverwaltung: Empfänger der Sammelmail (#128, Festlegung Felix 01.11.2026).
+CONFIRMED_ELSEWHERE = {"lending:digest_settings"}
 
 
 def options(client: Client, path: str) -> Any:
@@ -62,14 +64,15 @@ def admin(make_user: MakeUser, client: YubiKeyClient) -> User:
 
 
 def test_every_change_in_user_management_needs_confirmation() -> None:
-    """Jede Adresse mit „Nutzer verwalten“ außer Liste, Detailseite und Optionen."""
+    """Jede Adresse mit „Nutzer verwalten“ außer Liste, Detailseite und Optionen; dazu nur die
+    ausdrücklich festgelegten Adressen anderswo."""
     managed = {
         name
         for name, entry in walk(get_resolver().url_patterns)
         if getattr(entry.callback, "psagent_right", None) == Right.MANAGE_USERS
     }
 
-    assert managed - NOT_CONFIRMED == {name for name, _ in CONFIRMED}
+    assert (managed - NOT_CONFIRMED) | CONFIRMED_ELSEWHERE == {name for name, _ in CONFIRMED}
     assert {"accounts:certificate_register", "accounts:club_device_register", "backup"} <= managed
 
 
