@@ -11,6 +11,11 @@
     <option value="">alle im Bestand</option>
     {% for value, label in statuses %}<option value="{{ value }}"{% if value == wanted %} selected{% endif %}>{{ label }}</option>{% endfor %}
   </select>
+  <label for="groesse">Größe (passt für)</label>
+  <select id="groesse" name="groesse">
+    <option value="">alle</option>
+    {% for value, label in size_filters %}<option value="{{ value }}"{% if value == size %} selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
   <button type="submit">Suchen</button>
 </form>
 {% if rows %}

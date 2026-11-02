@@ -14,7 +14,7 @@
 <section class="card">
   <h2>{% if part.kind == "system" %}Bauteile{% else %}Angaben{% endif %}</h2>
   <div class="table-scroll"><table class="list">
-    <thead><tr><th>EI</th><th>Produktbezeichnung</th><th>gem. EN</th><th>Produktname</th><th>Hersteller</th><th>Herstellungsjahr</th><th>Kaufdatum</th><th>Datum 1. Einsatz</th><th>Seriennummer</th></tr></thead>
+    <thead><tr><th>EI</th><th>Produktbezeichnung</th><th>gem. EN</th><th>Produktname</th><th>Hersteller</th><th>Herstellungsjahr</th><th>Kaufdatum</th><th>Datum 1. Einsatz</th><th>Seriennummer</th><th>Größe</th></tr></thead>
     <tbody>
     {% for component in part.components.all %}
       <tr>
@@ -27,6 +27,7 @@
         <td>{{ component.purchase_date|date:"d.m.Y"|default:"–" }}</td>
         <td>{{ component.first_use_date|date:"d.m.Y"|default:"–" }}</td>
         <td>{{ component.serial_number|default:"–" }}</td>
+        <td>{{ component.get_size_display|default:"–" }}</td>
       </tr>
     {% endfor %}
     </tbody>
