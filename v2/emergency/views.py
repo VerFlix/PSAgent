@@ -15,10 +15,18 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from accounts.models import User
-from accounts.rights import Right, has_right, public, requires
+from accounts.rights import Right, has_right, may_use, public, requires
 from emergency import backfill
 from emergency import binder as service
-from emergency.forms import CaptureForm, LoanFormForm, LockRowFormSet, NoteForm, ResolveForm
+from emergency.forms import (
+    CaptureForm,
+    InspectionHeaderForm,
+    InspectionRowFormSet,
+    LoanFormForm,
+    LockRowFormSet,
+    NoteForm,
+    ResolveForm,
+)
 from emergency.models import Binder, Clarification, LoanForm, PaperForm
 
 SERVICE_WORKER = Path(settings.BASE_DIR) / "static" / "js" / "notfallmappe-sw.js"
@@ -53,6 +61,7 @@ def index(request: HttpRequest) -> HttpResponse:
         "sheets": service.SHEETS_PER_BINDER,
         "keep": service.KEEP_FILES,
         "may_clarify": has_right(request.user, Right.CLARIFY),
+        "may_backfill_inspections": may_use(request.user, Right.BACKFILL_INSPECTIONS),
     }
     return render(request, "emergency/index.html", context)
 
@@ -152,6 +161,44 @@ def backfill_loans(request: HttpRequest) -> HttpResponse:
     elif request.method == "POST":
         messages.error(request, "Bitte die markierten Felder prüfen.")
     return render(request, "emergency/backfill_loans.html", {"form": form, "fields": fields})
+
+
+@requires(Right.BACKFILL_INSPECTIONS)
+def backfill_inspections(request: HttpRequest) -> HttpResponse:
+    """Formular „Prüfprotokoll“ mit Scan nacherfassen (#80); danach signieren wie jede Runde."""
+    actor = _actor(request)
+    may_choose = has_right(actor, Right.BACKFILL_INSPECTIONS)
+    form = CaptureForm(request.POST or None, request.FILES or None)
+    header = InspectionHeaderForm(request.POST or None, actor=actor, may_choose=may_choose)
+    rows = InspectionRowFormSet(request.POST or None, prefix="rows")
+    if request.method == "POST" and form.is_valid() and header.is_valid() and rows.is_valid():
+        filled = [row.cleaned_data for row in rows if row.cleaned_data]
+        scans = [
+            (upload.read(), upload.name or "Datei") for upload in request.FILES.getlist("scan")
+        ]
+        try:
+            entry = backfill.capture_inspection_form(
+                form.cleaned_data["number"],
+                scans,
+                performed_on=header.cleaned_data["performed_on"],
+                inspector=header.cleaned_data["inspector"],
+                rows=filled,
+                actor=actor,
+            )
+        except backfill.BackfillError as error:
+            messages.error(request, str(error))
+        else:
+            messages.success(
+                request,
+                f"Formular {entry.paper_form.sheet.label} als {entry.round} erfasst. Jetzt das "
+                "Prüfprotokoll herunterladen, mit dem Signier-Tool signieren und hochladen; erst "
+                "dann wirkt es.",
+            )
+            return redirect("inspections:round_mode")
+    elif request.method == "POST":
+        messages.error(request, "Bitte die markierten Felder prüfen.")
+    context = {"form": form, "header": header, "rows": rows, "may_choose": may_choose}
+    return render(request, "emergency/backfill_inspections.html", context)
 
 
 @requires(Right.CLARIFY)

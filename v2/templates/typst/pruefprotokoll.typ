@@ -40,6 +40,7 @@
       [Sachkunde gültig bis:], [#data.qualification_until],
       [Begonnen:], [#data.started],
       [Abgeschlossen:], [#data.closed],
+      ..(if data.performed != "" { ([Geprüft laut Papier:], [#data.performed]) } else { () }),
     )
   ],
   block(stroke: 1pt, inset: 6pt, width: 100%)[
@@ -48,6 +49,11 @@
     #if data.stamp.len() == 0 { [#data.expert] } else { data.stamp.join(linebreak()) }
   ],
 )
+
+#if data.note != "" {
+  v(6pt)
+  block(stroke: 1pt, inset: 6pt, width: 100%)[#strong[Nacherfassung aus dem Notbetrieb:] #data.note]
+}
 
 #v(6pt)
 #text(size: 11pt, weight: "bold")[Geprüfte Teile (#data.parts.len())]

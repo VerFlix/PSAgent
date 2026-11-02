@@ -75,7 +75,8 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
   Geräte richten das auf der Seite „Notbetrieb“ von Hand ein. Service Worker brauchen HTTPS
   (oder `localhost`).
   Nach dem Ausfall: Formulare mit Nummer, Scan (PDF oder Fotos) und Originaldatum nacherfassen
-  (Sperrungen sowie Ausgaben und Rückgaben); fehlende Nummern, Doppelbuchungen und Ausgaben
+  (Sperrungen sowie Ausgaben und Rückgaben; Prüfprotokolle als eigene Runde, die der Prüfer signiert
+  und die mit dem Datum vom Papier wirkt, #80); fehlende Nummern, Doppelbuchungen und Ausgaben
   gegen die Regeln stehen auf der Klärungsliste für PSA-Sachkundige und Admin.
   Ablauf für den Ernstfall: `docs/runbooks/notbetrieb.md`.
 - Archiv ausgesonderter Teile (Parität 10, `/teile/archiv/`, jede Rolle): ausgesonderte Teile,

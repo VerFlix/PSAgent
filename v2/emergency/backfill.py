@@ -7,7 +7,8 @@
 3. Was sich nicht sauber übernehmen lässt, landet auf der Klärungsliste für PSA-Prüfer oder
    Admin, ebenso fehlende Formularnummern (Lücken zwischen erfassten Nummern einer Mappe).
 
-Erfasst werden Sperrungen sowie Ausgaben und Rückgaben; Prüfprotokolle folgen in Phase 3 (#80).
+Erfasst werden Sperrungen, Ausgaben und Rückgaben sowie Prüfprotokolle (#80, als eigene Runde,
+die signiert werden muss und erst dann mit dem Datum vom Papier wirkt).
 Was auf Papier ausgegeben wurde, wird eingetragen, auch wenn es gegen eine Regel verstieß (das
 Teil ist ja draußen); ein PSA-Prüfer sieht den Fall auf der Klärungsliste. Nur Doppelbuchungen
 verhindert die Datenbank: Sie warten, bis ein PSA-Prüfer die Reservierung storniert und die
@@ -37,6 +38,7 @@ from emergency.models import (
     Clarification,
     FormKind,
     FormSheet,
+    InspectionForm,
     LoanForm,
     LoanFormLoan,
     LoanFormPart,
@@ -44,7 +46,9 @@ from emergency.models import (
     LockEntry,
     PaperForm,
 )
-from inspections.services import next_inspection_due
+from inspections import services as inspections
+from inspections.models import Outcome, SkippedEffect
+from inspections.services import InspectionError, next_inspection_due
 from inventory.models import Component, EventKind, Part, normalize_ei
 from inventory.services import record_event
 from lending import services as lending
@@ -67,6 +71,7 @@ IMAGE_MAGIC = {b"\xff\xd8\xff": "jpg", b"\x89PNG\r\n\x1a\n": "png"}
 MAX_SCAN_FILES = 10
 MAX_SCAN_BYTES = 25 * 1024 * 1024
 MAX_LOCK_ROWS = 10  # Zeilen auf dem Formular „Sperrung“
+MAX_INSPECTION_ROWS = 12  # Zeilen auf dem Formular „Prüfprotokoll“
 # Obergrenze je Foto, gelesen aus dem Dateikopf vor dem Entpacken (Schutz vor Pixelbomben).
 # Handykameras liefern meist 12–50 Megapixel.
 MAX_PIXELS = 60_000_000
@@ -367,6 +372,88 @@ def capture_locks(
     return form
 
 
+# --- Prüfprotokolle (#80) ---
+
+
+@dataclass(frozen=True)
+class _PaperInspector:
+    """Für die Rechteprüfung „eigene“: der PSA-Prüfer vom Papier."""
+
+    inspector_id: int
+
+
+def _name(user: User) -> str:
+    return user.get_full_name() or user.get_username()
+
+
+@transaction.atomic
+def capture_inspection_form(
+    number: str,
+    scans: Sequence[Scan],
+    *,
+    performed_on: date,
+    inspector: User,
+    rows: Sequence[dict[str, Any]],
+    actor: User,
+) -> InspectionForm:
+    """Erfasst ein Prüfprotokoll als eigene, abgeschlossene Prüfungsrunde (Festlegung 02.11.2026).
+
+    Wer nacherfasst, handelt in der Runde und signiert sie danach wie jede Runde; erst die
+    Signatur wirkt, mit dem Datum vom Papier (`inspections.services._apply`). Der PSA-Prüfer
+    erfasst nur eigene Protokolle, der Admin mit Sachkunde alle. Die Sachkunde des Prüfers vom
+    Papier muss am Prüfdatum gegolten haben.
+    """
+    require(actor, Right.BACKFILL_INSPECTIONS, _PaperInspector(inspector.pk))
+    sheet = find_sheet(number, FormKind.INSPECTION)
+    _check_form_date(performed_on, sheet)
+    moment = _moment(performed_on)
+    if not has_right(inspector, Right.INSPECT, at=moment):
+        raise BackfillError(
+            f"{_name(inspector)} hatte am {performed_on:%d.%m.%Y} keine gültige Sachkunde; "
+            "das Protokoll lässt sich so nicht übernehmen."
+        )
+    if not rows:
+        raise BackfillError("Bitte mindestens eine Zeile des Formulars eintragen.")
+    if len(rows) > MAX_INSPECTION_ROWS:
+        raise BackfillError(f"Ein Prüfprotokoll hat höchstens {MAX_INSPECTION_ROWS} Zeilen.")
+    parts: list[Part] = []
+    for row in rows:
+        part = find_part(str(row["ei"]))
+        if part is None:
+            raise BackfillError(f"Kein Teil mit der EI „{str(row['ei']).strip()}“.")
+        if part in parts:
+            raise BackfillError(f"{part} steht zweimal auf dem Formular.")
+        parts.append(part)
+    form = _record_form(sheet, scans, actor)
+    round_ = inspections.start_backfill_round(actor=actor, performed_at=moment)
+    try:
+        for part, row in zip(parts, rows, strict=True):
+            inspections.record_result(
+                round_,
+                part,
+                str(row["outcome"]),
+                actor=actor,
+                comment=str(row.get("comment") or ""),
+                next_due=row.get("next_due"),
+            )
+    except InspectionError as error:
+        raise BackfillError(f"{part}: {error}") from error
+    entry = InspectionForm.objects.create(
+        paper_form=form,
+        round=round_,
+        performed_on=performed_on,
+        inspector=inspector,
+        inspector_name=_name(inspector),
+    )
+    note = (
+        f"Formular {sheet.label}, geprüft am {performed_on:%d.%m.%Y} von {_name(inspector)}; "
+        f"{_backfill_note(form, actor)}. Die Signatur bestätigt die Übereinstimmung mit dem "
+        "Papier; maßgeblich bleibt das Papieroriginal."
+    )
+    inspections.close_round(round_, actor=actor, note=note)
+    return entry
+
+
 # --- Klärungsliste ---
 
 
@@ -448,9 +535,30 @@ def _loan_form_cases() -> Iterable[Case]:
             )
 
 
+def _skipped_inspections() -> Iterable[Case]:
+    skipped = SkippedEffect.objects.filter(
+        result__round__paper_inspection__isnull=False
+    ).select_related("result__part", "result__round__paper_inspection__paper_form__sheet")
+    for entry in skipped.order_by("id"):
+        result = entry.result
+        paper = result.round.paper_inspection
+        outcome = Outcome(result.outcome).label
+        due = f", nächste Prüfung {result.next_due:%d.%m.%Y}" if result.next_due else ""
+        yield Case(
+            key=f"pruefung:{entry.pk}",
+            title=f"Prüfprotokoll {paper.paper_form.sheet.label}: Ergebnis für {result.part} "
+            "nicht übernommen",
+            detail=(
+                f"{entry.reason} Laut Formular am {paper.performed_on:%d.%m.%Y}: {outcome}{due}. "
+                "Teil prüfen und, falls nötig, in einer neuen Prüfungsrunde erfassen."
+            ),
+            form=paper.paper_form,
+        )
+
+
 def open_cases() -> list[Case]:
     resolved = set(Clarification.objects.values_list("key", flat=True))
-    cases = (*_gaps(), *_unapplied_locks(), *_loan_form_cases())
+    cases = (*_gaps(), *_unapplied_locks(), *_loan_form_cases(), *_skipped_inspections())
     return [case for case in cases if case.key not in resolved]
 
 

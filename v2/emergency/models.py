@@ -298,3 +298,42 @@ class LoanFormResult(AppendOnlyModel):
     class Meta:
         verbose_name = "Übernahme in den Verleih"
         verbose_name_plural = "Übernahmen in den Verleih"
+
+
+class InspectionForm(AppendOnlyModel):
+    """Formular „Prüfprotokoll“, nacherfasst als eigene Prüfungsrunde (#80).
+
+    Wer nacherfasst, handelt in der Runde und signiert die Übereinstimmung mit dem Papier. Der
+    PSA-Prüfer vom Papier steht hier mit Konto und Namen; seine Sachkunde galt am Prüfdatum.
+    """
+
+    paper_form = models.OneToOneField(
+        PaperForm, on_delete=models.PROTECT, related_name="inspection_form", verbose_name="Formular"
+    )
+    round = models.OneToOneField(
+        "inspections.InspectionRound",
+        on_delete=models.PROTECT,
+        related_name="paper_inspection",
+        verbose_name="Prüfungsrunde",
+    )
+    performed_on = models.DateField("geprüft am (laut Formular)")
+    inspector = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="+",
+        verbose_name="PSA-Prüfer laut Formular",
+    )
+    inspector_name = models.CharField("Name PSA-Prüfer laut Formular", max_length=200)
+
+    class Meta:
+        verbose_name = "nacherfasstes Prüfprotokoll"
+        verbose_name_plural = "nacherfasste Prüfprotokolle"
+        ordering = ("paper_form", "id")
+        constraints = (
+            models.CheckConstraint(
+                condition=Q(inspector_name__regex=r"\S"), name="emergency_inspection_form_name"
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"Prüfprotokoll aus {self.paper_form}"

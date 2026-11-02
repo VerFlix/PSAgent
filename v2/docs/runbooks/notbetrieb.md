@@ -1,6 +1,6 @@
 # Runbook: Notbetrieb mit der Notfallmappe
 
-Gilt ab #52 (Parität 22). Prüfprotokolle nacherfassen kommt mit #80. Geübt wird der Notbetrieb
+Gilt ab #52 (Parität 22), Prüfprotokolle ab #80. Geübt wird der Notbetrieb
 in #27. Fällt PSAgent aus, laufen Verleih und Prüfung auf Papier weiter; danach wird alles mit
 Formularnummer und Scan nacherfasst.
 
@@ -73,7 +73,16 @@ Sobald PSAgent wieder läuft, möglichst **innerhalb von 7 Tagen**, unter „Not
    darf jede Person ab Verleiher.
 2. **Ausgaben und Rückgaben** (Formular A). Erfassen darf, wer verleihen darf: Verleiher und
    Trainer/Materialwart ihre eigenen Formulare, PSA-Sachkundige und Admin alle.
-3. **Prüfprotokolle** (Formular P): der PSA-Prüfer selbst, mit Sachkunde und Signatur (#80).
+3. **Prüfprotokolle** (Formular P), „Prüfprotokolle nacherfassen“ (#80):
+   - Der PSA-Prüfer erfasst seine eigenen Protokolle, der Admin mit Sachkunde auch die anderer.
+   - Formularnummer, Scan, **Datum der Prüfung** und **Prüfer laut Papier**, dann jede Zeile. Die
+     Sachkunde des Prüfers muss an diesem Datum gegolten haben.
+   - Daraus wird eine abgeschlossene Prüfungsrunde. Unter „Prüfungsrunde“ ihr Prüfprotokoll
+     herunterladen, mit dem Signier-Tool signieren und hochladen (`signieren.md`). Die Signatur
+     bestätigt, dass die Angaben dem Papier entsprechen.
+   - Erst dann wirkt sie, **mit dem Datum vom Papier**: entsperren, aussondern, freigeben, nächste
+     Prüfung. Gab es am Teil danach schon Sperr- oder Prüfvorgänge, wirkt das Ergebnis nicht und
+     steht auf der Klärungsliste.
 
 Für jedes Formular:
 
@@ -100,5 +109,6 @@ braucht einen Text und wird nur angehängt. Typische Fälle:
 | Sperrung aus Formular … | Prüfen, ob das Teil zu Recht gesperrt ist; entsperren nur mit Sachkunde |
 | Doppelbuchung: Ausgabe aus Formular … nicht eingetragen | Die überschneidende Reservierung stornieren und die Ausgabe übernehmen, oder die Ausgabe mit Begründung verwerfen |
 | Ausgabe/Rückgabe aus Formular … prüfen | Z. B. gesperrtes Teil oder Prüfung überfällig: Teil prüfen lassen, Fall mit Ergebnis klären |
+| Prüfprotokoll …: Ergebnis für … nicht übernommen | Am Teil geschah nach dem Datum vom Papier schon etwas. Teil ansehen und, falls nötig, in einer neuen Prüfungsrunde prüfen; dann mit Ergebnis klären |
 
 Die Liste sollte nach jedem Notbetrieb leer werden. Bleibt etwas offen, Felix informieren.

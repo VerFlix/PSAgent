@@ -4,7 +4,9 @@ from typing import Any
 
 from django import forms
 
+from accounts.models import Role, User
 from emergency import backfill
+from inspections.models import Outcome
 from privacy.notice import NO_NAMES
 
 DATE = forms.DateInput(attrs={"type": "date"})
@@ -42,6 +44,51 @@ class LockRowForm(forms.Form):
 
 LockRowFormSet = forms.formset_factory(
     LockRowForm, extra=3, max_num=backfill.MAX_LOCK_ROWS, absolute_max=backfill.MAX_LOCK_ROWS
+)
+
+
+class ExpertChoiceField(forms.ModelChoiceField):  # type: ignore[type-arg]  # zur Laufzeit nicht generisch
+    """Auswahl eines PSA-Prüfers, angezeigt mit vollem Namen."""
+
+    def label_from_instance(self, obj: Any) -> str:
+        return str(obj.get_full_name() or obj.get_username())
+
+
+class InspectionHeaderForm(forms.Form):
+    """Kopf des Formulars „Prüfprotokoll“: Datum und PSA-Prüfer laut Papier (#80)."""
+
+    performed_on = forms.DateField(label="Datum der Prüfung", widget=DATE)
+    inspector = ExpertChoiceField(
+        label="PSA-Prüfer laut Formular", queryset=User.objects.none(), empty_label=None
+    )
+
+    def __init__(self, *args: Any, actor: User, may_choose: bool, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        field = self.fields["inspector"]
+        assert isinstance(field, ExpertChoiceField)  # noqa: S101 – oben so angelegt
+        if may_choose:
+            experts = User.objects.filter(
+                is_active=True, role__in=[Role.ADMIN, Role.PPE_EXPERT]
+            ).order_by("last_name", "first_name")
+            field.queryset = experts
+        else:
+            field.queryset = User.objects.filter(pk=actor.pk)
+        field.initial = actor.pk
+
+
+class InspectionRowForm(forms.Form):
+    ei = forms.CharField(label="Teil (EI)", max_length=100)
+    # Leere Vorauswahl, damit unberührte Zeilen leer bleiben und übersprungen werden.
+    outcome = forms.ChoiceField(label="Ergebnis", choices=[("", "–"), *Outcome.choices])
+    comment = forms.CharField(label="Kommentar", max_length=1000, required=False)
+    next_due = forms.DateField(label="nächste Prüfung", required=False, widget=DATE)
+
+
+InspectionRowFormSet = forms.formset_factory(
+    InspectionRowForm,
+    extra=backfill.MAX_INSPECTION_ROWS,
+    max_num=backfill.MAX_INSPECTION_ROWS,
+    absolute_max=backfill.MAX_INSPECTION_ROWS,
 )
 
 

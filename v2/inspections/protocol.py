@@ -106,7 +106,12 @@ def _text(value: Any) -> str:
 
 
 def payload(
-    round_: InspectionRound, *, head: Head, closed_at: datetime, content_sha256: str
+    round_: InspectionRound,
+    *,
+    head: Head,
+    closed_at: datetime,
+    content_sha256: str,
+    note: str = "",
 ) -> dict[str, Any]:
     """Alle Werte für die Vorlage als Text."""
     expert = round_.inspector
@@ -146,6 +151,11 @@ def payload(
         "qualification_until": _date(qualification.valid_until if qualification else None),
         "started": _moment(round_.started_at),
         "closed": _moment(closed_at),
+        # Nacherfassung aus dem Notbetrieb (#80): Prüfdatum vom Papier und Herkunft.
+        "performed": _date(timezone.localtime(round_.performed_at).date())
+        if round_.performed_at
+        else "",
+        "note": note,
         "parts": parts,
         "content_sha256": content_sha256,
         "chain_seq": str(head.seq),
@@ -169,11 +179,16 @@ def field_box() -> tuple[int, int, int, int]:
 
 
 def render(
-    round_: InspectionRound, *, head: Head, closed_at: datetime, content_sha256: str
+    round_: InspectionRound,
+    *,
+    head: Head,
+    closed_at: datetime,
+    content_sha256: str,
+    note: str = "",
 ) -> bytes:
     """Setzt das Protokoll und hängt das leere Signaturfeld an."""
     data = json.dumps(
-        payload(round_, head=head, closed_at=closed_at, content_sha256=content_sha256)
+        payload(round_, head=head, closed_at=closed_at, content_sha256=content_sha256, note=note)
     )
     pdf = typst.compile(TEMPLATE, format="pdf", sys_inputs={"data": data})
     assert isinstance(pdf, bytes)  # noqa: S101 – ein Dokument, eine Datei
