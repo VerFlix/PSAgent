@@ -23,16 +23,21 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods, require_POST
 
-from accounts import confirm, services, webauthn
+from accounts import confirm, counter, services, webauthn
+from accounts.cards import counter_card
 from accounts.confirm import requires_yubikey
 from accounts.devices import register_device, revoke_device
 from accounts.enrollment import find_token, mark_used
 from accounts.models import ClubDevice, Passkey, User
-from accounts.rights import Right, has_right, public, requires
+from accounts.rights import Right, has_right, may_use, public, requires
 
 # Backend, unter dem die Sitzung läuft (auch nach Passkey-Anmeldung).
 SESSION_BACKEND = "django.contrib.auth.backends.ModelBackend"
 WRONG_CREDENTIALS = "Benutzername oder Passwort ist falsch."
+COUNTER_ONLY = (
+    "An der Theke melden sich nur Verleiher und Trainer/Materialwart an; Admin und "
+    "PSA-Sachkundige nutzen dort ein Verleiher-Konto."
+)
 
 
 class LoginForm(forms.Form):
@@ -42,6 +47,19 @@ class LoginForm(forms.Form):
 
 class DeviceForm(forms.Form):
     name = forms.CharField(label="Bezeichnung des Geräts", max_length=100)
+    theke = forms.BooleanField(
+        label="Theke (QR-Code und PIN, höchstens Verleiher-Rechte)", required=False
+    )
+
+
+class CounterLoginForm(forms.Form):
+    code = forms.CharField(label="Persönlicher QR-Code", max_length=200)
+    pin = forms.CharField(label="PIN", max_length=20)
+
+
+class CounterPinForm(forms.Form):
+    pin = forms.CharField(label="Neue PIN (6 Ziffern)", max_length=6, min_length=6)
+    repeat = forms.CharField(label="PIN wiederholen", max_length=6, min_length=6)
 
 
 class StampForm(forms.Form):
@@ -119,12 +137,50 @@ def login_view(request: HttpRequest) -> HttpResponse:
             user = None
         if not isinstance(user, User):
             form.add_error(None, WRONG_CREDENTIALS)
+        elif _refused_at_counter(request, user):
+            form.add_error(None, COUNTER_ONLY)
         else:
             login(request, user, backend=SESSION_BACKEND)
             return redirect(_next_url(request))
-    return render(
-        request, "accounts/login.html", {"form": form, "next": request.GET.get("next", "")}
-    )
+    context = {
+        "form": form,
+        "next": request.GET.get("next", ""),
+        "counter_form": CounterLoginForm() if _at_counter(request) else None,
+    }
+    return render(request, "accounts/login.html", context)
+
+
+def _at_counter(request: HttpRequest) -> bool:
+    device = getattr(request, "club_device", None)
+    return device is not None and device.counter
+
+
+def _refused_at_counter(request: HttpRequest, user: User) -> bool:
+    """Theke (#126): nur Verleiher und Trainer/Materialwart melden sich dort an."""
+    return _at_counter(request) and not may_use(user, Right.COUNTER_LOGIN)
+
+
+@public
+@require_http_methods(["GET", "POST"])
+def counter_login(request: HttpRequest) -> HttpResponse:
+    """Anmeldung an der Theke mit persönlichem QR-Code und PIN (#126)."""
+    form = CounterLoginForm(request.POST or None)
+    error = ""
+    if request.method == "POST" and form.is_valid():
+        try:
+            user = counter.authenticate(
+                getattr(request, "club_device", None),
+                form.cleaned_data["code"],
+                form.cleaned_data["pin"],
+            )
+        except counter.CounterError as problem:
+            error = str(problem)
+        else:
+            login(request, user, backend=SESSION_BACKEND)
+            request.session[counter.PIN_SESSION] = True
+            return redirect(_next_url(request))
+    context = {"counter_form": form, "counter_error": error, "at_counter": _at_counter(request)}
+    return render(request, "accounts/counter_login.html", context)
 
 
 @public
@@ -143,6 +199,8 @@ def passkey_login(request: HttpRequest) -> JsonResponse:
         user = webauthn.authenticate(data.get("credential", {}), request.session)
     except webauthn.PasskeyError as error:
         return _error(str(error))
+    if _refused_at_counter(request, user):
+        return _error(COUNTER_ONLY)
     login(request, user, backend=SESSION_BACKEND)
     return JsonResponse({"redirect": _next_url(request)})
 
@@ -168,7 +226,58 @@ def account(request: HttpRequest) -> HttpResponse:
     }
     if has_right(user, Right.MANAGE_USERS):
         context["devices"] = ClubDevice.objects.filter(revoked_at__isnull=True).order_by("name")
+    if has_right(user, Right.COUNTER_CREDENTIALS):
+        credential = getattr(user, "counter_credential", None)
+        context["counter"] = {
+            "form": CounterPinForm(),
+            "has_pin": bool(credential and credential.pin_hash),
+            "locked": bool(credential and credential.locked_at),
+            "has_qr": bool(credential and credential.qr_hash),
+            "in_pin_session": bool(request.session.get(counter.PIN_SESSION)),
+        }
     return render(request, "accounts/account.html", context)
+
+
+def _not_in_pin_session(request: HttpRequest) -> None:
+    """PIN und QR-Code nur nach Anmeldung mit Passwort oder Passkey, nie per PIN (#126)."""
+    if request.session.get(counter.PIN_SESSION):
+        raise PermissionDenied(
+            "PIN und QR-Code richtest du nach der Anmeldung mit Passwort oder Passkey ein, "
+            "nicht in einer Sitzung per PIN."
+        )
+
+
+@requires(Right.COUNTER_CREDENTIALS)
+@require_POST
+def counter_pin(request: HttpRequest) -> HttpResponse:
+    """Eigene PIN für die Theke setzen; hebt eine Sperre auf."""
+    _not_in_pin_session(request)
+    form = CounterPinForm(request.POST)
+    if not form.is_valid() or form.cleaned_data["pin"] != form.cleaned_data["repeat"]:
+        messages.error(request, "Bitte zweimal dieselbe PIN mit 6 Ziffern eingeben.")
+        return redirect("accounts:account")
+    try:
+        counter.set_pin(
+            _current_user(request), form.cleaned_data["pin"], actor=_current_user(request)
+        )
+    except counter.CounterError as error:
+        messages.error(request, str(error))
+    else:
+        messages.success(request, "PIN für die Theke gesetzt.")
+    return redirect("accounts:account")
+
+
+@requires(Right.COUNTER_CREDENTIALS)
+@require_POST
+def counter_qr(request: HttpRequest) -> HttpResponse:
+    """Neuer persönlicher QR-Code als Karte (PDF); der alte gilt danach nicht mehr."""
+    _not_in_pin_session(request)
+    user = _current_user(request)
+    code = counter.issue_qr(user, actor=user)
+    response = HttpResponse(counter_card(user, code), content_type="application/pdf")
+    response["Content-Disposition"] = 'attachment; filename="Theke-Karte.pdf"'
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 @requires(Right.ACCOUNT)
@@ -332,7 +441,12 @@ def club_device_register(request: HttpRequest) -> HttpResponse:
     if not form.is_valid() or not form.cleaned_data["name"].strip():
         messages.error(request, "Bitte eine Bezeichnung für das Gerät angeben.")
         return response
-    device = register_device(form.cleaned_data["name"], actor=admin, response=response)
+    device = register_device(
+        form.cleaned_data["name"],
+        actor=admin,
+        response=response,
+        counter=form.cleaned_data["theke"],
+    )
     messages.success(request, f"Dieses Gerät ist jetzt das Vereinsgerät „{device.name}“.")
     return response
 

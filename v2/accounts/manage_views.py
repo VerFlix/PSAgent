@@ -15,7 +15,7 @@ from django.urls import reverse
 from django.utils.cache import add_never_cache_headers
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from accounts import certificates, services
+from accounts import certificates, counter, services
 from accounts.confirm import requires_yubikey
 from accounts.models import Passkey, Qualification, Role, SigningCertificate, User
 from accounts.rights import Right, requires
@@ -338,3 +338,21 @@ def certificate_revoke(request: HttpRequest, pk: int, certificate: int) -> HttpR
     else:
         messages.success(request, f"Signaturzertifikat „{entry.name}“ widerrufen.")
     return _back(account)
+
+
+@requires(Right.MANAGE_USERS)
+@requires_yubikey
+@require_POST
+def user_counter(request: HttpRequest, pk: int) -> HttpResponse:
+    """Theke (#126): PIN löschen oder QR-Code widerrufen, mit YubiKey-Bestätigung."""
+    account = get_object_or_404(User, pk=pk)
+    action = request.POST.get("aktion")
+    if action == "pin":
+        counter.clear_pin(account, actor=_actor(request))
+        messages.success(request, "PIN für die Theke gelöscht; die Person setzt eine neue.")
+    elif action == "qr":
+        counter.revoke_qr(account, actor=_actor(request))
+        messages.success(request, "QR-Code für die Theke widerrufen.")
+    else:
+        messages.error(request, "Unbekannte Aktion.")
+    return redirect("accounts:user_detail", pk=account.pk)

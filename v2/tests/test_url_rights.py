@@ -27,6 +27,7 @@ ROLES = (Role.ADMIN, Role.PPE_EXPERT, Role.TRAINER, Role.LENDER, Role.VIEWER)
 # Bewusst öffentlich (docs/rechte.md, „Wo geprüft wird“).
 PUBLIC = {
     "accounts:login",
+    "accounts:counter_login",  # QR-Code und PIN, nur an Theke-Geräten wirksam (#126)
     "accounts:passkey_login_options",
     "accounts:passkey_login",
     "accounts:logout",
