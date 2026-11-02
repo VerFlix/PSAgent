@@ -116,6 +116,8 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   Einen bekannten Entleiher (gleicher Name) verknüpft die Nacherfassung nur für Personen, die
   Kontaktdaten ohnehin sehen dürfen; Verleiher legen immer einen neuen Entleiher an. Sonst gäbe
   eine erfundene Ausgabe Einblick in fremde Kontaktdaten (wie bei Reservierungen ausgeschlossen).
+- Größe am Bauteil (#124, Felix, 02.11.2026): gehört zu „Teile anlegen, Beschreibung und GAL
+  pflegen …“ (ab Trainer/Materialwart), ohne Sachkunde; sie ist kein PSA-relevantes Feld.
 - QR-Etiketten (#14): drucken gehört zu „Teile anlegen, Beschreibung und GAL pflegen …“ (ab
   Trainer). Der QR-Code enthält nur den Link `/q/<EI>`, keine Personendaten; der Link führt nach
   der Anmeldung zur Teileseite und ist für jede Rolle mit „Verfügbarkeit sehen“ erreichbar.
