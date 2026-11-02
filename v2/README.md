@@ -77,6 +77,7 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
   Nach dem Ausfall: Formulare mit Nummer, Scan (PDF oder Fotos) und Originaldatum nacherfassen
   (Sperrungen sowie Ausgaben und Rückgaben); fehlende Nummern, Doppelbuchungen und Ausgaben
   gegen die Regeln stehen auf der Klärungsliste für PSA-Sachkundige und Admin.
+  Ablauf für den Ernstfall: `docs/runbooks/notbetrieb.md`.
 - Archiv ausgesonderter Teile (Parität 10, `/teile/archiv/`, jede Rolle): ausgesonderte Teile,
   neueste zuerst, mit Datum, Grund und Suche; wer ausgesondert hat, sehen Rollen ab Verleiher.
   Historie und Haftungsausschluss stehen auf der Teileseite; gelöscht wird nichts.
