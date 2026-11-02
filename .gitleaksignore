@@ -2,3 +2,5 @@
 # Künstliches Testpasswort in den Anmeldetests (#11); neuere Stände tragen „gitleaks:allow“.
 230e08f9232672249f1a26f6b4496359f65cd841:v2/tests/accounts/test_login.py:generic-api-key:15
 230e08f9232672249f1a26f6b4496359f65cd841:v2/tests/e2e/test_login_e2e.py:generic-api-key:12
+# Künstliches Testpasswort im Theke-Test (#126); der neuere Stand nutzt eine Variable mit „gitleaks:allow“.
+4aca85efeda4b15da08cf9814db7a5b2ae84964e:v2/tests/accounts/test_counter.py:generic-api-key:262

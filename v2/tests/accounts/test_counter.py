@@ -253,13 +253,14 @@ def test_viewer_password_login_at_the_counter_is_refused(
     client: Client, make_user: MakeUser, admin: User
 ) -> None:
     viewer = make_user(Role.VIEWER)
-    viewer.set_password("ein-langes-Test-Passwort-42")  # gitleaks:allow – künstlich
+    password = "ein-langes-Test-Passwort-42"  # gitleaks:allow – künstlich
+    viewer.set_password(password)
     viewer.save()
     device_for(client, admin)
 
     response = client.post(
         reverse("accounts:login"),
-        {"username": viewer.username, "password": "ein-langes-Test-Passwort-42"},
+        {"username": viewer.username, "password": password},
     )
 
     assert response.status_code == 200
