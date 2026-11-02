@@ -100,6 +100,11 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   Mappe, solange jemand ab Verleiher angemeldet ist, und zeigt sie ohne Verbindung auch ohne
   Anmeldung an (Konzept: offline auf Vereins-Tablet und -PC). Auf anderen Geräten richtet man
   die Kopie nur von Hand ein.
+- Prüfprotokolle nacherfassen (#80, Felix, 02.11.2026): Der PSA-Prüfer erfasst seine eigenen
+  Protokolle, der Admin mit Sachkunde alle; wer nacherfasst, signiert die Übereinstimmung mit dem
+  Papier. Die Sachkunde des Prüfers vom Papier muss am Prüfdatum gegolten haben, die der
+  signierenden Person beim Signieren. Die Wirkung gilt ab dem Datum vom Papier, außer am Teil
+  geschah danach schon etwas (dann Klärungsliste).
 - Nacherfassung (#52): Sperrungen erfasst nach, wer sperren darf (ab Verleiher); der Vorgang
   trägt die erfassende Person und das Datum vom Formular. Die Klärungsliste („Klärungsliste
   nach dem Notbetrieb bearbeiten“) sehen und bearbeiten nur PSA-Sachkundige und Admin, laut

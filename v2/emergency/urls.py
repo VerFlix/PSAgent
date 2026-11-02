@@ -13,6 +13,7 @@ urlpatterns = [
     path("sw.js", views.service_worker, name="service_worker"),
     path("nacherfassen/sperrungen/", views.backfill_locks, name="backfill_locks"),
     path("nacherfassen/ausgaben/", views.backfill_loans, name="backfill_loans"),
+    path("nacherfassen/pruefprotokolle/", views.backfill_inspections, name="backfill_inspections"),
     path("klaerung/", views.clarifications, name="clarifications"),
     path(
         "klaerung/ausgabe/<int:pk>/uebernehmen/",

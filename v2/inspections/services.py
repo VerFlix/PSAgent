@@ -22,7 +22,8 @@ import json
 from datetime import UTC, date, datetime
 
 from django.db import transaction
-from django.db.models import OuterRef, Subquery
+from django.db.models import F, OuterRef, Subquery
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from accounts.models import User
@@ -42,6 +43,7 @@ from inspections.models import (
     RoundState,
     SignatureRejection,
     SignedProtocol,
+    SkippedEffect,
 )
 from inspections.signature import SignatureError
 from inventory.models import Component, EventKind, Part, normalize_ei
@@ -90,7 +92,13 @@ def _require_state(round_: InspectionRound, *allowed: RoundState) -> None:
 
 
 def _validate(
-    part: Part, outcome: str, comment: str, next_due: date | None, *, actor: User | None
+    part: Part,
+    outcome: str,
+    comment: str,
+    next_due: date | None,
+    *,
+    actor: User | None,
+    performed_on: date | None = None,
 ) -> Outcome:
     try:
         result = Outcome(outcome)
@@ -105,9 +113,17 @@ def _validate(
     if result == Outcome.RETIRE and next_due is not None:
         raise InspectionError("Ein ausgesondertes Teil hat keine nächste Prüfung.")
     # Bei der Übernahme aus dem Altsystem darf die nächste Prüfung schon verstrichen sein.
-    if next_due is not None and actor is not None and next_due <= timezone.localdate():
-        raise InspectionError("Die nächste Prüfung muss in der Zukunft liegen.")
+    if next_due is not None and actor is not None:
+        # Nacherfasst (#80): Maßstab ist das Prüfdatum vom Papier, nicht heute.
+        if performed_on is not None and next_due <= performed_on:
+            raise InspectionError("Die nächste Prüfung muss nach dem Prüfdatum liegen.")
+        if performed_on is None and next_due <= timezone.localdate():
+            raise InspectionError("Die nächste Prüfung muss in der Zukunft liegen.")
     return result
+
+
+def _performed_on(round_: InspectionRound) -> date | None:
+    return timezone.localtime(round_.performed_at).date() if round_.performed_at else None
 
 
 # --- Runde und Ergebnisse ---
@@ -140,6 +156,17 @@ def start_round(
                 "Es gibt bereits eine offene Prüfungsrunde; bitte abschließen oder abbrechen."
             )
         return InspectionRound.objects.create(inspector=actor, started_at=at or timezone.now())
+
+
+def start_backfill_round(*, actor: User, performed_at: datetime) -> InspectionRound:
+    """Runde für ein nacherfasstes Prüfprotokoll aus dem Notbetrieb (#80).
+
+    Wer nacherfasst, handelt in der Runde und signiert sie; sie wirkt ab `performed_at`, dem Tag
+    vom Papier. Sie wird in derselben Transaktion gefüllt und abgeschlossen
+    (`emergency.backfill.capture_inspection_form`), daher ohne die Regel „eine offene Runde“.
+    """
+    require(actor, Right.INSPECT)
+    return InspectionRound.objects.create(inspector=actor, performed_at=performed_at)
 
 
 def open_round(actor: User) -> InspectionRound | None:
@@ -236,7 +263,9 @@ def record_result(
         raise InspectionError(
             f"{part} ist in {round_} bereits erfasst; Änderungen sind Korrekturen."
         )
-    checked = _validate(part, outcome, comment, next_due, actor=actor)
+    checked = _validate(
+        part, outcome, comment, next_due, actor=actor, performed_on=_performed_on(round_)
+    )
     RoundPart.objects.get_or_create(round=round_, part=part)
     return InspectionResult.objects.create(
         round=round_,
@@ -284,7 +313,9 @@ def correct_result(
     _require_state(target, RoundState.OPEN)
     if target.pk != previous.round_id and target.results.filter(part=previous.part).exists():
         raise InspectionError(f"{previous.part} ist in {target} bereits erfasst.")
-    checked = _validate(previous.part, outcome, comment, next_due, actor=actor)
+    checked = _validate(
+        previous.part, outcome, comment, next_due, actor=actor, performed_on=_performed_on(target)
+    )
     return InspectionResult.objects.create(
         round=target,
         part=previous.part,
@@ -331,6 +362,9 @@ def round_content(round_: InspectionRound) -> bytes:
         "legacy_report_id": round_.legacy_report_id,
         "results": results,
     }
+    if round_.performed_at is not None:
+        # Nur nacherfasste Runden (#80); ältere Runden behalten so ihre Prüfsumme.
+        content["performed_at"] = _utc(round_.performed_at)
     return json.dumps(content, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
 
 
@@ -339,7 +373,7 @@ def content_sha256(round_: InspectionRound) -> str:
 
 
 @transaction.atomic
-def close_round(round_: InspectionRound, *, actor: User | None) -> RoundEvent:
+def close_round(round_: InspectionRound, *, actor: User | None, note: str = "") -> RoundEvent:
     """Schließt die Runde ab: danach keine Ergebnisse oder Korrekturen mehr in ihr."""
     round_ = _lock(round_)
     _require_inspector(round_, actor)
@@ -355,12 +389,12 @@ def close_round(round_: InspectionRound, *, actor: User | None) -> RoundEvent:
         round=round_, kind=RoundEventKind.CLOSED, actor=actor, content_sha256=digest
     )
     if round_.inspector_id is not None:
-        _create_protocol(round_, closed_at=event.at, content_sha256=digest)
+        _create_protocol(round_, closed_at=event.at, content_sha256=digest, note=note)
     return event
 
 
 def _create_protocol(
-    round_: InspectionRound, *, closed_at: datetime, content_sha256: str
+    round_: InspectionRound, *, closed_at: datetime, content_sha256: str, note: str = ""
 ) -> RoundProtocol:
     """Prüfprotokoll zum Signieren, mit dem Kettenkopf nach dem Abschluss (#38).
 
@@ -368,7 +402,9 @@ def _create_protocol(
     """
     head = chain.head()
     assert head is not None  # noqa: S101 – der Abschluss eben ist selbst ein Glied
-    pdf = protocol.render(round_, head=head, closed_at=closed_at, content_sha256=content_sha256)
+    pdf = protocol.render(
+        round_, head=head, closed_at=closed_at, content_sha256=content_sha256, note=note
+    )
     return RoundProtocol.objects.create(
         round=round_,
         pdf=pdf,
@@ -388,14 +424,58 @@ def _verify_unchanged(round_: InspectionRound) -> None:
         )
 
 
+# Vorgänge, deren Reihenfolge über Sperr- und Prüfstatus entscheidet (wie bei Sperrungen, #52).
+STATUS_EVENTS = (EventKind.LOCKED, EventKind.UNLOCKED, EventKind.RETIRED)
+
+
+def _effective_at() -> Coalesce:
+    """Ab wann ein Ergebnis wirkt: Datum vom Papier (#80), sonst Signatur bzw. Übernahme."""
+    effective = RoundEvent.objects.filter(kind__in=EFFECTIVE_KINDS, round_id=OuterRef("round_id"))
+    return Coalesce(F("round__performed_at"), Subquery(effective.values("at")[:1]))
+
+
+def _later_activity(part: Part, since: datetime, round_: InspectionRound) -> str:
+    """Warum ein nacherfasstes Ergebnis nicht mehr wirken darf; leer, wenn nichts dagegen spricht.
+
+    Später heißt: Sperr-, Entsperr- oder Aussonderungsvorgänge oder eine wirksame Prüfung ab dem
+    Tag vom Papier. Sonst stimmte danach die Reihenfolge am Teil nicht mehr.
+    """
+    if part.events.filter(kind__in=STATUS_EVENTS, at__gte=since).exists():
+        return "Am Teil gibt es spätere Sperr-, Entsperr- oder Aussonderungsvorgänge."
+    effective = RoundEvent.objects.filter(kind__in=EFFECTIVE_KINDS).values("round_id")
+    later = (
+        InspectionResult.objects.filter(part=part, round_id__in=effective, skipped__isnull=True)
+        .exclude(round=round_)
+        .annotate(effective_at=_effective_at())
+        .filter(effective_at__gte=since)
+    )
+    if later.exists():
+        return "Das Teil wurde nach dem Datum vom Formular schon geprüft."
+    return ""
+
+
 def _apply(round_: InspectionRound, *, actor: User | None, at: datetime) -> None:
-    """Überträgt die Ergebnisse auf die Teile. Läuft in der Transaktion des Aufrufers."""
+    """Überträgt die Ergebnisse auf die Teile. Läuft in der Transaktion des Aufrufers.
+
+    Nacherfasste Runden (#80) wirken mit dem Datum vom Papier, aber nur, wenn am Teil seitdem
+    nichts geschah; sonst bleibt das Ergebnis ohne Wirkung und kommt auf die Klärungsliste.
+    """
+    backfilled = round_.performed_at is not None
+    effect_at = min(round_.performed_at, at) if round_.performed_at is not None else at
     for result in round_.current_results():
         part = result.part
+        if backfilled and (reason := _later_activity(part, effect_at, round_)):
+            SkippedEffect.objects.create(result=result, reason=reason)
+            continue
 
         def effect(kind: EventKind, comment: str, result: InspectionResult = result) -> None:
             record_event(
-                result.part, kind, actor=actor, at=at, comment=comment, inspection_result=result
+                result.part,
+                kind,
+                actor=actor,
+                at=effect_at,
+                comment=comment,
+                inspection_result=result,
             )
 
         if result.outcome == Outcome.PASSED:
@@ -494,14 +574,11 @@ def cancel_round(round_: InspectionRound, *, actor: User | None, comment: str) -
 
 def effective_result(part: Part) -> InspectionResult | None:
     """Das zuletzt wirksam gewordene, nicht korrigierte Prüfergebnis eines Teils."""
-    effective = RoundEvent.objects.filter(kind__in=EFFECTIVE_KINDS)
-    rounds = effective.values("round_id")
+    rounds = RoundEvent.objects.filter(kind__in=EFFECTIVE_KINDS).values("round_id")
     return (
-        InspectionResult.objects.filter(part=part, round_id__in=rounds)
+        InspectionResult.objects.filter(part=part, round_id__in=rounds, skipped__isnull=True)
         .exclude(correction__round_id__in=rounds)
-        .annotate(
-            effective_at=Subquery(effective.filter(round_id=OuterRef("round_id")).values("at")[:1])
-        )
+        .annotate(effective_at=_effective_at())
         .order_by("-effective_at", "-id")
         .first()
     )

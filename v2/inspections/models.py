@@ -75,6 +75,12 @@ class InspectionRound(AppendOnlyModel):
     legacy_report_id = models.PositiveIntegerField(
         "Prüfbericht im Altsystem", null=True, blank=True, unique=True
     )
+    performed_at = models.DateTimeField(
+        "geprüft am (laut Papierformular)",
+        null=True,
+        blank=True,
+        help_text="Nur bei Nacherfassung aus dem Notbetrieb (#80); dann wirkt die Runde ab hier.",
+    )
 
     class Meta:
         verbose_name = "Prüfungsrunde"
@@ -364,6 +370,37 @@ class SignatureRejection(AppendOnlyModel):
 
     def __str__(self) -> str:
         return f"Abgelehnte Signatur {self.round} ({self.at:%d.%m.%Y %H:%M})"
+
+
+class SkippedEffect(AppendOnlyModel):
+    """Nacherfasstes Ergebnis, das beim Signieren nicht auf das Teil wirkte (#80).
+
+    Gab es am Teil nach dem Datum vom Papier schon Sperr- oder Prüfvorgänge, würde die Wirkung
+    die Reihenfolge verfälschen. Das Ergebnis bleibt im Protokoll, zählt aber nicht als letzte
+    Prüfung; der Fall steht auf der Klärungsliste des Notbetriebs.
+    """
+
+    result = models.OneToOneField(
+        InspectionResult,
+        on_delete=models.PROTECT,
+        related_name="skipped",
+        verbose_name="Prüfergebnis",
+    )
+    reason = models.TextField("Grund")
+    at = models.DateTimeField("Zeitpunkt", default=timezone.now)
+
+    class Meta:
+        verbose_name = "nicht übernommenes Prüfergebnis"
+        verbose_name_plural = "nicht übernommene Prüfergebnisse"
+        ordering = ("at", "id")
+        constraints = (
+            models.CheckConstraint(
+                condition=Q(reason__regex=r"\S"), name="inspections_skipped_reason_required"
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"Nicht übernommen: {self.result}"
 
 
 class RoundPart(models.Model):

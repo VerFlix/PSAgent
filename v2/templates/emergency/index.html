@@ -37,7 +37,7 @@
   <ul class="plain">
     <li><a href="{% url 'emergency:backfill_locks' %}">Sperrungen nacherfassen</a></li>
     <li><a href="{% url 'emergency:backfill_loans' %}">Ausgaben und Rückgaben nacherfassen</a></li>
-    <li>Prüfprotokolle: erfasst der PSA-Prüfer ab Phase 3</li>
+    {% if may_backfill_inspections %}<li><a href="{% url 'emergency:backfill_inspections' %}">Prüfprotokolle nacherfassen</a> (PSA-Prüfer, danach signieren)</li>{% else %}<li>Prüfprotokolle erfasst der PSA-Prüfer selbst nach.</li>{% endif %}
     {% if may_clarify %}<li><a href="{% url 'emergency:clarifications' %}">Klärungsliste</a></li>{% endif %}
   </ul>
 </section>
