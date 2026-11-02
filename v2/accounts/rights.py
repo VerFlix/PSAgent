@@ -38,6 +38,9 @@ class Right(StrEnum):
     VIEW_CONTACTS = "view_contacts"
     LEND = "lend"
     CHANGE_OTHERS_RESERVATIONS = "change_others_reservations"
+    CREATE_BORROWER = "create_borrower"
+    LINK_MEMBER_CARD = "link_member_card"
+    CHANGE_MEMBER_CARD = "change_member_card"
     LOCK = "lock"
     BACKFILL_LOANS = "backfill_loans"
     BACKFILL_INSPECTIONS = "backfill_inspections"
@@ -112,6 +115,11 @@ RIGHTS: dict[Right, Rule] = {
         full_from=Role.TRAINER,
         scope=_own,
         scope_label="nur eigene",
+    ),
+    Right.CREATE_BORROWER: Rule("Entleiher anlegen, auch ohne Ausleihe", Role.LENDER),
+    Right.LINK_MEMBER_CARD: Rule("Mitgliedsausweis mit Entleiher verbinden", Role.LENDER),
+    Right.CHANGE_MEMBER_CARD: Rule(
+        "Verbindung zum Mitgliedsausweis lösen oder ändern", Role.TRAINER
     ),
     Right.LOCK: Rule("Sperren, jederzeit (mit Pflichtkommentar)", Role.LENDER),
     Right.BACKFILL_LOANS: Rule(

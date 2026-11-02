@@ -12,6 +12,9 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 | Kontaktdaten der Entleiher sehen | ✓ | ✓ | nur laufende Ausleihen | nur laufende Ausleihen | – |
 | Reservieren, ausgeben, zurücknehmen | ✓ | ✓ | ✓ | ✓ | – |
 | Reservierungen anderer ändern oder stornieren | ✓ | ✓ | ✓ | nur eigene | – |
+| Entleiher anlegen, auch ohne Ausleihe | ✓ | ✓ | ✓ | ✓ | – |
+| Mitgliedsausweis mit Entleiher verbinden | ✓ | ✓ | ✓ | ✓ | – |
+| Verbindung zum Mitgliedsausweis lösen oder ändern | ✓ | ✓ | ✓ | – | – |
 | Sperren, jederzeit (mit Pflichtkommentar) | ✓ | ✓ | ✓ | ✓ | – |
 | Ausleihen nacherfassen (Notbetrieb) | ✓ | ✓ | eigene | eigene | – |
 | Prüfprotokolle nacherfassen (Notbetrieb) | ✓, nur mit Sachkunde | eigene, nur mit Sachkunde | – | – | – |
@@ -116,6 +119,15 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   Einen bekannten Entleiher (gleicher Name) verknüpft die Nacherfassung nur für Personen, die
   Kontaktdaten ohnehin sehen dürfen; Verleiher legen immer einen neuen Entleiher an. Sonst gäbe
   eine erfundene Ausgabe Einblick in fremde Kontaktdaten (wie bei Reservierungen ausgeschlossen).
+- Mitgliedsausweis (#125, Felix, 31.10.2026): Der DAV-Mitgliedsausweis dient als Ausleihausweis.
+  Gespeichert wird nur die Mitgliedsnummer vom Strichcode, lokal in den Kontaktdaten (kein
+  Zugriff auf die Mitgliederverwaltung), eindeutig und mit der Löschfrist gelöscht. Verbinden
+  darf ab Verleiher, nach Abgleich des Namens auf dem Ausweis; lösen oder ändern erst ab
+  Trainer/Materialwart. Die Nummer sieht in der Oberfläche nur, wer Kontaktdaten sehen darf. Wer
+  einen Ausweis scannt, sieht wie bei der Namenssuche nur den Namen. Das Protokoll
+  `MemberCardEvent` nennt die Nummer nicht.
+- Entleiher anlegen, auch ohne Ausleihe (#125): ab Verleiher, wie bisher bei der Ausgabe. Danach
+  sieht der Verleiher die Kontaktdaten nur bei laufender Ausleihe.
 - Größe am Bauteil (#124, Felix, 02.11.2026): gehört zu „Teile anlegen, Beschreibung und GAL
   pflegen …“ (ab Trainer/Materialwart), ohne Sachkunde; sie ist kein PSA-relevantes Feld.
 - QR-Etiketten (#14): drucken gehört zu „Teile anlegen, Beschreibung und GAL pflegen …“ (ab

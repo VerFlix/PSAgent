@@ -27,8 +27,16 @@ from accounts.models import User
 from accounts.rights import Right, has_right, requires
 from inventory.models import Component, Part, PartStatus
 from inventory.services import search_parts
-from lending import digest, receipts, reminders, services
-from lending.forms import BorrowerForm, CancelForm, CheckoutForm, PeriodForm, ReturnForm
+from lending import digest, members, receipts, reminders, services
+from lending.forms import (
+    BorrowerForm,
+    CancelForm,
+    CheckoutForm,
+    MemberCardForm,
+    PeriodForm,
+    PersonForm,
+    ReturnForm,
+)
 from lending.models import (
     Booking,
     Borrower,
@@ -113,6 +121,7 @@ def _borrower(form: BorrowerForm, actor: User, *, checkout: bool) -> Borrower:
             address=fields["address"].strip(),
             email=fields["email"].strip(),
             phone=fields["phone"].strip(),
+            member_number=form.cleaned_data.get("member_number") or "",
             actor=actor,
         )
     if form.has_new_values():
@@ -299,12 +308,87 @@ def borrower_search(request: HttpRequest) -> HttpResponse:
     """htmx: Entleiher nach Namen, ab 3 Zeichen, höchstens 10; Verleiher sehen nur den Namen."""
     query = request.GET.get("suche", "")
     found = services.search_borrowers(query, actor=_actor(request))
+    card = _looks_like_card(query)
+    if card:
+        # Gescannter oder eingetippter Mitgliedsausweis (#125): genau diese Person.
+        holder = members.find(query, actor=_actor(request))
+        found = [holder] if holder is not None else []
     context = {
+        "card": card,
         "found": found,
         "too_short": len(query.strip()) < services.SEARCH_MIN_LENGTH,
         "limit": services.SEARCH_LIMIT,
     }
     return render(request, "lending/_borrower_results.html", context)
+
+
+def _looks_like_card(query: str) -> bool:
+    try:
+        members.normalize(query)
+    except LendingError:
+        return False
+    return True
+
+
+@requires(Right.CREATE_BORROWER)
+@require_http_methods(["GET", "POST"])
+def borrower_create(request: HttpRequest) -> HttpResponse:
+    """Person anlegen, auch ohne Ausleihe, mit Mitgliedsausweis (#125)."""
+    form = PersonForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        data = form.cleaned_data
+        try:
+            services.create_borrower(
+                data["name"].strip(),
+                address=data["address"].strip(),
+                email=data["email"].strip(),
+                phone=data["phone"].strip(),
+                member_number=data["member_number"],
+                actor=_actor(request),
+            )
+        except LendingError as error:
+            form.add_error(None, str(error))
+        else:
+            messages.success(
+                request,
+                f"{data['name'].strip()} ist angelegt. Die Kontaktdaten siehst du künftig nur bei "
+                "laufender Ausleihe.",
+            )
+            return redirect("lending:overview")
+    return render(request, "lending/borrower_create.html", {"form": form})
+
+
+@requires(Right.LINK_MEMBER_CARD)
+@require_http_methods(["GET", "POST"])
+def member_card(request: HttpRequest, pk: int) -> HttpResponse:
+    """Mitgliedsausweis verbinden (ab Verleiher, mit Namensabgleich) bzw. ändern oder lösen."""
+    borrower = get_object_or_404(Borrower, pk=pk, contact__isnull=False)
+    actor = _actor(request)
+    may_change = has_right(actor, Right.CHANGE_MEMBER_CARD)
+    form = MemberCardForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        raw = form.cleaned_data["member_number"]
+        try:
+            if may_change and request.POST.get("aktion") == "aendern":
+                members.change(borrower, raw, actor=actor)
+            elif not form.cleaned_data["name_checked"]:
+                raise LendingError("Bitte zuerst den Namen auf dem Ausweis vergleichen.")
+            else:
+                members.link(borrower, raw, actor=actor)
+        except LendingError as error:
+            form.add_error(None, str(error))
+        else:
+            messages.success(request, "Mitgliedsausweis gespeichert.")
+            return redirect("lending:member_card", pk=borrower.pk)
+    contact = BorrowerContact.objects.get(borrower=borrower)
+    context = {
+        "borrower": borrower,
+        "contact": contact,
+        "form": form,
+        "may_change": may_change,
+        "may_view": has_right(actor, Right.VIEW_CONTACTS, borrower),
+    }
+    return render(request, "lending/member_card.html", context)
 
 
 @requires(Right.LEND)

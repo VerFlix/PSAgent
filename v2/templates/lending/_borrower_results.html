@@ -9,6 +9,8 @@
     {% endfor %}
     <label class="check"><input type="radio" name="borrower" value=""> Keiner davon, neu anlegen</label>
   </fieldset>
+{% elif card %}
+  <p class="hint">Dieser Mitgliedsausweis ist noch mit niemandem verbunden. Eine neue Person unten anlegen und den Ausweis dort lesen, oder die Person per Name suchen und den Ausweis verbinden.</p>
 {% else %}
   <p class="hint">Kein Entleiher gefunden. Unten neu anlegen.</p>
 {% endif %}

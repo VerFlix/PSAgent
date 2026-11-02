@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Reservieren oder ausgeben{% endblock %}
 {% block content %}
 <h1>Reservieren oder ausgeben</h1>
@@ -38,15 +39,17 @@
   <section class="card">
     <h2>Entleiher</h2>
     {% for error in borrower_form.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
-    <label for="borrower-search">Bekannten Entleiher suchen (Name, ab 3 Zeichen)</label>
+    <label for="borrower-search">Bekannten Entleiher suchen (Name ab 3 Zeichen oder Mitgliedsausweis scannen)</label>
     <input id="borrower-search" name="suche" type="search" autocomplete="off"
            hx-get="{% url 'lending:borrower_search' %}" hx-trigger="input changed delay:300ms, search"
            hx-target="#borrower-results" hx-include="this">
+    {% include "lending/_card_scan.html" with target="borrower-search" %}
     <div id="borrower-results">{% if selected %}<input type="hidden" name="borrower" value="{{ selected.pk }}">{% endif %}</div>
     <div id="borrower-status">{% if selected %}{% include "lending/_borrower_status.html" %}{% else %}<p class="hint" id="borrower-status-empty">Kein bekannter Entleiher gewählt: unten einen neuen anlegen.</p>{% endif %}</div>
     <fieldset>
       <legend>Neuer Entleiher oder neue Angaben</legend>
       {% for field in borrower_form %}{% if field.name != "borrower" and field.name != "contact_confirmed" %}{% include "inventory/_field.html" %}{% endif %}{% endfor %}
+      {% include "lending/_card_scan.html" with target="id_member_number" label="Ausweis der neuen Person lesen" %}
       <p class="hint">Für die Ausgabe nötig: Name, Adresse und E-Mail oder Telefon.</p>
     </fieldset>
   </section>
@@ -54,5 +57,6 @@
   <button type="submit" name="action" value="reserve">Reservieren</button>
   <button type="submit" name="action" value="lend" class="primary">Weiter zur Ausgabe (ab heute)</button>
 </form>
+<script src="{% static 'js/ausweis.js' %}" defer></script>
 {% endif %}
 {% endblock %}

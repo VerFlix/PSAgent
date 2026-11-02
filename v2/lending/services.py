@@ -58,15 +58,22 @@ def create_borrower(
     address: str = "",
     email: str = "",
     phone: str = "",
+    member_number: str = "",
     user: User | None = None,
     actor: User | None = None,
 ) -> Borrower:
-    """Legt einen Entleiher mit Kontaktdaten an. Kontaktdaten dürfen unvollständig sein."""
-    require(actor, Right.LEND)
-    borrower = Borrower.objects.create(user=user, created_by=actor)
-    BorrowerContact.objects.create(
-        borrower=borrower, name=name, address=address, email=email, phone=phone
-    )
+    """Legt einen Entleiher mit Kontaktdaten an, auch ohne Ausleihe (#125). Kontaktdaten dürfen
+    unvollständig sein; eine Mitgliedsnummer verbindet gleich den Ausweis."""
+    from lending import members  # vermeidet einen Kreisimport
+
+    require(actor, Right.CREATE_BORROWER)
+    with transaction.atomic():
+        borrower = Borrower.objects.create(user=user, created_by=actor)
+        BorrowerContact.objects.create(
+            borrower=borrower, name=name, address=address, email=email, phone=phone
+        )
+        if member_number.strip():
+            members.link(borrower, member_number, actor=actor)
     return borrower
 
 

@@ -49,6 +49,9 @@ class BorrowerForm(forms.Form):
     )
     email = forms.EmailField(label="E-Mail", required=False)
     phone = forms.CharField(label="Telefon", max_length=50, required=False)
+    member_number = forms.CharField(
+        label="Mitgliedsnummer (DAV-Ausweis, nur bei neuer Person)", max_length=20, required=False
+    )
     contact_confirmed = forms.BooleanField(
         label="Kontaktdaten unverändert (nachgefragt)", required=False
     )
@@ -63,6 +66,11 @@ class BorrowerForm(forms.Form):
         data = super().clean() or {}
         if not data.get("borrower") and not (data.get("name") or "").strip():
             raise forms.ValidationError("Bitte einen Entleiher wählen oder einen Namen eingeben.")
+        if data.get("borrower") and (data.get("member_number") or "").strip():
+            raise forms.ValidationError(
+                "Den Ausweis einer bekannten Person bitte über „Mitgliedsausweis verbinden“ "
+                "verbinden, mit Abgleich des Namens."
+            )
         return data
 
 
@@ -119,3 +127,26 @@ class ReturnForm(forms.Form):
 
 class CancelForm(forms.Form):
     comment = forms.CharField(label="Grund", max_length=1000, required=False)
+
+
+class PersonForm(forms.Form):
+    """Person anlegen, auch ohne Ausleihe (#125)."""
+
+    name = forms.CharField(label="Name", max_length=200)
+    address = forms.CharField(
+        label="Adresse", required=False, widget=forms.Textarea(attrs={"rows": 2})
+    )
+    phone = forms.CharField(label="Telefon", max_length=50, required=False)
+    email = forms.EmailField(label="E-Mail", required=False)
+    member_number = forms.CharField(
+        label="Mitgliedsnummer (DAV-Ausweis scannen oder eintippen)", max_length=20, required=False
+    )
+
+
+class MemberCardForm(forms.Form):
+    member_number = forms.CharField(
+        label="Mitgliedsnummer (Ausweis scannen)", max_length=20, required=False
+    )
+    name_checked = forms.BooleanField(
+        label="Der Name auf dem Ausweis stimmt mit dieser Person überein", required=False
+    )

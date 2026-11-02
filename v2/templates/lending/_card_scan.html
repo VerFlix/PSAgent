@@ -1,0 +1,6 @@
+<div class="card-scan" data-card-scan="{{ target }}">
+  <button type="button" data-camera-start>{{ label|default:"Ausweis mit der Kamera lesen" }}</button>
+  <button type="button" data-camera-stop hidden>Kamera beenden</button>
+  <p class="hint" role="status" data-camera-status></p>
+  <video class="camera" hidden muted playsinline></video>
+</div>
