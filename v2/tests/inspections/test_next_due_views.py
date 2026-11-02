@@ -101,6 +101,25 @@ def test_parity_6_no_ppe_parts_are_listed_last(client: Client, parts: object) ->
     assert "Bandschlinge ohne PSA" not in page(client, schnell="30")
 
 
+def test_parity_6_list_follows_replaced_today(
+    client: Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#134: Die Liste fragt `lending.services.today` bei jedem Aufruf neu.
+
+    Früher band `from lending.services import today` die Funktion beim ersten Import der
+    Ansicht. Geschah das unter dem festen Stichtag der Verleih-Tests, rechnete die Liste danach
+    dauerhaft mit diesem Tag, und die Tests hingen von der Reihenfolge ab.
+    """
+    part = create_product({"designation": "Seil Stichtag", "ei": "TST-N8"})
+    adopt_inspection([part], next_due=in_days(30))
+    login(client)
+    assert "in 30 Tagen" in page(client)  # Ansicht ist jetzt mit dem echten Datum geladen
+
+    monkeypatch.setattr("lending.services.today", lambda: in_days(35))
+
+    assert "seit 5 Tagen überfällig" in page(client)
+
+
 def test_parity_6_timeline_combines_events(client: Client) -> None:
     part = create_product({"designation": "Helm", "ei": "TST-Z1"})
     part.documents.add(link_document("https://example.org/gal.pdf", title="GAL"))

@@ -17,7 +17,7 @@ from accounts.rights import Right, requires
 from inspections.services import next_inspection_due
 from inventory.models import Component, Part, PartStatus
 from inventory.services import search_parts
-from lending.services import today
+from lending import services as lending
 
 DATE = forms.DateInput(attrs={"type": "date"})
 STATUSES = [(value, label) for value, label in PartStatus.choices if value != PartStatus.RETIRED]
@@ -60,7 +60,7 @@ def next_due(request: HttpRequest) -> HttpResponse:
     """Parität 6: Liste „Nächste Prüfungen“ mit Filter; je Teil führt ein Link zur Zeitleiste."""
     form = DueForm(request.GET or None)
     data = form.cleaned_data if form.is_valid() else {}
-    current = today()
+    current = lending.today()
     limit = data.get("bis")
     if data.get("schnell") == "30":
         limit = current + timedelta(days=30)
