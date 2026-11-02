@@ -22,7 +22,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from accounts.models import User
 from accounts.rights import Right, has_right, requires
 from inspections.services import next_inspection_due
-from inventory import documents, export, labels
+from inventory import documents, export, labels, sizes
 from inventory.forms import (
     CommentForm,
     ComponentEditFormSet,
@@ -78,8 +78,12 @@ def _parts() -> QuerySet[Part]:
 def part_list(request: HttpRequest) -> HttpResponse:
     query = request.GET.get("q", "").strip()
     wanted = request.GET.get("status", "")
+    size = request.GET.get("groesse", "")
+    parts = search_parts(_parts(), query)
+    if size in sizes.SIZES:
+        parts = parts.filter(components__size__in=sizes.sizes_covering(size)).distinct()
     rows = []
-    for part in search_parts(_parts(), query):
+    for part in parts:
         status = part.status()
         if (wanted and status != wanted) or (not wanted and status == PartStatus.RETIRED):
             continue
@@ -89,6 +93,8 @@ def part_list(request: HttpRequest) -> HttpResponse:
         "query": query,
         "wanted": wanted,
         "statuses": PartStatus.choices,
+        "size": size,
+        "size_filters": [(value, label) for value, label in sizes.SIZE_CHOICES if "-" not in value],
         "may_create": has_right(request.user, Right.MANAGE_PARTS),
     }
     return render(request, "inventory/part_list.html", context)

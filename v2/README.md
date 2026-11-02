@@ -87,6 +87,10 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
 - Archiv ausgesonderter Teile (Parität 10, `/teile/archiv/`, jede Rolle): ausgesonderte Teile,
   neueste zuerst, mit Datum, Grund und Suche; wer ausgesondert hat, sehen Rollen ab Verleiher.
   Historie und Haftungsausschluss stehen auf der Teileseite; gelöscht wird nichts.
+- Größe am Bauteil (#124), z. B. für Gurte: XS–XL, Bereiche für verstellbare Gurte (M–XL) und
+  Kindergurt 1/2; nicht Teil der EI. Pflegen ab Trainer/Materialwart; der Import lässt sie leer.
+  Die Teileliste filtert nach „passt für“ (ein Bereich passt für jede enthaltene Größe); das
+  QR-Etikett nennt die Größe.
 - QR-Etiketten (ab Trainer): auf der Teileseite oder für markierte bzw. alle Teile in der
   Teileliste, als PDF für A4-Bögen mit 65 Etiketten 38 x 21,2 mm (z. B. Avery Zweckform 3666).
   Der QR-Code enthält `PSAGENT_BASE_URL/q/<EI>`; die Kamera-App öffnet damit nach der Anmeldung

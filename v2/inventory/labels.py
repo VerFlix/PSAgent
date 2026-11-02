@@ -21,6 +21,7 @@ from django.conf import settings
 from django.urls import reverse
 
 from inventory.models import Part
+from inventory.sizes import size_label
 
 TEMPLATE = Path(settings.BASE_DIR) / "templates" / "typst" / "etiketten.typ"
 PER_SHEET = 65
@@ -49,6 +50,9 @@ def entries(parts: Iterable[Part]) -> list[dict[str, Any]]:
         for component in components:
             title = part.name if part.kind == "system" else component.designation or part.name
             detail = component.designation if part.kind == "system" else ""
+            if component.size:
+                size = f"Größe {size_label(component.size)}"
+                detail = f"{detail} · {size}" if detail else size
             result.append(
                 {
                     "ei": component.ei,

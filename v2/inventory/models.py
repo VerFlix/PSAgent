@@ -20,6 +20,7 @@ from django.utils import timezone
 
 from accounts.models import User
 from core.append_only import AppendOnlyModel
+from inventory.sizes import SIZE_CHOICES, SIZES
 
 
 class RegexpReplace(models.Func):
@@ -198,6 +199,13 @@ class Component(models.Model):
     first_use_date = models.DateField("Datum 1. Einsatz", null=True, blank=True)
     ei = models.CharField("Einzelidentifikation (EI)", max_length=100)
     serial_number = models.CharField("Seriennummer", max_length=100, blank=True)
+    size = models.CharField(
+        "Größe",
+        max_length=10,
+        blank=True,
+        choices=SIZE_CHOICES,
+        help_text="Z. B. bei Gurten; Bereiche für verstellbare Gurte. Leer: ohne Angabe.",
+    )
     ei_key = models.GeneratedField(
         expression=Lower(
             RegexpReplace(F("ei"), models.Value(r"\s"), models.Value(""), models.Value("g"))
@@ -226,6 +234,9 @@ class Component(models.Model):
                 condition=Q(year_of_manufacture__isnull=True)
                 | Q(year_of_manufacture__gte=1900, year_of_manufacture__lte=2200),
                 name="inventory_component_year_plausible",
+            ),
+            models.CheckConstraint(
+                condition=Q(size__in=["", *SIZES]), name="inventory_component_size_valid"
             ),
         )
 

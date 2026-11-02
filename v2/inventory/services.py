@@ -63,6 +63,7 @@ COMPONENT_FIELDS = (
     "first_use_date",
     "ei",
     "serial_number",
+    "size",
 )
 PPE_COMPONENT_FIELDS = ("ei", "year_of_manufacture", "first_use_date")
 _validate_url = URLValidator(schemes=["http", "https"])
@@ -90,6 +91,11 @@ def component_values(component: Component) -> dict[str, str]:
     return values
 
 
+def _recorded(record: ComponentRecord) -> dict[str, str]:
+    """Festgehaltener Stand; Felder, die es damals noch nicht gab (z. B. Größe, #124), sind leer."""
+    return {name: str(record.values.get(name, "")) for name in RECORDED_FIELDS}
+
+
 def _record(
     component: Component, kind: RecordKind, *, actor: User | None, changed: list[str] | None = None
 ) -> None:
@@ -111,7 +117,7 @@ def _require_recorded(component: Component) -> None:
     """
     stored = Component.objects.select_for_update().get(pk=component.pk)
     latest = component.records.order_by("-id").first()
-    if latest is None or component_values(stored) != latest.values:
+    if latest is None or component_values(stored) != _recorded(latest):
         raise InventoryError(
             f"{component} passt nicht zum festgehaltenen Stand und wird nicht geändert. "
             "Bitte das Prüfwerkzeug ausführen (kette_pruefen) und den Admin informieren."
@@ -145,14 +151,14 @@ def component_problems() -> list[str]:
             problems.extend(
                 f"{where}: {_label(name)} hat sich bis Stand #{after.pk} ohne Vermerk geändert."
                 for name in RECORDED_FIELDS
-                if name not in after.changed and before.values.get(name) != after.values.get(name)
+                if name not in after.changed and _recorded(before)[name] != _recorded(after)[name]
             )
         current = component_values(component)
         problems.extend(
             f"{where}: {_label(name)} weicht vom festgehaltenen Stand ab "
             "(an der App vorbei geändert)."
             for name in RECORDED_FIELDS
-            if current[name] != records[-1].values.get(name)
+            if current[name] != _recorded(records[-1])[name]
         )
     return problems
 
