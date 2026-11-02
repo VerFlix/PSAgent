@@ -36,6 +36,7 @@ QR_PREFIX = "PSAGENT-THEKE:"
 PIN_LENGTH = 6
 MAX_FAILURES = 5
 PIN_SESSION = "psagent_counter_pin"  # Sitzung begann mit QR-Code und PIN
+PIN_DEVICE = "psagent_counter_device"  # an diesem Theke-Gerät; nur dort gilt die Sitzung
 WRONG = "QR-Code oder PIN passt nicht."
 
 

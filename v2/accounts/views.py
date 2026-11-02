@@ -178,6 +178,7 @@ def counter_login(request: HttpRequest) -> HttpResponse:
         else:
             login(request, user, backend=SESSION_BACKEND)
             request.session[counter.PIN_SESSION] = True
+            request.session[counter.PIN_DEVICE] = request.club_device.pk  # type: ignore[attr-defined]
             return redirect(_next_url(request))
     context = {"counter_form": form, "counter_error": error, "at_counter": _at_counter(request)}
     return render(request, "accounts/counter_login.html", context)
@@ -239,11 +240,15 @@ def account(request: HttpRequest) -> HttpResponse:
 
 
 def _not_in_pin_session(request: HttpRequest) -> None:
-    """PIN und QR-Code nur nach Anmeldung mit Passwort oder Passkey, nie per PIN (#126)."""
+    """Zugangsdaten (PIN, QR-Code, Passkeys) nie in einer Sitzung per PIN ändern (#126).
+
+    Sonst könnte jemand mit abgeschauter PIN und fotografierter Karte etwa einen eigenen Passkey
+    eintragen und sich damit überall mit der vollen Rolle anmelden.
+    """
     if request.session.get(counter.PIN_SESSION):
         raise PermissionDenied(
-            "PIN und QR-Code richtest du nach der Anmeldung mit Passwort oder Passkey ein, "
-            "nicht in einer Sitzung per PIN."
+            "Zugangsdaten änderst du nach der Anmeldung mit Passwort oder Passkey, nicht in "
+            "einer Sitzung per PIN."
         )
 
 
@@ -291,6 +296,7 @@ def stamp(request: HttpRequest) -> HttpResponse:
 @requires(Right.ACCOUNT)
 @require_POST
 def passkey_register_options(request: HttpRequest) -> HttpResponse:
+    _not_in_pin_session(request)
     user = _current_user(request)
     return HttpResponse(
         webauthn.registration_options(user, request.session), content_type="application/json"
@@ -306,6 +312,7 @@ def passkey_register(request: HttpRequest) -> JsonResponse:
     Sonst könnte jemand, der eine fremde Sitzung übernimmt, seinen eigenen YubiKey eintragen und
     damit Änderungen in der Nutzerverwaltung bestätigen (#95).
     """
+    _not_in_pin_session(request)
     user = _current_user(request)
     data = _json_body(request)
     approved = webauthn.yubikeys(user).exists()
@@ -331,6 +338,7 @@ def passkey_register(request: HttpRequest) -> JsonResponse:
 @requires(Right.ACCOUNT)
 @require_POST
 def passkey_revoke(request: HttpRequest, pk: int) -> HttpResponse:
+    _not_in_pin_session(request)
     passkey = get_object_or_404(Passkey, pk=pk, user=request.user, revoked_at__isnull=True)
     try:
         webauthn.revoke(passkey)

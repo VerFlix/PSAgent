@@ -315,3 +315,33 @@ def test_admin_clears_pin_in_user_management(client: Client, admin: User, lender
 
     assert response.status_code == 302
     assert CounterCredential.objects.get(user=lender).pin_hash == ""
+
+
+def test_pin_session_cannot_manage_passkeys(client: Client, lender: User, admin: User) -> None:
+    code = ready(lender)
+    device_for(client, admin)
+    client.post(reverse("accounts:counter_login"), {"code": code, "pin": PIN})
+
+    assert client.post(reverse("accounts:passkey_register_options")).status_code == 403
+    assert client.post(reverse("accounts:passkey_register")).status_code == 403
+    assert client.post(reverse("accounts:passkey_revoke", args=[1])).status_code == 403
+
+
+@pytest.mark.parametrize(
+    "elsewhere", ["kein Vereinsgerät", "anderes Theke-Gerät", "kein Theke-Gerät"]
+)
+def test_pin_session_ends_away_from_its_counter_device(
+    client: Client, lender: User, admin: User, elsewhere: str
+) -> None:
+    code = ready(lender)
+    device_for(client, admin)
+    client.post(reverse("accounts:counter_login"), {"code": code, "pin": PIN})
+    assert client.get(reverse("lending:overview")).status_code == 200
+
+    if elsewhere == "kein Vereinsgerät":
+        del client.cookies[COOKIE]
+    else:
+        device_for(client, admin, theke=elsewhere == "anderes Theke-Gerät")
+    response = client.get(reverse("lending:overview"))
+
+    assert response.status_code == 302 and "_auth_user_id" not in client.session
