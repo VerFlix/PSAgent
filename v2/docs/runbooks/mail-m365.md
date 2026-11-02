@@ -35,8 +35,10 @@ openssl x509 -in graph.crt -noout -fingerprint -sha1 | cut -d= -f2 | tr -d :
 
 Die zweite Zeile gibt den Fingerabdruck aus (`PSAGENT_GRAPH_CERT_THUMBPRINT`).
 
-- `graph.pem` (privater Schlüssel) auf den Server, z. B. `/etc/psagent/graph.pem`, Eigentümer der
-  Dienstnutzer, Rechte `600`.
+- `graph.pem` (privater Schlüssel) auf den Server nach `/etc/psagent/certs/graph.pem`, lesbar
+  nur für root und die App im Container (Benutzer 10001), wie in `server-einrichten.md`,
+  Schritt 5:
+  `sudo chown root:10001 /etc/psagent/certs/graph.pem && sudo chmod 640 /etc/psagent/certs/graph.pem`.
 - Nur `graph.crt` geht zu Microsoft.
 - Ablauf nach 2 Jahren im Kalender eintragen; vorher ein neues Zertifikat hochladen.
 
@@ -95,7 +97,7 @@ PSAGENT_MAIL_FROM=psagent@<domain>
 PSAGENT_MAIL_REPLY_TO=material@<domain>
 PSAGENT_GRAPH_TENANT_ID=<Verzeichnis-ID>
 PSAGENT_GRAPH_CLIENT_ID=<Anwendungs-ID>
-PSAGENT_GRAPH_CERT_PATH=/etc/psagent/graph.pem
+PSAGENT_GRAPH_CERT_PATH=/etc/psagent/certs/graph.pem
 PSAGENT_GRAPH_CERT_THUMBPRINT=<Fingerabdruck>
 ```
 
