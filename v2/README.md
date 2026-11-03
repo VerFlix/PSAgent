@@ -60,6 +60,11 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
 
 - Weitere Passkeys verwaltet jede Person unter „Konto“. Der letzte Passkey eines Admins oder
   Sachkundigen lässt sich nicht widerrufen.
+- Theke (#126): Ein Vereinsgerät der Art „Theke“ (Häkchen beim Festlegen) erlaubt die Anmeldung
+  mit persönlichem QR-Code und 6-stelliger PIN (`/anmelden/theke/` bzw. auf der
+  Anmeldeseite). Dort gelten höchstens Verleiher-Rechte; Admin, PSA-Sachkundige und Viewer werden
+  abgewiesen. PIN und QR-Karte (PDF) richtet jede Person unter „Konto“ ein, nach Anmeldung mit
+  Passwort oder Passkey; nach 5 falschen PINs ist die PIN gesperrt. Gespeichert sind nur Hashes.
 - Vereinsgerät (z. B. Tablet an der Ausgabe): Ein Admin legt es unter „Konto“ fest. Dort endet
   die Sitzung nach 3 Minuten ohne Eingabe und nach jedem abgeschlossenen Vorgang; sonst gilt
   sie 8 Stunden.

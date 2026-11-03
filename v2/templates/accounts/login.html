@@ -2,6 +2,20 @@
 {% block title %}Anmelden{% endblock %}
 {% block content %}
 <h1>Anmelden</h1>
+{% if counter_form %}<section class="card">
+  <h2>An der Theke: QR-Code und PIN</h2>
+  <p>Persönlichen QR-Code scannen (die Kennung erscheint im Feld), dann die PIN eingeben. Hier gelten höchstens Verleiher-Rechte.</p>
+  <form method="post" action="{% url 'accounts:counter_login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">
+    {% csrf_token %}
+    {% if counter_error %}<p class="error" role="alert">{{ counter_error }}</p>{% endif %}
+    <label for="id_code">Persönlicher QR-Code</label>
+    <input id="id_code" name="code" autocomplete="off" autofocus required>
+    <label for="id_pin">PIN</label>
+    <input id="id_pin" name="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="6" required>
+    <button type="submit" class="primary">Anmelden</button>
+  </form>
+</section>
+{% endif %}
 <section class="card">
   <h2>Mit Passkey</h2>
   <p>Sicherheitsschlüssel (YubiKey) oder Passkey auf dem eigenen Gerät. Pflicht für Admin und PSA-Sachkundige.</p>

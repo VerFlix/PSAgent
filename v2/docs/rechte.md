@@ -28,6 +28,8 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 | Löschsperre für Entleiherdaten setzen und aufheben (mit Pflichtgrund) | ✓ | ✓ | – | – | – |
 | E-Mail-Erinnerungen bei Überfälligkeit für alle ein- und ausschalten | ✓ | – | – | – | – |
 | Sammelmail zu überfälligen Ausleihen: schalten, Empfänger pflegen, Testmail | ✓ | – | – | – | – |
+| An der Theke anmelden (QR-Code + PIN oder Passwort), dort höchstens Verleiher-Rechte | – | – | ✓ | ✓ | – |
+| Eigene PIN setzen, eigenen QR-Code drucken (Theke) | – | – | ✓ | ✓ | – |
 | Nutzer, Rollen, Sachkunde-Zertifikate verwalten | ✓ | – | – | – | – |
 | Signierte Einträge ändern oder löschen | niemand | niemand | niemand | niemand | niemand |
 
@@ -52,7 +54,7 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 - **Ansichten**: jede trägt `requires(Right…)` oder `public`. Ein Test schlägt fehl, wenn eine URL
   keines von beiden hat. htmx-Teilanfragen werden genauso geprüft; ohne Anmeldung antworten sie
   mit `401` und `HX-Redirect` zur Anmeldung.
-- **Öffentlich** sind nur Anmeldung (Passwort und Passkey), Abmeldung, der Einrichtungslink
+- **Öffentlich** sind nur Anmeldung (Passwort, Passkey und an der Theke QR-Code mit PIN), Abmeldung, der Einrichtungslink
   (Passkey oder, außer für Admin und PSA-Sachkundige, eigenes Passwort), `/healthz` und das
   Skript des Service Workers für die Offline-Kopie der Notfallmappe (`/notbetrieb/sw.js`, ohne
   Daten).
@@ -86,6 +88,13 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 - Eine Reservierung ausgeben, die jemand anderes angelegt hat, ist Verleihen, kein Ändern.
 - Teile übernommener Altdaten (ohne `angelegt von`) gelten für Verleiher nicht als eigene.
 - Vereinsgeräte festlegen und widerrufen gehört zu „Nutzer verwalten“ (nur Admin).
+- Theke (#126, Felix, 31.10. und 01.11.2026): Ein Vereinsgerät der Art „Theke“ legt der Admin
+  beim Festlegen fest (mit YubiKey). Dort melden sich nur Verleiher und Trainer/Materialwart an,
+  mit persönlichem QR-Code und PIN oder mit Passwort, und haben dort höchstens Verleiher-Rechte
+  (Kontaktdaten wie ein Verleiher am PC). Admin, PSA-Sachkundige und Viewer werden dort
+  abgewiesen; eine bestehende Sitzung endet. Nach 5 falschen PINs ist die PIN gesperrt. PIN und
+  QR-Code richtet jede Person nur für sich ein, nicht in einer Sitzung per PIN. PIN löschen und
+  QR-Code widerrufen gehört zu „Nutzer verwalten“ (Admin, mit YubiKey).
 - Nutzer verwalten (#67): Ein Admin nimmt sich nicht selbst die Admin-Rolle und deaktiviert
   sich nicht selbst; das letzte aktive Admin-Konto bleibt erhalten. Rollenwechsel, Deaktivieren,
   Reaktivieren, Einrichtungslinks und vom Admin widerrufene Passkeys stehen im nur anhängbaren

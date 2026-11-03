@@ -54,6 +54,8 @@ class Right(StrEnum):
     ERASURE_HOLD = "erasure_hold"
     REMINDERS = "reminders"
     OVERDUE_DIGEST = "overdue_digest"
+    COUNTER_LOGIN = "counter_login"
+    COUNTER_CREDENTIALS = "counter_credentials"
     MANAGE_USERS = "manage_users"
     MODIFY_SIGNED = "modify_signed"
 
@@ -94,6 +96,8 @@ class Rule:
     full_from: Role | None = None
     scope: Callable[[User, object], bool] | None = None
     scope_label: str = ""
+    # Höchste Rolle, für die die Zeile gilt (Theke, #126); darüber ist sie verboten.
+    maximum: Role | None = None
 
 
 RIGHTS: dict[Right, Rule] = {
@@ -170,6 +174,14 @@ RIGHTS: dict[Right, Rule] = {
     Right.OVERDUE_DIGEST: Rule(
         "Sammelmail zu überfälligen Ausleihen: schalten, Empfänger pflegen, Testmail", Role.ADMIN
     ),
+    Right.COUNTER_LOGIN: Rule(
+        "An der Theke anmelden (QR-Code + PIN oder Passwort), dort höchstens Verleiher-Rechte",
+        Role.LENDER,
+        maximum=Role.TRAINER,
+    ),
+    Right.COUNTER_CREDENTIALS: Rule(
+        "Eigene PIN setzen, eigenen QR-Code drucken (Theke)", Role.LENDER, maximum=Role.TRAINER
+    ),
     Right.MANAGE_USERS: Rule("Nutzer, Rollen, Sachkunde-Zertifikate verwalten", Role.ADMIN),
     Right.MODIFY_SIGNED: Rule("Signierte Einträge ändern oder löschen", None),
 }
@@ -179,6 +191,10 @@ def _basic(user: object, rule: Rule, at: datetime | None) -> bool:
     if not isinstance(user, User) or not user.is_active or rule.minimum is None:
         return False
     if not user.has_role(rule.minimum):
+        return False
+    if rule.maximum is not None and ROLE_ORDER.index(Role(user.role)) > ROLE_ORDER.index(
+        rule.maximum
+    ):
         return False
     return not rule.qualification or user.has_valid_qualification(at)
 
@@ -207,6 +223,8 @@ def denial(right: Right) -> str:
     if rule.minimum is None:
         return f"„{rule.label}“ ist niemandem erlaubt."
     text = f"„{rule.label}“ ist erst ab der Rolle {rule.minimum.label} erlaubt"
+    if rule.maximum is not None:
+        text += f" und nur bis zur Rolle {rule.maximum.label}"
     if rule.qualification:
         text += " und nur mit gültiger Sachkunde"
     if rule.scope_label:
@@ -265,6 +283,8 @@ def cell(right: Right, role: Role) -> str:
     if rule.minimum is None:
         return "niemand"
     if ROLE_ORDER.index(role) < ROLE_ORDER.index(rule.minimum):
+        return "–"
+    if rule.maximum is not None and ROLE_ORDER.index(role) > ROLE_ORDER.index(rule.maximum):
         return "–"
     restricted = rule.full_from is not None and ROLE_ORDER.index(role) < ROLE_ORDER.index(
         rule.full_from

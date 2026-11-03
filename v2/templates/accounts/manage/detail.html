@@ -61,6 +61,17 @@
 </section>
 
 <section class="card">
+  <h2>Theke</h2>
+  <p>PIN löschen (z. B. nach einer Sperre) oder den persönlichen QR-Code widerrufen (Karte verloren). Die Person richtet danach selbst eine neue PIN bzw. einen neuen QR-Code ein.</p>
+  <form method="post" data-yubikey="{% url 'accounts:yubikey_options' %}" action="{% url 'accounts:user_counter' account.pk %}" class="inline">{% csrf_token %}
+    <input type="hidden" name="aktion" value="pin"><button type="submit">PIN löschen</button>
+  </form>
+  <form method="post" data-yubikey="{% url 'accounts:yubikey_options' %}" action="{% url 'accounts:user_counter' account.pk %}" class="inline">{% csrf_token %}
+    <input type="hidden" name="aktion" value="qr"><button type="submit" class="danger">QR-Code widerrufen</button>
+  </form>
+</section>
+
+<section class="card">
   <h2>Sachkunde</h2>
   <p>{% if valid_qualification %}Zurzeit gültig.{% else %}Zurzeit keine gültige Sachkunde.{% endif %}</p>
   {% if qualifications %}
