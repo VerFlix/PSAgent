@@ -102,6 +102,12 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   (Kurzkontrolle, GAL bereitgestellt, Unterschrift, bei bekannten Entleihern „unverändert
   (nachgefragt)“ oder neue Angaben). Der laufende Vorgang steht in der Sitzung nur mit
   Verweisen, ohne Personendaten.
+- Rückgabe und Schaden melden an der Theke (#127, Felix, 03.11.2026): Rückgabe ab Verleiher wie
+  am PC (Kurzprüfung, Name, Unterschrift; Parität 17), auch teilweise. Ein Schaden bei der
+  Rückgabe sperrt das Teil (Recht „Sperren“); dafür reicht der angetippte Grund, bei
+  „Sonstiges“ braucht es einen Kommentar. „Schaden melden“ (ab Verleiher, Recht „Sperren“)
+  verlangt Grund und Kommentar. Der Grund steht als Text im Sperrkommentar, z. B. „Sturz
+  belastet: …“. Eine Benachrichtigung der PSA-Sachkundigen ist für später vorgemerkt (#141).
 - Nutzer verwalten (#67): Ein Admin nimmt sich nicht selbst die Admin-Rolle und deaktiviert
   sich nicht selbst; das letzte aktive Admin-Konto bleibt erhalten. Rollenwechsel, Deaktivieren,
   Reaktivieren, Einrichtungslinks und vom Admin widerrufene Passkeys stehen im nur anhängbaren

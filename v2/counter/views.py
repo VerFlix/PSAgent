@@ -383,15 +383,48 @@ def checkout_parts(request: HttpRequest) -> HttpResponse:
 @requires(Right.LEND)
 @require_GET
 def part_suggestions(request: HttpRequest) -> HttpResponse:
-    """htmx: passende EIs zur Eingabe, mit dem Grund, falls ein Teil nicht frei ist."""
-    cart = load(request)
-    taken = set(cart.part_ids())
+    """htmx: passende EIs zur Eingabe. Ausgabe: mit dem Grund, falls ein Teil bis zur Rückgabe
+    nicht frei ist; Rückgabe: nur verliehene Teile; Schaden melden: mit dem Zustand."""
+    purpose = request.GET.get("fuer", "ausgabe")
+    found = stock.suggest(request.GET.get("ei", ""))
     items = []
-    if cart.end is not None:
-        for component in stock.suggest(request.GET.get("ei", "")):
+    if purpose == "rueckgabe":
+        lent = {
+            loan.part_id: loan
+            for loan in Loan.objects.filter(
+                status=LoanStatus.LENT, part__in=[c.part for c in found]
+            )
+        }
+        for component in found:
+            loan = lent.get(component.part_id)
+            note = [f"fällig {loan.end:%d.%m.%Y}"] if loan else []
+            items.append(
+                {
+                    "ei": component.ei,
+                    "name": component.part.name,
+                    "note": note,
+                    "reasons": [] if loan else ["ist nicht ausgeliehen"],
+                }
+            )
+    elif purpose == "schaden":
+        for component in found:
             part = component.part
-            reasons = ["ist schon dabei"] if part.pk in taken else stock.reasons(part, cart.end)
-            items.append({"ei": component.ei, "name": part.name, "reasons": reasons})
+            items.append(
+                {
+                    "ei": component.ei,
+                    "name": part.name,
+                    "note": [str(part.status().label)],
+                    "reasons": ["ist bereits gesperrt"] if part.is_locked() else [],
+                }
+            )
+    else:
+        cart = load(request)
+        taken = set(cart.part_ids())
+        if cart.end is not None:
+            for component in found:
+                part = component.part
+                reasons = ["ist schon dabei"] if part.pk in taken else stock.reasons(part, cart.end)
+                items.append({"ei": component.ei, "name": part.name, "reasons": reasons})
     return render(request, "counter/_suggestions.html", {"items": items})
 
 
@@ -499,17 +532,21 @@ def borrower_search(request: HttpRequest) -> HttpResponse:
     return render(request, "counter/_borrower_results.html", context)
 
 
-def _finish(
-    request: HttpRequest, booking: Booking, count: int, end: date, *, receipt: bool
+def finish(
+    request: HttpRequest,
+    text: str,
+    *,
+    booking: Booking | None = None,
+    receipt: ReceiptKind | None = None,
 ) -> HttpResponse:
+    """Vorgang abgeschlossen: ggf. Quittung, Meldung, am Vereinsgerät abmelden (#127)."""
     clear(request)
     note = None
-    if receipt:
+    if booking is not None and receipt is not None:
         try:
-            note = (messages.SUCCESS, receipts.send(booking, ReceiptKind.CHECKOUT))
+            note = (messages.SUCCESS, receipts.send(booking, receipt))
         except receipts.ReceiptError as error:
             note = (messages.WARNING, str(error))
-    text = f"Ausgegeben: {count} Teil{'e' if count != 1 else ''}, Rückgabe bis {end:%d.%m.%Y}."
     logged_out = finish_operation(request)
     messages.success(request, f"{text} Abgemeldet." if logged_out else text)
     if note is not None:
@@ -574,7 +611,13 @@ def checkout_sign(request: HttpRequest) -> HttpResponse:
     except LendingError as error:
         form.add_error(None, str(error))
         return render(request, "counter/sign.html", context, status=400)
-    return _finish(request, booking, count, end, receipt=data["receipt"])
+    text = f"Ausgegeben: {_parts_text(count)}, Rückgabe bis {end:%d.%m.%Y}."
+    receipt = ReceiptKind.CHECKOUT if data["receipt"] else None
+    return finish(request, text, booking=booking, receipt=receipt)
+
+
+def _parts_text(count: int) -> str:
+    return f"{count} Teil{'e' if count != 1 else ''}"
 
 
 def _cart_parts(cart: Cart) -> list[Part]:

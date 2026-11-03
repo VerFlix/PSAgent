@@ -2,7 +2,7 @@
   <ul class="suggestions">
     {% for item in items %}
       <li>
-        <button type="button" data-ei-pick="{{ item.ei }}" class="suggestion{% if item.reasons %} problem{% endif %}"><strong>{{ item.ei }}</strong> {{ item.name }}{% if item.reasons %}<span>{{ item.reasons|join:", " }}</span>{% endif %}</button>
+        <button type="button" data-ei-pick="{{ item.ei }}" class="suggestion{% if item.reasons %} problem{% endif %}"><strong>{{ item.ei }}</strong> {{ item.name }}{% if item.reasons %}<span>{{ item.reasons|join:", " }}</span>{% elif item.note %}<span>{{ item.note|join:", " }}</span>{% endif %}</button>
       </li>
     {% endfor %}
   </ul>

@@ -1,0 +1,44 @@
+{% extends "counter/base.html" %}
+{% load static %}
+{% block title %}Rückgabe{% endblock %}
+{% block theke %}
+<h1>Rückgabe: {{ borrower }}</h1>
+<form method="post" id="ei-form" class="card sign" action="{% url 'counter:return_booking' booking.pk %}">
+  {% csrf_token %}
+  {% if problem %}<p class="notice error" role="alert">{{ problem }}</p>{% endif %}
+  {% for error in form.non_field_errors %}<p class="notice error" role="alert">{{ error }}</p>{% endfor %}
+  <details class="scan">
+    <summary>Teil scannen oder EI eingeben</summary>
+    {% include "counter/_ei_entry.html" with button="Als zurück markieren" purpose="rueckgabe" %}
+  </details>
+  <ul class="lines">
+    {% for loan in lent %}
+      <li class="line{% if loan.pk in back %} back{% endif %}{% if loan.pk in damaged %} problem{% endif %}">
+        <label class="check big"><input type="checkbox" name="zurueck" value="{{ loan.pk }}"{% if loan.pk in back %} checked{% endif %}>
+          <span><strong>{% for component in loan.part.components.all %}{{ component.ei }}{% if not forloop.last %}, {% endif %}{% endfor %}</strong> {{ loan.part.name }}
+            <span class="note">fällig {{ loan.end|date:"d.m.Y" }}{% if loan.end < today %} · überfällig{% endif %}</span></span></label>
+        <label class="check big damage"><input type="checkbox" name="schaden" value="{{ loan.pk }}" aria-label="Schaden an {% for component in loan.part.components.all %}{{ component.ei }}{% if not forloop.last %}, {% endif %}{% endfor %}"{% if loan.pk in damaged %} checked{% endif %}> Schaden</label>
+      </li>
+    {% endfor %}
+  </ul>
+  <p><button type="submit" name="alle" value="1">Alle zurück</button></p>
+  {% include "counter/_damage_fields.html" with legend="Bei Schaden: Grund (das Teil wird gesperrt)" hint="Der Grund reicht; bei „Sonstiges“ bitte kurz beschreiben." %}
+  {% with field=form.comment %}{% include "inventory/_field.html" %}{% endwith %}
+  <label class="check big">{{ form.quick_check }} {{ form.quick_check.label }}</label>
+  {% for error in form.quick_check.errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  <label class="check big">{{ form.receipt }} {{ form.receipt.label }}</label>
+  {% with field=form.signer_name %}{% include "inventory/_field.html" %}{% endwith %}
+  <p id="signature-label">Unterschrift</p>
+  <canvas class="signature" width="600" height="200" aria-labelledby="signature-label" data-signature-for="id_signature"></canvas>
+  {{ form.signature }}
+  {% for error in form.signature.errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  <p class="sign-actions">
+    <button type="button" data-signature-clear="id_signature">Unterschrift löschen</button>
+    <button type="submit" name="zuruecknehmen" value="1" class="primary big">Zurücknehmen</button>
+  </p>
+</form>
+<p><a class="button" href="{% url 'counter:returns' %}">Zurück zur Liste</a></p>
+<script src="{% static 'vendor/jsQR-1.4.0.js' %}" defer></script>
+<script src="{% static 'js/theke.js' %}" defer></script>
+<script src="{% static 'js/signature.js' %}" defer></script>
+{% endblock %}

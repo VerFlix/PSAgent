@@ -2,7 +2,9 @@
 
 from django import forms
 
+from counter.damage import REASONS
 from lending.forms import PersonForm as PersonForm  # Person anlegen wie unter „Verleih“ (#125)
+from privacy.notice import NO_NAMES
 
 
 class ContactForm(forms.Form):
@@ -17,3 +19,21 @@ class ContactForm(forms.Form):
 
     def given(self) -> dict[str, str]:
         return {key: str(value).strip() for key, value in self.cleaned_data.items() if value}
+
+
+class DamageForm(forms.Form):
+    """Grund zum Antippen und Kommentar; die Pflichten prüft `damage.lock_comment`."""
+
+    reason = forms.ChoiceField(
+        label="Grund",
+        choices=[(reason, reason) for reason in REASONS],
+        widget=forms.RadioSelect,
+        required=False,
+    )
+    comment = forms.CharField(
+        label="Was ist beschädigt?",
+        max_length=1000,
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
+        help_text=NO_NAMES,
+    )

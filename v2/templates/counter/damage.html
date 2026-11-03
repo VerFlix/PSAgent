@@ -1,0 +1,34 @@
+{% extends "counter/base.html" %}
+{% load static %}
+{% block title %}Schaden melden{% endblock %}
+{% block theke %}
+<h1>Schaden melden</h1>
+{% if problem %}<p class="notice error" role="alert">{{ problem }}</p>{% endif %}
+{% if part %}
+  <section class="card">
+    <h2>{{ ei }} {{ part.name }}</h2>
+    {% if lent %}<p class="hint">Das Teil ist gerade verliehen; gesperrt wird trotzdem sofort.</p>{% endif %}
+    {% if locked %}
+      <p class="notice info" role="status">Das Teil ist bereits gesperrt.</p>
+    {% else %}
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="teil" value="{{ part.pk }}">
+        <input type="hidden" name="teil_ei" value="{{ ei }}">
+        {% include "counter/_damage_fields.html" with legend="Grund" hint="Grund und Kommentar sind Pflicht. Entsperren können nur PSA-Sachkundige." %}
+        <button type="submit" name="sperren" value="1" class="big primary danger-fill">Sperren</button>
+      </form>
+    {% endif %}
+  </section>
+  <p><a class="button" href="{% url 'counter:damage_report' %}">Anderes Teil</a></p>
+{% else %}
+  <section class="card other">
+    <form method="post" id="ei-form" action="{% url 'counter:damage_report' %}">
+      {% csrf_token %}
+      {% include "counter/_ei_entry.html" with button="Teil wählen" purpose="schaden" %}
+    </form>
+  </section>
+  <script src="{% static 'vendor/jsQR-1.4.0.js' %}" defer></script>
+  <script src="{% static 'js/theke.js' %}" defer></script>
+{% endif %}
+{% endblock %}
