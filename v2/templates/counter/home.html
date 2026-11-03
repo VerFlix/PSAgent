@@ -7,8 +7,8 @@
     {% csrf_token %}
     <button type="submit" class="tile tile-out">Ausgabe<span>Teile ausleihen, Reservierung abholen</span></button>
   </form>
-  <a class="tile tile-ret" href="{% url 'lending:overview' %}">Rückgabe<span>Offene Ausleihen</span></a>
-  <a class="tile tile-dmg" href="{% url 'inventory:part_list' %}">Schaden melden<span>Teil wählen und sperren</span></a>
+  <a class="tile tile-ret" href="{% url 'counter:returns' %}">Rückgabe<span>Offene Ausleihen, auch teilweise</span></a>
+  <a class="tile tile-dmg" href="{% url 'counter:damage_report' %}">Schaden melden<span>Teil wählen und sperren</span></a>
   <a class="tile tile-today" href="{% url 'lending:overview' %}">Heute<span>Abholungen und Rückgaben</span></a>
 </div>
 <ul class="theke-more">

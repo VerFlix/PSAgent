@@ -106,8 +106,11 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
   Gurte wählt man nach Größe, Klettersteigset und Helm per Plus und Minus, andere Teile per EI
   (Art-Tasten und Ziffernblock, vorausgefüllt mit `PSAGENT_EI_PREFIX`) oder QR-Etikett. Auch
   „Reservierung abholen“ geht hier. Es gelten dieselben Regeln und Pflichten wie am PC;
-  danach meldet das Vereinsgerät ab. Rückgabe, Schaden melden und Heute folgen als eigene
-  Seiten; bis dahin öffnen die Kacheln die normale Ansicht.
+  danach meldet das Vereinsgerät ab. Rückgabe: offene Ausleihen, überfällige zuerst; ein
+  gescanntes Teil öffnet seine Ausleihe, Teilrückgabe ist möglich, ein Schaden sperrt das Teil
+  (Grund antippen, bei „Sonstiges“ mit Kommentar). Schaden melden: Teil wählen, Grund und
+  Kommentar, sperren. Der Grund steht im Sperrkommentar. „Heute“ folgt als eigene Seite; bis
+  dahin öffnet die Kachel die normale Ansicht.
 - QR-Etiketten (ab Trainer): auf der Teileseite oder für markierte bzw. alle Teile in der
   Teileliste, als PDF für A4-Bögen mit 65 Etiketten 38 x 21,2 mm (z. B. Avery Zweckform 3666).
   Der QR-Code enthält `PSAGENT_BASE_URL/q/<EI>`; die Kamera-App öffnet damit nach der Anmeldung

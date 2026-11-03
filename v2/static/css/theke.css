@@ -96,3 +96,16 @@
   .sizes { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .keys.kinds, .keys.digits { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+
+/* Teil 2: Rückgabe und Schaden melden */
+.hit.late { border-color: var(--theke-dmg); background: #fbe9e2; color: #8a3313; }
+a.hit { display: block; padding: 0.6rem 1rem; text-align: left; }
+.line.back { border-color: var(--theke-ret); }
+.line .damage { flex-shrink: 0; }
+.reasons { margin-top: 1rem; }
+.chips-small { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; margin-bottom: 0.75rem; }
+.reason { display: flex; align-items: center; gap: 0.5rem; min-height: 3.4rem; padding: 0 0.75rem; border: 2px solid var(--theke-line); border-radius: 0.75rem; background: #fff; font-weight: 700; }
+.reason input { width: 1.5rem; height: 1.5rem; min-height: 0; }
+.reason:has(input:checked) { border-color: var(--theke-dmg); background: #fbe9e2; color: #8a3313; }
+.scan summary { min-height: 3rem; display: flex; align-items: center; font-weight: 700; cursor: pointer; }
+.danger-fill { background: var(--theke-dmg); border-color: var(--theke-dmg); color: #fff; }

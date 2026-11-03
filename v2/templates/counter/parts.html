@@ -57,28 +57,8 @@
   <h2 id="anderes">Anderes Teil</h2>
   <form method="post" id="ei-form" action="{% url 'counter:checkout_parts' %}" hx-post="{% url 'counter:checkout_parts' %}" hx-target="#schritt" hx-select="#schritt" hx-swap="outerHTML" hx-disinherit="hx-target hx-select hx-swap">
     {% csrf_token %}
-    <label for="ei-eingabe">EI eingeben oder QR-Etikett scannen</label>
-    <div class="ei-row">
-      <input id="ei-eingabe" name="ei" value="{{ prefix }}" data-prefix="{{ prefix }}" autocomplete="off" autocapitalize="characters" spellcheck="false"
-             hx-get="{% url 'counter:part_suggestions' %}" hx-trigger="input changed delay:200ms" hx-target="#ei-vorschlaege" hx-swap="innerHTML">
-      <button type="submit" class="primary">Hinzufügen</button>
-    </div>
-    <div id="ei-vorschlaege" aria-live="polite"></div>
-    <div class="keys kinds" role="group" aria-label="Art">
-      {% for kind in all_kinds %}<button type="button" data-ei-art="{{ kind.code }}" aria-label="Art {{ kind.label }}">{{ kind.code }}<span>{{ kind.label }}</span></button>{% endfor %}
-    </div>
-    <div class="keys digits" role="group" aria-label="Ziffern">
-      {% for digit in digits %}<button type="button" data-ei-key="{{ digit }}" aria-label="Ziffer {{ digit }}">{{ digit }}</button>{% endfor %}
-      <button type="button" data-ei-key="-" aria-label="Bindestrich für einen Zusatz">-</button>
-      <button type="button" data-ei-delete aria-label="Letztes Zeichen löschen">Löschen</button>
-    </div>
+    {% include "counter/_ei_entry.html" with button="Hinzufügen" purpose="ausgabe" %}
   </form>
-  <div class="card-scan">
-    <button type="button" data-qr-start>QR-Etikett mit der Kamera lesen</button>
-    <button type="button" data-qr-stop hidden>Kamera beenden</button>
-    <p class="hint" role="status" data-qr-status></p>
-    <video class="camera" data-qr-video hidden muted playsinline></video>
-  </div>
 </section>
 <script src="{% static 'vendor/jsQR-1.4.0.js' %}" defer></script>
 <script src="{% static 'js/theke.js' %}" defer></script>

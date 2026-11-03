@@ -1,0 +1,8 @@
+<fieldset class="reasons">
+  <legend>{{ legend }}</legend>
+  <div class="chips-small">
+    {% for choice in damage.reason %}<label class="reason">{{ choice.tag }} {{ choice.choice_label }}</label>{% endfor %}
+  </div>
+  {% with field=damage.comment %}{% include "inventory/_field.html" %}{% endwith %}
+  <p class="hint">{{ hint }}</p>
+</fieldset>

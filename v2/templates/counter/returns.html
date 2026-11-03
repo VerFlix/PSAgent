@@ -1,0 +1,31 @@
+{% extends "counter/base.html" %}
+{% load static %}
+{% block title %}Rückgabe{% endblock %}
+{% block theke %}
+<h1>Rückgabe</h1>
+<div class="theke-cols">
+  <section aria-labelledby="offen">
+    <h2 id="offen">Offene Ausleihen</h2>
+    {% if rows %}
+      <ul class="hits">
+        {% for row in rows %}
+          <li><a class="hit button{% if row.late %} late{% endif %}" href="{% url 'counter:return_booking' row.booking.pk %}">{{ row.name }}
+            <span>{{ row.count }} Teil{{ row.count|pluralize:"e" }} · fällig {{ row.due|date:"d.m.Y" }} · {% if row.late %}{{ row.late }} Tag{{ row.late|pluralize:"e" }} überfällig{% elif row.due == today %}fällig heute{% else %}vorzeitig{% endif %}</span></a></li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="hint">Zurzeit ist nichts ausgeliehen.</p>
+    {% endif %}
+  </section>
+  <section class="card other" aria-labelledby="scannen">
+    <h2 id="scannen">Teil scannen</h2>
+    <p class="hint">Die Ausleihe wird am Teil erkannt.</p>
+    <form method="post" id="ei-form" action="{% url 'counter:returns' %}">
+      {% csrf_token %}
+      {% include "counter/_ei_entry.html" with button="Ausleihe öffnen" purpose="rueckgabe" %}
+    </form>
+  </section>
+</div>
+<script src="{% static 'vendor/jsQR-1.4.0.js' %}" defer></script>
+<script src="{% static 'js/theke.js' %}" defer></script>
+{% endblock %}
