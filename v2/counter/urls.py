@@ -2,7 +2,7 @@
 
 from django.urls import path
 
-from counter import returns, views
+from counter import returns, settings_views, today, views
 
 app_name = "counter"
 
@@ -19,4 +19,6 @@ urlpatterns = [
     path("rueckgabe/", returns.returns, name="returns"),
     path("rueckgabe/<int:pk>/", returns.return_booking, name="return_booking"),
     path("schaden/", returns.damage_report, name="damage_report"),
+    path("heute/", today.today_view, name="today"),
+    path("einstellungen/", settings_views.counter_settings, name="settings"),
 ]

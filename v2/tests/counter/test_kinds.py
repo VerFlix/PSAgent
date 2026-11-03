@@ -46,8 +46,8 @@ def test_numbers_sort_as_numbers() -> None:
 def test_quick_access_is_belt_via_ferrata_set_and_helmet() -> None:
     """Festlegung (Felix, 03.11.2026): Schnellzugriff G, KS, H; Gurte nach Größe."""
     assert [kind.code for kind in kinds.quick_kinds()] == ["G", "KS", "H"]
-    assert [kind.code for kind in kinds.KINDS if kind.sized] == ["G"]
-    assert {kind.code for kind in kinds.KINDS} >= {"S", "EX", "LVS"}
+    assert [kind.code for kind in kinds.all_kinds() if kind.sized] == ["G"]
+    assert {kind.code for kind in kinds.all_kinds()} >= {"S", "EX", "LVS"}
 
 
 def test_parts_of_a_kind(make_part: MakePart) -> None:

@@ -16,7 +16,7 @@
             {% csrf_token %}
             {% if card.sizes %}
               {% for size in card.sizes %}
-                <button type="submit" name="gurt" value="{{ size.value }}" aria-label="{{ card.kind.label }} {{ size.aria }} hinzufügen, {% if size.free %}{{ size.free }} frei{% else %}keiner frei{% endif %}"{% if not size.free %} disabled{% endif %}>{{ size.label }}<span>{% if size.free %}{{ size.free }} frei{% else %}keiner{% endif %}</span></button>
+                <button type="submit" name="groesse" value="{{ card.kind.code }}:{{ size.value }}" aria-label="{{ card.kind.label }} {{ size.aria }} hinzufügen, {% if size.free %}{{ size.free }} frei{% else %}keiner frei{% endif %}"{% if not size.free %} disabled{% endif %}>{{ size.label }}<span>{% if size.free %}{{ size.free }} frei{% else %}keiner{% endif %}</span></button>
               {% endfor %}
             {% else %}
               <button type="submit" name="weniger" value="{{ card.kind.code }}" aria-label="{{ card.kind.label }} eins weniger"{% if not card.count %} disabled{% endif %}>−</button>

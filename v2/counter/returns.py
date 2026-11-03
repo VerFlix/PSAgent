@@ -34,7 +34,7 @@ from lending.services import LendingError
 
 
 def _entry_context() -> dict[str, Any]:
-    return {"prefix": kinds.ei_prefix(), "all_kinds": kinds.KINDS, "digits": "1234567890"}
+    return {"prefix": kinds.ei_prefix(), "all_kinds": kinds.all_kinds(), "digits": "1234567890"}
 
 
 @dataclass(frozen=True)

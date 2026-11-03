@@ -134,3 +134,9 @@ ol.timeline li.timeline-verleih { border-left: 3px solid #b7791f; margin-left: -
 .status-passed { background: #e3f4e6; }
 .status-defect { background: #fde2e1; }
 .status-retire { background: #eee; }
+
+/* Theke-Gerät (#127): normale Ansichten für Touch vergrößert, Knöpfe mindestens 48 px. */
+.touch button, .touch .button, .touch input, .touch select, .touch textarea { min-height: 3rem; font-size: 1.1rem; }
+.touch input[type="checkbox"], .touch input[type="radio"] { min-height: 0; width: 1.6rem; height: 1.6rem; }
+.touch main a { display: inline-block; min-height: 3rem; line-height: 3rem; }
+.touch .list td, .touch .list th { padding: 0.6rem; }

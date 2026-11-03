@@ -1,0 +1,50 @@
+{% extends "counter/base.html" %}
+{% block title %}Heute{% endblock %}
+{% block theke %}
+<h1>Heute, {{ today|date:"l, d.m.Y" }}</h1>
+<div class="theke-cols">
+  <section aria-labelledby="abholen">
+    <h2 id="abholen">Abholungen</h2>
+    {% if pickups %}
+      <form method="post" action="{% url 'counter:checkout_reservations' %}">
+        {% csrf_token %}
+        <ul class="hits">
+          {% for row in pickups %}
+            <li><button type="submit" name="vorgang" value="{{ row.booking.pk }}" class="hit">{{ row.name }}<span>{{ row.count }} Teil{{ row.count|pluralize:"e" }} · {% if row.start < today %}seit {{ row.start|date:"d.m." }}{% else %}ab heute{% endif %} bis {{ row.end|date:"d.m.Y" }}</span></button></li>
+          {% endfor %}
+        </ul>
+      </form>
+    {% else %}
+      <p class="hint">Heute ist nichts zum Abholen reserviert.</p>
+    {% endif %}
+    <h2 id="zurueck">Rückgaben</h2>
+    {% if returns %}
+      <ul class="hits">
+        {% for row in returns %}
+          <li><a class="hit button{% if row.late %} late{% endif %}" href="{% url 'counter:return_booking' row.booking.pk %}">{{ row.name }}
+            <span>{{ row.count }} Teil{{ row.count|pluralize:"e" }} · {% if row.late %}{{ row.late }} Tag{{ row.late|pluralize:"e" }} überfällig{% else %}fällig heute{% endif %}</span></a></li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="hint">Heute ist keine Rückgabe fällig.</p>
+    {% endif %}
+  </section>
+  <section aria-labelledby="bestand">
+    <h2 id="bestand">Bestand</h2>
+    {% for kind, rows in stock %}
+      <div class="table-scroll">
+        <table class="list stock">
+          <caption>{{ kind.label }}{% if kind.sized %} je Größe{% endif %}</caption>
+          <thead><tr><th scope="col">{% if kind.sized %}Größe{% else %}Art{% endif %}</th><th scope="col">heute frei</th><th scope="col">verliehen</th><th scope="col">gesperrt</th></tr></thead>
+          <tbody>
+            {% for row in rows %}<tr><th scope="row" aria-label="{{ row.aria }}">{{ row.label }}</th><td>{{ row.free }}</td><td>{{ row.lent }}</td><td>{{ row.locked }}</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% empty %}
+      <p class="hint">Im Schnellzugriff steht keine Art (Theke-Einstellungen).</p>
+    {% endfor %}
+    <p class="hint">Teile mit einem Größenbereich (verstellbar) zählen bei jeder Größe, die sie abdecken.</p>
+  </section>
+</div>
+{% endblock %}

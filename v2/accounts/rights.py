@@ -56,6 +56,7 @@ class Right(StrEnum):
     OVERDUE_DIGEST = "overdue_digest"
     COUNTER_LOGIN = "counter_login"
     COUNTER_CREDENTIALS = "counter_credentials"
+    COUNTER_SETTINGS = "counter_settings"
     MANAGE_USERS = "manage_users"
     MODIFY_SIGNED = "modify_signed"
 
@@ -181,6 +182,10 @@ RIGHTS: dict[Right, Rule] = {
     ),
     Right.COUNTER_CREDENTIALS: Rule(
         "Eigene PIN setzen, eigenen QR-Code drucken (Theke)", Role.LENDER, maximum=Role.TRAINER
+    ),
+    Right.COUNTER_SETTINGS: Rule(
+        "Theke einstellen: Art-Kürzel, Schnellzugriff, nach Größe, Vorauswahl der Leihdauer",
+        Role.ADMIN,
     ),
     Right.MANAGE_USERS: Rule("Nutzer, Rollen, Sachkunde-Zertifikate verwalten", Role.ADMIN),
     Right.MODIFY_SIGNED: Rule("Signierte Einträge ändern oder löschen", None),

@@ -109,8 +109,12 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
   danach meldet das Vereinsgerät ab. Rückgabe: offene Ausleihen, überfällige zuerst; ein
   gescanntes Teil öffnet seine Ausleihe, Teilrückgabe ist möglich, ein Schaden sperrt das Teil
   (Grund antippen, bei „Sonstiges“ mit Kommentar). Schaden melden: Teil wählen, Grund und
-  Kommentar, sperren. Der Grund steht im Sperrkommentar. „Heute“ folgt als eigene Seite; bis
-  dahin öffnet die Kachel die normale Ansicht.
+  Kommentar, sperren. Der Grund steht im Sperrkommentar. Heute: Abholungen, fällige und
+  überfällige Rückgaben, Bestand im Schnellzugriff (je Größe heute frei, verliehen, gesperrt).
+  Die übrigen Bereiche öffnen die normale Ansicht, am Theke-Gerät für Touch vergrößert;
+  `docs/theke.md` listet den Weg zu jeder Verleiher-Funktion. Art-Kürzel, Schnellzugriff,
+  „nach Größe“ und die Vorauswahl der Leihdauer stellt der Admin unter
+  `/theke/einstellungen/` ein (mit YubiKey).
 - QR-Etiketten (ab Trainer): auf der Teileseite oder für markierte bzw. alle Teile in der
   Teileliste, als PDF für A4-Bögen mit 65 Etiketten 38 x 21,2 mm (z. B. Avery Zweckform 3666).
   Der QR-Code enthält `PSAGENT_BASE_URL/q/<EI>`; die Kamera-App öffnet damit nach der Anmeldung

@@ -3,51 +3,41 @@
 Festlegung (Felix, 31.10. und 03.11.2026): Eine EI hat die Form `<Präfix><Art>-<Nummer>`, ggf.
 mit `-<Zusatz>`, z. B. `DAV-HL-G-143` oder `DAV-HL-H-31-B`. Das Präfix ist eine Einstellung
 (`PSAGENT_EI_PREFIX`, Standard `DAV-HL-`). Bestätigte Kürzel: G (Klettergurt), KS
-(Klettersteigset), H (Helm), S (Seil), EX (Expressset) und LVS (LVS-Gerät). Weitere pflegt später
-der Admin (#127, PR 3). Im Schnellzugriff stehen Klettergurt, Klettersteigset und Helm; Gurte
-wählt man nach Größe (#124).
+(Klettersteigset), H (Helm), S (Seil), EX (Expressset) und LVS (LVS-Gerät). Der Admin pflegt die
+Liste, den Schnellzugriff und „nach Größe“ unter „Theke-Einstellungen“ (`counter.config`).
+Ohne Einstellung stehen Klettergurt, Klettersteigset und Helm im Schnellzugriff; Gurte wählt
+man nach Größe (#124).
 
 Die Art ist kein Feld am Teil, sondern folgt aus der EI. Teile mit anderer Schreibweise gibt die
 Theke über „Anderes Teil“ aus.
 """
 
 import re
-from dataclasses import dataclass
 
 from django.conf import settings
 from django.db.models import QuerySet
 
+from counter import config
 from inventory.models import Part, normalize_ei
 
-
-@dataclass(frozen=True)
-class Kind:
-    code: str
-    label: str
-    quick: bool = False  # Schnellzugriff in Schritt „Teile“
-    sized: bool = False  # Auswahl nach Größe (#124)
-
-
-KINDS: tuple[Kind, ...] = (
-    Kind("G", "Klettergurt", quick=True, sized=True),
-    Kind("KS", "Klettersteigset", quick=True),
-    Kind("H", "Helm", quick=True),
-    Kind("S", "Seil"),
-    Kind("EX", "Expressset"),
-    Kind("LVS", "LVS-Gerät"),
-)
+Kind = config.Kind
 
 
 def ei_prefix() -> str:
     return str(settings.PSAGENT_EI_PREFIX)
 
 
+def all_kinds() -> tuple[Kind, ...]:
+    """Art-Kürzel nach dem jüngsten Stand der Theke-Einstellungen."""
+    return config.kinds()
+
+
 def by_code(code: str) -> Kind | None:
-    return next((kind for kind in KINDS if kind.code == code.upper()), None)
+    return next((kind for kind in all_kinds() if kind.code == code.upper()), None)
 
 
 def quick_kinds() -> list[Kind]:
-    return [kind for kind in KINDS if kind.quick]
+    return [kind for kind in all_kinds() if kind.quick]
 
 
 def _pattern() -> re.Pattern[str]:

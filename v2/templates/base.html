@@ -13,7 +13,7 @@
   {% if offline_binder_auto %}<script src="{% static 'js/offline.js' %}" defer></script>{% endif %}
   {% block head %}{% endblock %}
 </head>
-<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'{% if request.club_device.counter %} class="touch"{% endif %}>
   {% if offline_binder_auto %}<span hidden data-offline-binder="auto" data-sw="{% url 'emergency:service_worker' %}" data-scope="{% url 'emergency:index' %}"></span>{% endif %}
   <header class="topbar">
     <a class="brand" href="{% url 'home' %}">PSAgent</a>
