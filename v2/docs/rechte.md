@@ -130,7 +130,10 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   eine erfundene Ausgabe Einblick in fremde Kontaktdaten (wie bei Reservierungen ausgeschlossen).
 - Mitgliedsausweis (#125, Felix, 31.10.2026): Der DAV-Mitgliedsausweis dient als Ausleihausweis.
   Gespeichert wird nur die Mitgliedsnummer vom Strichcode, lokal in den Kontaktdaten (kein
-  Zugriff auf die Mitgliederverwaltung), eindeutig und mit der Löschfrist gelöscht. Verbinden
+  Zugriff auf die Mitgliederverwaltung), eindeutig und mit der Löschfrist gelöscht. Der
+  Strichcode enthält „Sektion/Ortsgruppe/Mitglied*Kategorie*Eintritt DAV*Eintritt
+  Sektion*Geburtsdatum“; übernommen werden nur die 11 Ziffern vorn (DAV-weit eindeutig), der Rest
+  verlässt das Tablet nicht und wird auch vom Server verworfen (Felix, 03.11.2026). Verbinden
   darf ab Verleiher, nach Abgleich des Namens auf dem Ausweis; lösen oder ändern erst ab
   Trainer/Materialwart. Die Nummer sieht in der Oberfläche nur, wer Kontaktdaten sehen darf. Wer
   einen Ausweis scannt, sieht wie bei der Namenssuche nur den Namen. Das Protokoll

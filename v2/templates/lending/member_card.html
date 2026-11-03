@@ -5,7 +5,7 @@
 <h1>Mitgliedsausweis von {{ contact.name }}</h1>
 <section class="card">
   {% if contact.member_number %}
-    <p>Mitgliedsausweis verbunden{% if may_view %}: {{ contact.member_number }}{% endif %}.</p>
+    <p>Mitgliedsausweis verbunden{% if may_view %}: {{ contact.member_number_display }}{% endif %}.</p>
   {% else %}
     <p>Noch kein Mitgliedsausweis verbunden.</p>
   {% endif %}

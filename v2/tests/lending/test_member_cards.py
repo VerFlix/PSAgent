@@ -22,6 +22,10 @@ from tests.helpers import make_inspector
 
 pytestmark = pytest.mark.django_db
 NUMBER = "99900004711"
+# Ganze Zeile des Strichcodes im Aufbau des DAV-Musters, künstlich: Sektion/Ortsgruppe/Mitglied,
+# Kategorie, Eintritt DAV, Eintritt Sektion, Geburtsdatum.
+BIRTH = "01011990"
+CARD_LINE = f"999/00/004711*1000*2020*2020*{BIRTH}"
 
 
 @pytest.fixture
@@ -42,16 +46,51 @@ def number_of(borrower: Borrower) -> str:
 
 
 @pytest.mark.parametrize(
-    "raw", ["99900004711", "999 00 004711", "999/00/004711", " 999-00-004711 "]
+    "raw",
+    [
+        "99900004711",
+        "999 00 004711",
+        "999/00/004711",
+        " 999-00-004711 ",
+        CARD_LINE,
+        f"{CARD_LINE}\r\n",
+        "999/00/004711 * 1000 * 2020",
+        "999/00/004711*",
+    ],
 )
 def test_number_is_normalized(raw: str) -> None:
+    """Ausdruck, Eingabe oder ganze Zeile des Strichcodes: übrig bleiben nur die 11 Ziffern."""
     assert members.normalize(raw) == NUMBER
 
 
-@pytest.mark.parametrize("raw", ["", "9990000471", "999000047111", "99900A04711"])
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "",
+        "9990000471",
+        "999000047111",
+        "99900A04711",
+        "9990000471110002020202001011990",  # ohne Trenner: Nummer nicht eindeutig abgrenzbar
+        "1000*2020*2020*01011990",
+        "*999/00/004711",
+    ],
+)
 def test_malformed_number_is_rejected(raw: str) -> None:
     with pytest.raises(LendingError, match="11 Ziffern"):
         members.normalize(raw)
+
+
+def test_card_line_keeps_nothing_but_the_number(lender: User) -> None:
+    """Geburtsdatum, Kategorie, Eintrittsjahre: nirgends gespeichert (Felix, 03.11.2026)."""
+    person = create_borrower("Mara Muster", member_number=CARD_LINE, actor=lender)
+
+    contact = BorrowerContact.objects.get(borrower=person)
+    assert contact.member_number == NUMBER
+    assert contact.member_number_display == "999/00/004711"
+    stored = str(BorrowerContact.objects.values().get()) + str(
+        MemberCardEvent.objects.values().get()
+    )
+    assert BIRTH not in stored and "*" not in stored
 
 
 # --- Verbinden, lösen, ändern ---
@@ -142,6 +181,17 @@ def test_search_by_scanned_number(client: Client, borrower: Borrower, lender: Us
     page = client.get(reverse("lending:borrower_search"), {"suche": "999 00 004711"})
 
     assert page.context["found"] == [borrower]
+
+
+def test_search_by_whole_card_line(client: Client, borrower: Borrower, lender: User) -> None:
+    """Kommt doch die ganze Zeile an (Handscanner ohne Skript), findet die Suche die Person."""
+    members.link(borrower, NUMBER, actor=lender)
+    client.force_login(lender)
+
+    page = client.get(reverse("lending:borrower_search"), {"suche": CARD_LINE})
+
+    assert page.context["found"] == [borrower]
+    assert BIRTH not in page.content.decode()
 
 
 def test_person_page_creates_without_loan(client: Client, lender: User) -> None:

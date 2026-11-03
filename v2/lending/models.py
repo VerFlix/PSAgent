@@ -112,6 +112,12 @@ class BorrowerContact(models.Model):
         return self.name
 
     @property
+    def member_number_display(self) -> str:
+        """Mitgliedsnummer wie auf dem Ausweis: 123/00/456789 (#125)."""
+        number = self.member_number
+        return f"{number[:3]}/{number[3:5]}/{number[5:]}" if number else ""
+
+    @property
     def checked_at(self) -> datetime:
         """Wann die Kontaktdaten zuletzt geändert oder als unverändert bestätigt wurden."""
         return max(self.updated_at, self.confirmed_at or self.updated_at)

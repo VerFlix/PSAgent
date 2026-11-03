@@ -6,7 +6,11 @@ Entleihers. Sie ist eindeutig und verschwindet mit den Kontaktdaten nach der Lö
 Verbinden darf der Verleiher nach Abgleich des Namens auf dem Ausweis; lösen oder ändern erst
 Trainer/Materialwart. Das Protokoll (`MemberCardEvent`) nennt die Nummer nicht.
 
-Annahme bis zu Felix' Test: Der Strichcode enthält genau die aufgedruckte Mitgliedsnummer.
+Aufbau des Strichcodes (Felix, 03.11.2026, nach dem DAV-Muster): „SSS/OO/MMMMMM*KKKK*JJJJ*JJJJ*
+TTMMJJJJ“, also Sektion, Ortsgruppe und Mitgliedsnummer, dann Kategorie, Eintrittsjahr DAV und
+Sektion und das Geburtsdatum. Gespeichert werden nur die ersten 11 Ziffern (DAV-weit eindeutig).
+Alles ab dem ersten „*“ wird verworfen: im Browser, bevor es an den Server geht, und hier noch
+einmal, falls es doch ankommt (Handscanner, Eintippen).
 """
 
 import re
@@ -20,14 +24,21 @@ from lending.services import LendingError
 
 DIGITS = 11
 TAKEN = "Dieser Mitgliedsausweis ist schon mit einer anderen Person verbunden."
+WRONG_FORMAT = (
+    f"Die Mitgliedsnummer hat {DIGITS} Ziffern: Sektion/Ortsgruppe/Mitglied, vorne in der Zeile "
+    "unter dem Strichcode, z. B. 123/00/456789."
+)
+# Sektion (3), Ortsgruppe (2), Mitglied (6), getrennt durch nichts, „/“, „.“, „-“ oder Leerzeichen;
+# danach höchstens der Rest des Strichcodes ab dem ersten „*“.
+CARD = re.compile(r"\s*(\d{3})\s*[/.\-]?\s*(\d{2})\s*[/.\-]?\s*(\d{6})\s*(?:\*.*)?", re.DOTALL)
 
 
 def normalize(raw: str) -> str:
-    """Nur die Ziffern; Leerzeichen, Schräg- und Bindestriche vom Ausdruck fallen weg."""
-    number = re.sub(r"[\s/.\-]", "", raw or "")
-    if not re.fullmatch(rf"[0-9]{{{DIGITS}}}", number):
-        raise LendingError(f"Die Mitgliedsnummer hat {DIGITS} Ziffern (unter dem Strichcode).")
-    return number
+    """Die 11 Ziffern aus Ausdruck oder Strichcode; der Rest (z. B. Geburtsdatum) fällt weg."""
+    match = CARD.fullmatch(raw or "")
+    if match is None:
+        raise LendingError(WRONG_FORMAT)
+    return "".join(match.groups())
 
 
 def find(raw: str, *, actor: User | None) -> Borrower | None:
