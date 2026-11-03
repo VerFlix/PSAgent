@@ -95,6 +95,13 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   abgewiesen; eine bestehende Sitzung endet. Nach 5 falschen PINs ist die PIN gesperrt. PIN und
   QR-Code richtet jede Person nur für sich ein, nicht in einer Sitzung per PIN. PIN löschen und
   QR-Code widerrufen gehört zu „Nutzer verwalten“ (Admin, mit YubiKey).
+- Theke-Ansicht (#127, Felix, 31.10. und 03.11.2026): alle Seiten unter `/theke/` ab Verleiher
+  (Recht „Reservieren, ausgeben, zurücknehmen“), keine eigenen Rechte und keine neue Fachlogik.
+  Personen anlegen, Ausweis verbinden und Kontaktdaten überschreiben laufen über dieselben
+  Services wie am PC, mit denselben Rechten. Die Ausgabe verlangt dieselben Pflichten wie am PC
+  (Kurzkontrolle, GAL bereitgestellt, Unterschrift, bei bekannten Entleihern „unverändert
+  (nachgefragt)“ oder neue Angaben). Der laufende Vorgang steht in der Sitzung nur mit
+  Verweisen, ohne Personendaten.
 - Nutzer verwalten (#67): Ein Admin nimmt sich nicht selbst die Admin-Rolle und deaktiviert
   sich nicht selbst; das letzte aktive Admin-Konto bleibt erhalten. Rollenwechsel, Deaktivieren,
   Reaktivieren, Einrichtungslinks und vom Admin widerrufene Passkeys stehen im nur anhängbaren

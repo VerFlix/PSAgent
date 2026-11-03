@@ -1,0 +1,38 @@
+{% extends "counter/base.html" %}
+{% load static %}
+{% block title %}Ausgabe: Unterschrift{% endblock %}
+{% block theke %}
+<h1>Unterschrift</h1>
+<form method="post" class="card sign">
+  {% csrf_token %}
+  <p>Entleiher: <strong>{{ borrower.display_name }}</strong> · Rückgabe bis <strong>{{ end|date:"D d.m.Y" }}</strong></p>
+  <ul class="lines summary">
+    {% if reserved %}
+      {% for loan in reserved %}
+        <li class="line"><label class="check big"><input type="checkbox" name="ausleihe" value="{{ loan.pk }}"{% if loan.pk in chosen %} checked{% endif %}> <span><strong>{% for component in loan.part.components.all %}{{ component.ei }}{% if not forloop.last %}, {% endif %}{% endfor %}</strong> {{ loan.part.name }} · bis {{ loan.end|date:"d.m.Y" }}</span></label>
+          {% include "counter/_gal.html" with part=loan.part %}</li>
+      {% endfor %}
+    {% else %}
+      {% for part in parts %}
+        <li class="line"><span><strong>{% for component in part.components.all %}{{ component.ei }}{% if not forloop.last %}, {% endif %}{% endfor %}</strong> {{ part.name }}</span>
+          {% include "counter/_gal.html" %}</li>
+      {% endfor %}
+    {% endif %}
+  </ul>
+  {% for error in form.non_field_errors %}<p class="notice error" role="alert">{{ error }}</p>{% endfor %}
+  <label class="check big">{{ form.quick_check }} {{ form.quick_check.label }}</label>
+  <label class="check big">{{ form.gal_provided }} {{ form.gal_provided.label }}</label>
+  <label class="check big">{{ form.receipt }} {{ form.receipt.label }}</label>
+  {% with field=form.signer_name %}{% include "inventory/_field.html" %}{% endwith %}
+  {% include "privacy/_notice.html" %}
+  <p id="signature-label">Unterschrift Entleiher/in</p>
+  <canvas class="signature" width="600" height="200" aria-labelledby="signature-label" data-signature-for="id_signature"></canvas>
+  {{ form.signature }}
+  {% for error in form.signature.errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  <p class="sign-actions">
+    <button type="button" data-signature-clear="id_signature">Unterschrift löschen</button>
+    <button type="submit" class="primary big">Ausgeben</button>
+  </p>
+</form>
+<script src="{% static 'js/signature.js' %}" defer></script>
+{% endblock %}

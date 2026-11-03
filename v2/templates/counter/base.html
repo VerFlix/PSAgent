@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% load static %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/theke.css' %}">{% endblock %}
+{% block content %}
+<div class="theke">
+  <nav class="theke-nav" aria-label="Theke">
+    <a class="theke-start" href="{% url 'counter:home' %}">Start</a>
+    {% if steps %}
+      <ol class="theke-steps">
+        {% for step in steps %}
+          <li class="{% if step.current %}current{% elif step.url %}open{% endif %}"{% if step.current %} aria-current="step"{% endif %}>
+            {% if step.url and not step.current %}<a href="{{ step.url }}">{{ step.number }} {{ step.name }}</a>{% else %}<span>{{ step.number }} {{ step.name }}</span>{% endif %}
+          </li>
+        {% endfor %}
+      </ol>
+    {% endif %}
+  </nav>
+  {% block theke %}{% endblock %}
+</div>
+{% endblock %}

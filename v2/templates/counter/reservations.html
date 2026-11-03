@@ -1,0 +1,18 @@
+{% extends "counter/base.html" %}
+{% block title %}Reservierung abholen{% endblock %}
+{% block theke %}
+<h1>Reservierung abholen</h1>
+{% if bookings %}
+  <form method="post">
+    {% csrf_token %}
+    <ul class="hits">
+      {% for row in bookings %}
+        <li><button type="submit" name="vorgang" value="{{ row.booking.pk }}" class="hit">{{ row.name }}<span>{{ row.count }} Teil{{ row.count|pluralize:"e" }} · {{ row.start|date:"d.m." }} bis {{ row.end|date:"d.m.Y" }}</span></button></li>
+      {% endfor %}
+    </ul>
+  </form>
+{% else %}
+  <p class="hint">Heute ist nichts zum Abholen reserviert.</p>
+{% endif %}
+<p><a class="button big" href="{% url 'counter:checkout_period' %}">Zurück zur Ausgabe</a></p>
+{% endblock %}

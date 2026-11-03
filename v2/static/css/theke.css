@@ -1,0 +1,98 @@
+/* Theke (#127): Touch-Oberfläche für ein Tablet im Querformat (gebaut für 1280 × 800).
+   Knöpfe mindestens 48 px hoch, Kontrast nach WCAG AA, Farben passend zu app.css. */
+:root {
+  --theke-out: #1e6b47;
+  --theke-ret: #1f4e8c;
+  --theke-dmg: #a3401c;
+  --theke-today: #52606d;
+  --theke-line: #a9b3ad;
+}
+
+.theke { max-width: 80rem; margin: 0 auto; }
+.theke h1 { font-size: 1.75rem; margin: 0.5rem 0 1rem; }
+.theke button, .theke .button, .theke input, .theke select, .theke textarea { min-height: 3rem; font-size: 1.1rem; }
+.theke .button { display: inline-flex; align-items: center; justify-content: center; padding: 0 1.25rem; border: 2px solid var(--accent); border-radius: 0.75rem; color: var(--accent); background: #fff; text-decoration: none; font-weight: 700; }
+.theke .button.primary { background: var(--theke-out); border-color: var(--theke-out); color: #fff; }
+.theke .button.disabled { border-color: var(--border); color: var(--muted); background: #eef0ee; }
+.theke .big, .theke button.big { min-height: 4.5rem; font-size: 1.4rem; padding: 0 2rem; border-radius: 1rem; }
+
+.theke-nav { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.theke-start { display: inline-flex; align-items: center; min-height: 3rem; padding: 0 1.25rem; border: 2px solid var(--theke-out); border-radius: 0.75rem; font-weight: 700; color: var(--theke-out); text-decoration: none; background: #fff; }
+.theke-steps { display: flex; gap: 0.5rem; list-style: none; padding: 0; margin: 0; flex-wrap: wrap; }
+.theke-steps li { border-radius: 999px; background: #e4e7e3; color: #4a5550; }
+.theke-steps li a, .theke-steps li span { display: inline-flex; align-items: center; min-height: 3rem; padding: 0 1.1rem; font-weight: 700; color: inherit; text-decoration: none; }
+.theke-steps li.open { background: #e3f1e8; color: #154d33; }
+.theke-steps li.current { background: var(--theke-out); color: #fff; }
+
+/* Startseite */
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.tiles form { margin: 0; display: flex; }
+.tile { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 0.5rem; min-height: 16rem; padding: 1.25rem; border: none; border-radius: 1.25rem; color: #fff; font-size: 2rem; font-weight: 700; text-align: left; text-decoration: none; cursor: pointer; }
+.tile span { font-size: 1.05rem; font-weight: 400; }
+.tile-out { background: var(--theke-out); }
+.tile-ret { background: var(--theke-ret); }
+.tile-dmg { background: var(--theke-dmg); }
+.tile-today { background: var(--theke-today); }
+.theke-more { display: flex; flex-wrap: wrap; gap: 0.75rem; list-style: none; padding: 0; }
+
+/* Schritt 1 */
+.chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.chip { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.25rem; min-height: 6rem; border: 2px solid var(--theke-line); border-radius: 1rem; background: #fff; color: var(--fg); font-size: 1.4rem; font-weight: 700; }
+.chip span { font-size: 1rem; font-weight: 400; }
+.chip.on { border: 3px solid var(--theke-out); background: var(--theke-out); color: #fff; }
+.date-pick { display: flex; align-items: end; gap: 1rem; flex-wrap: wrap; }
+.date-pick label { width: 100%; }
+
+/* Schritt 2 */
+.theke-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; }
+.quick-card { background: var(--card); border: 1px solid var(--border); border-radius: 1rem; padding: 0.75rem 1rem; margin-bottom: 0.75rem; }
+.quick-card h3 { display: flex; justify-content: space-between; margin: 0; font-size: 1.3rem; }
+.quick-card .count { min-width: 2.5rem; text-align: center; border-radius: 999px; background: #e3f1e8; color: #154d33; }
+.sizes { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 0.4rem; }
+.sizes button { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 3.6rem; padding: 0; border: 2px solid var(--theke-out); border-radius: 0.75rem; background: #fff; color: var(--fg); font-weight: 700; }
+.sizes button span { font-size: 0.8rem; font-weight: 400; }
+.sizes button:disabled { border-style: dashed; border-color: #c9cfcb; background: #f1f3f0; color: #6b746f; opacity: 1; cursor: not-allowed; }
+.plusminus { display: flex; gap: 0.75rem; }
+.plusminus button { width: 5rem; min-height: 3.5rem; font-size: 1.8rem; border-radius: 0.75rem; }
+.lines { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.line { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; border: 2px solid var(--border); border-radius: 0.75rem; background: #fff; }
+.line.problem { border-color: var(--theke-dmg); background: #fbe9e2; }
+.line .note { display: block; color: #4a5550; font-size: 0.95rem; }
+.line.problem .note { color: #8a3313; font-weight: 700; }
+.line .actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+.notice { padding: 0.75rem 1rem; border-radius: 0.75rem; font-weight: 700; }
+.notice.error { background: #fbe9e2; color: #8a3313; }
+.notice.info { background: #eaf0f8; color: #163a69; }
+.theke-next { margin: 1rem 0; text-align: right; }
+.other .ei-row { display: flex; gap: 0.75rem; }
+.other .ei-row input { flex: 1; max-width: none; font-size: 1.4rem; font-family: ui-monospace, monospace; }
+.keys { display: grid; gap: 0.5rem; margin-top: 0.75rem; }
+.keys.kinds { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.keys.digits { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.keys button { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 3.5rem; border-radius: 0.75rem; font-size: 1.3rem; font-weight: 700; }
+.keys button span { font-size: 0.8rem; font-weight: 400; }
+.suggestions { list-style: none; padding: 0; margin: 0.5rem 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.suggestion { width: 100%; text-align: left; border-radius: 0.75rem; }
+.suggestion span { display: block; font-size: 0.9rem; }
+.suggestion.problem { border-color: var(--theke-dmg); color: #8a3313; }
+
+/* Schritt 3 und Reservierungen */
+.hits { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.hit { width: 100%; min-height: 4rem; text-align: left; font-size: 1.3rem; font-weight: 700; border-width: 2px; border-radius: 0.75rem; }
+.hit span { display: block; font-size: 1rem; font-weight: 400; }
+.person details { margin: 1rem 0; }
+.person summary { min-height: 3rem; display: flex; align-items: center; font-weight: 700; cursor: pointer; }
+
+/* Schritt 4 */
+.check.big { display: flex; align-items: center; gap: 0.75rem; min-height: 3.5rem; font-size: 1.2rem; }
+.check.big input { width: 2rem; height: 2rem; min-height: 0; }
+.sign canvas.signature { max-width: none; }
+.sign-actions { display: flex; justify-content: space-between; gap: 1rem; }
+.gal { font-size: 0.95rem; }
+
+@media (max-width: 60rem) {
+  .tiles, .chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .theke-cols { grid-template-columns: minmax(0, 1fr); }
+  .sizes { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .keys.kinds, .keys.digits { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}

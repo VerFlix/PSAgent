@@ -285,3 +285,23 @@ def test_pages_offer_the_camera(
     page = client.get(url).content.decode()
 
     assert "data-card-scan" in page and "js/ausweis.js" in page
+
+
+def test_person_page_takes_the_whole_card_line(client: Client, lender: User) -> None:
+    """Ohne Skript (Handscanner) kommt die ganze Zeile an; der Server behält nur die Nummer."""
+    client.force_login(lender)
+
+    response = client.post(
+        reverse("lending:borrower_create"),
+        {
+            "name": "Mara Muster",
+            "address": "",
+            "phone": "",
+            "email": "",
+            "member_number": CARD_LINE,
+        },
+    )
+
+    assert response.status_code == 302
+    person = Borrower.objects.get(contact__name="Mara Muster")
+    assert number_of(person) == NUMBER

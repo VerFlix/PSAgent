@@ -99,6 +99,15 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
   Ausleihen“ legt Entleiher auch ohne Ausleihe an. Verbinden ab Verleiher mit Namensabgleich,
   lösen oder ändern ab Trainer/Materialwart. Die Kamera liest Strichcodes nur mit dem
   eingebauten `BarcodeDetector` (Chrome auf Android); sonst Handscanner oder eintippen.
+- Theke-Ansicht (#127, `/theke/`, ab Verleiher): Touch-Oberfläche für ein Tablet im Querformat
+  (gebaut für 1280 x 800). Ein Theke-Gerät startet nach der Anmeldung dort. Vier Kacheln:
+  Ausgabe, Rückgabe, Schaden melden, Heute; darunter die übrigen Bereiche in der normalen
+  Ansicht. Die Ausgabe läuft in vier Schritten: Dauer → Teile → Entleiher → Unterschrift.
+  Gurte wählt man nach Größe, Klettersteigset und Helm per Plus und Minus, andere Teile per EI
+  (Art-Tasten und Ziffernblock, vorausgefüllt mit `PSAGENT_EI_PREFIX`) oder QR-Etikett. Auch
+  „Reservierung abholen“ geht hier. Es gelten dieselben Regeln und Pflichten wie am PC;
+  danach meldet das Vereinsgerät ab. Rückgabe, Schaden melden und Heute folgen als eigene
+  Seiten; bis dahin öffnen die Kacheln die normale Ansicht.
 - QR-Etiketten (ab Trainer): auf der Teileseite oder für markierte bzw. alle Teile in der
   Teileliste, als PDF für A4-Bögen mit 65 Etiketten 38 x 21,2 mm (z. B. Avery Zweckform 3666).
   Der QR-Code enthält `PSAGENT_BASE_URL/q/<EI>`; die Kamera-App öffnet damit nach der Anmeldung

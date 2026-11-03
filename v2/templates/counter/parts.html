@@ -1,0 +1,85 @@
+{% extends "counter/base.html" %}
+{% load static %}
+{% block title %}Ausgabe: Teile{% endblock %}
+{% block theke %}
+<div id="schritt">
+  <h1>Teile bis {{ end|date:"D d.m.Y" }}</h1>
+  {% if notice %}<p class="notice {{ notice.kind }}" role="{% if notice.kind == 'error' %}alert{% else %}status{% endif %}">{{ notice.text }}</p>{% endif %}
+  <div class="theke-cols">
+    <section class="quick" aria-labelledby="schnell">
+      <h2 id="schnell" class="visually-hidden">Schnellzugriff</h2>
+      {% for card in cards %}
+        <div class="quick-card">
+          <h3>{{ card.kind.label }} <span class="count" aria-label="{{ card.count }} gewählt">{{ card.count }}</span></h3>
+          <p class="hint">{{ card.free }} frei bis {{ end|date:"d.m." }}{% if card.sizes %} · Größe antippen{% endif %}</p>
+          <form method="post" action="{% url 'counter:checkout_parts' %}" hx-post="{% url 'counter:checkout_parts' %}" hx-target="#schritt" hx-select="#schritt" hx-swap="outerHTML" class="{% if card.sizes %}sizes{% else %}plusminus{% endif %}">
+            {% csrf_token %}
+            {% if card.sizes %}
+              {% for size in card.sizes %}
+                <button type="submit" name="gurt" value="{{ size.value }}" aria-label="{{ card.kind.label }} {{ size.aria }} hinzufügen, {% if size.free %}{{ size.free }} frei{% else %}keiner frei{% endif %}"{% if not size.free %} disabled{% endif %}>{{ size.label }}<span>{% if size.free %}{{ size.free }} frei{% else %}keiner{% endif %}</span></button>
+              {% endfor %}
+            {% else %}
+              <button type="submit" name="weniger" value="{{ card.kind.code }}" aria-label="{{ card.kind.label }} eins weniger"{% if not card.count %} disabled{% endif %}>−</button>
+              <button type="submit" name="mehr" value="{{ card.kind.code }}" aria-label="{{ card.kind.label }} eins mehr"{% if not card.free %} disabled{% endif %}>+</button>
+            {% endif %}
+          </form>
+        </div>
+      {% endfor %}
+    </section>
+    <section class="chosen" aria-labelledby="gewaehlt">
+      <h2 id="gewaehlt">Ausgewählt: {{ lines|length }} Teil{{ lines|length|pluralize:"e" }}</h2>
+      <form method="post" action="{% url 'counter:checkout_parts' %}" hx-post="{% url 'counter:checkout_parts' %}" hx-target="#schritt" hx-select="#schritt" hx-swap="outerHTML">
+        {% csrf_token %}
+        <ul class="lines">
+          {% for line in lines %}
+            <li class="line{% if line.problems %} problem{% endif %}">
+              <span class="what"><strong>{{ line.ei }}</strong> {{ line.name }}
+                <span class="note">{% if line.problems %}{{ line.problems|join:", " }}{% else %}{{ line.note }}{% endif %}</span></span>
+              <span class="actions">
+                {% if line.swappable %}<button type="submit" name="tauschen" value="{{ forloop.counter0 }}" aria-label="{{ line.ei }} tauschen">Tauschen</button>{% endif %}
+                <button type="submit" name="entfernen" value="{{ forloop.counter0 }}" aria-label="{{ line.ei }} entfernen">Entfernen</button>
+              </span>
+            </li>
+          {% empty %}
+            <li class="hint">Noch nichts gewählt.</li>
+          {% endfor %}
+        </ul>
+      </form>
+    </section>
+  </div>
+  <p class="theke-next">
+    {% if can_continue %}<a class="button big primary" href="{% url 'counter:checkout_borrower' %}">Weiter: Entleiher</a>
+    {% else %}<span class="button big disabled" aria-disabled="true">Weiter: Entleiher</span>{% endif %}
+  </p>
+</div>
+
+<section class="card other" aria-labelledby="anderes">
+  <h2 id="anderes">Anderes Teil</h2>
+  <form method="post" id="ei-form" action="{% url 'counter:checkout_parts' %}" hx-post="{% url 'counter:checkout_parts' %}" hx-target="#schritt" hx-select="#schritt" hx-swap="outerHTML" hx-disinherit="hx-target hx-select hx-swap">
+    {% csrf_token %}
+    <label for="ei-eingabe">EI eingeben oder QR-Etikett scannen</label>
+    <div class="ei-row">
+      <input id="ei-eingabe" name="ei" value="{{ prefix }}" data-prefix="{{ prefix }}" autocomplete="off" autocapitalize="characters" spellcheck="false"
+             hx-get="{% url 'counter:part_suggestions' %}" hx-trigger="input changed delay:200ms" hx-target="#ei-vorschlaege" hx-swap="innerHTML">
+      <button type="submit" class="primary">Hinzufügen</button>
+    </div>
+    <div id="ei-vorschlaege" aria-live="polite"></div>
+    <div class="keys kinds" role="group" aria-label="Art">
+      {% for kind in all_kinds %}<button type="button" data-ei-art="{{ kind.code }}" aria-label="Art {{ kind.label }}">{{ kind.code }}<span>{{ kind.label }}</span></button>{% endfor %}
+    </div>
+    <div class="keys digits" role="group" aria-label="Ziffern">
+      {% for digit in digits %}<button type="button" data-ei-key="{{ digit }}" aria-label="Ziffer {{ digit }}">{{ digit }}</button>{% endfor %}
+      <button type="button" data-ei-key="-" aria-label="Bindestrich für einen Zusatz">-</button>
+      <button type="button" data-ei-delete aria-label="Letztes Zeichen löschen">Löschen</button>
+    </div>
+  </form>
+  <div class="card-scan">
+    <button type="button" data-qr-start>QR-Etikett mit der Kamera lesen</button>
+    <button type="button" data-qr-stop hidden>Kamera beenden</button>
+    <p class="hint" role="status" data-qr-status></p>
+    <video class="camera" data-qr-video hidden muted playsinline></video>
+  </div>
+</section>
+<script src="{% static 'vendor/jsQR-1.4.0.js' %}" defer></script>
+<script src="{% static 'js/theke.js' %}" defer></script>
+{% endblock %}
