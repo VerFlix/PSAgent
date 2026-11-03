@@ -76,6 +76,12 @@ class BorrowerContact(models.Model):
     address = models.TextField("Adresse", blank=True)
     email = models.EmailField("E-Mail", blank=True)
     phone = models.CharField("Telefon", max_length=50, blank=True)
+    member_number = models.CharField(
+        "Mitgliedsnummer (DAV-Ausweis)",
+        max_length=11,
+        blank=True,
+        help_text="11 Ziffern vom Strichcode des Mitgliedsausweises (#125); nur lokal.",
+    )
     updated_at = models.DateTimeField("geändert am", default=timezone.now)
     confirmed_at = models.DateTimeField(
         "zuletzt als unverändert bestätigt",
@@ -91,10 +97,25 @@ class BorrowerContact(models.Model):
             models.CheckConstraint(
                 condition=Q(name__regex=r"\S"), name="lending_contact_name_required"
             ),
+            models.CheckConstraint(
+                condition=Q(member_number="") | Q(member_number__regex=r"^[0-9]{11}$"),
+                name="lending_contact_member_number_digits",
+            ),
+            models.UniqueConstraint(
+                fields=["member_number"],
+                condition=~Q(member_number=""),
+                name="lending_contact_member_number_unique",
+            ),
         )
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def member_number_display(self) -> str:
+        """Mitgliedsnummer wie auf dem Ausweis: 123/00/456789 (#125)."""
+        number = self.member_number
+        return f"{number[:3]}/{number[3:5]}/{number[5:]}" if number else ""
 
     @property
     def checked_at(self) -> datetime:
@@ -491,3 +512,44 @@ class DigestRun(AppendOnlyModel):
 
     def __str__(self) -> str:
         return f"Sammelmail {self.day:%d.%m.%Y}: {self.bookings} Vorgänge"
+
+
+class MemberCardEventKind(models.TextChoices):
+    LINKED = "linked", "Mitgliedsausweis verbunden"
+    CHANGED = "changed", "Mitgliedsausweis geändert"
+    UNLINKED = "unlinked", "Mitgliedsausweis gelöst"
+
+
+class MemberCardEvent(AppendOnlyModel):
+    """Protokoll zum Mitgliedsausweis eines Entleihers (#125): wer, was, wann, ohne die Nummer.
+
+    Die Nummer selbst steht nur in `BorrowerContact` und verschwindet mit der Löschfrist (#63);
+    Tabellen, die nur angehängt werden, enthalten keine löschpflichtigen Personendaten.
+    """
+
+    borrower = models.ForeignKey(
+        Borrower, on_delete=models.PROTECT, related_name="+", verbose_name="Entleiher"
+    )
+    kind = models.CharField("Vorgang", max_length=10, choices=MemberCardEventKind.choices)
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="durch",
+    )
+    at = models.DateTimeField("Zeitpunkt", default=timezone.now)
+
+    class Meta:
+        verbose_name = "Vorgang zum Mitgliedsausweis"
+        verbose_name_plural = "Vorgänge zum Mitgliedsausweis"
+        ordering = ("at", "id")
+        constraints = (
+            models.CheckConstraint(
+                condition=Q(kind__in=MemberCardEventKind.values), name="lending_member_card_kind"
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.get_kind_display()}: Entleiher #{self.borrower_id}"

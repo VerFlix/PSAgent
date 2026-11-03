@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Person anlegen{% endblock %}
+{% block content %}
+<h1>Person anlegen</h1>
+<p>Für eine spätere Ausleihe, z. B. vor einem Kurs. Für die Ausgabe nötig sind Name, Adresse und E-Mail oder Telefon. Danach siehst du die Kontaktdaten nur bei laufender Ausleihe.</p>
+<form method="post" class="card">
+  {% csrf_token %}
+  {% for error in form.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  {% for field in form %}{% include "inventory/_field.html" %}{% endfor %}
+  {% include "lending/_card_scan.html" with target="id_member_number" %}
+  <p class="hint">Mitgliedsausweis: den Strichcode lesen oder die Nummer vorne in der Zeile darunter eintippen (Sektion/Ortsgruppe/Mitglied, z. B. 123/00/456789). Gespeichert wird nur diese Nummer, nicht Geburtsdatum oder Kategorie. Gäste ohne Ausweis lassen das Feld leer.</p>
+  <button type="submit" class="primary">Anlegen</button>
+</form>
+<p><a href="{% url 'lending:overview' %}">Zurück zu „Anstehende Ausleihen“</a></p>
+<script src="{% static 'js/ausweis.js' %}" defer></script>
+{% endblock %}

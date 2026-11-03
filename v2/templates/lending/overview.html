@@ -2,7 +2,7 @@
 {% block title %}Anstehende Ausleihen{% endblock %}
 {% block content %}
 <h1>Anstehende Ausleihen</h1>
-<p><a href="{% url 'lending:new_booking' %}">Reservieren oder ausgeben</a> · <a href="{% url 'lending:calendar' %}">Kalender</a></p>
+<p><a href="{% url 'lending:new_booking' %}">Reservieren oder ausgeben</a> · <a href="{% url 'lending:borrower_create' %}">Person anlegen</a> · <a href="{% url 'lending:calendar' %}">Kalender</a></p>
 <p class="hint">E-Mail-Erinnerungen bei Überfälligkeit: {{ reminders_on|yesno:"an,aus" }}{% if may_switch_reminders %}
   <form method="post" action="{% url 'lending:reminder_switch' %}" class="inline">{% csrf_token %}
     <input type="hidden" name="an" value="{{ reminders_on|yesno:"0,1" }}">

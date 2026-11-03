@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Mitgliedsausweis{% endblock %}
+{% block content %}
+<h1>Mitgliedsausweis von {{ contact.name }}</h1>
+<section class="card">
+  {% if contact.member_number %}
+    <p>Mitgliedsausweis verbunden{% if may_view %}: {{ contact.member_number_display }}{% endif %}.</p>
+  {% else %}
+    <p>Noch kein Mitgliedsausweis verbunden.</p>
+  {% endif %}
+  <form method="post">
+    {% csrf_token %}
+    {% for error in form.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+    {% if not contact.member_number %}
+      <label for="id_member_number">Mitgliedsnummer (Ausweis scannen)</label>
+      <input id="id_member_number" name="member_number" autocomplete="off" autofocus required>
+      {% include "lending/_card_scan.html" with target="id_member_number" %}
+      <label class="check"><input type="checkbox" name="name_checked"> Der Name auf dem Ausweis stimmt mit dieser Person überein</label>
+      <button type="submit" class="primary">Ausweis verbinden</button>
+    {% endif %}
+  </form>
+  {% if may_change %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="aktion" value="aendern">
+    <label for="id_change">Ausweis ändern (neue Nummer) oder Feld leer lassen zum Lösen</label>
+    <input id="id_change" name="member_number" autocomplete="off">
+    {% include "lending/_card_scan.html" with target="id_change" label="Neuen Ausweis lesen" %}
+    <button type="submit">Ändern oder lösen</button>
+  </form>
+  {% endif %}
+  <p class="hint">Die Verbindung wird protokolliert. Lösen oder ändern können nur Trainer/Materialwart.</p>
+</section>
+<script src="{% static 'js/ausweis.js' %}" defer></script>
+{% endblock %}

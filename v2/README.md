@@ -91,6 +91,14 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
   Kindergurt 1/2; nicht Teil der EI. Pflegen ab Trainer/Materialwart; der Import lässt sie leer.
   Die Teileliste filtert nach „passt für“ (ein Bereich passt für jede enthaltene Größe); das
   QR-Etikett nennt die Größe.
+- Mitgliedsausweis (#125): Der Strichcode des DAV-Ausweises findet bei Reservierung und Ausgabe
+  die verbundene Person (Suchfeld, Handscanner oder Kamera des Tablets). Gespeichert ist nur die
+  Mitgliedsnummer (Sektion/Ortsgruppe/Mitglied, 11 Ziffern), lokal am Entleiher. Der Strichcode
+  enthält auch Kategorie, Eintrittsjahre und Geburtsdatum; das verwirft schon der Browser, der
+  Server zusätzlich. „Person anlegen“ unter „Anstehende
+  Ausleihen“ legt Entleiher auch ohne Ausleihe an. Verbinden ab Verleiher mit Namensabgleich,
+  lösen oder ändern ab Trainer/Materialwart. Die Kamera liest Strichcodes nur mit dem
+  eingebauten `BarcodeDetector` (Chrome auf Android); sonst Handscanner oder eintippen.
 - QR-Etiketten (ab Trainer): auf der Teileseite oder für markierte bzw. alle Teile in der
   Teileliste, als PDF für A4-Bögen mit 65 Etiketten 38 x 21,2 mm (z. B. Avery Zweckform 3666).
   Der QR-Code enthält `PSAGENT_BASE_URL/q/<EI>`; die Kamera-App öffnet damit nach der Anmeldung

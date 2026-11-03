@@ -1,5 +1,5 @@
 <div class="card status-box">
-  <p><strong>{{ selected.contact.name }}</strong></p>
+  <p><strong>{{ selected.contact.name }}</strong> · {% if contact.member_number %}Mitgliedsausweis verbunden{% else %}<a href="{% url 'lending:member_card' selected.pk %}" target="_blank" rel="noopener">Mitgliedsausweis verbinden</a>{% endif %}</p>
   {% if gaps %}
     <p class="error" role="alert">Für die Ausgabe fehlt: {{ gaps|join:", " }}. Bitte unten eintragen.</p>
   {% else %}
