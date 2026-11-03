@@ -95,9 +95,18 @@ class User(AbstractUser):
             ),
         )
 
+    # An einem Theke-Gerät setzt die Middleware dies für die Anfrage (#126).
+    counter_cap = False
+
     def has_role(self, minimum: Role) -> bool:
-        """True, wenn das Konto aktiv ist und mindestens die Rolle `minimum` hat."""
-        return self.is_active and _RANK[Role(self.role)] >= _RANK[minimum]
+        """True, wenn das Konto aktiv ist und mindestens die Rolle `minimum` hat.
+
+        An der Theke zählt höchstens die Rolle Verleiher, gleich welche Rolle das Konto hat.
+        """
+        rank = _RANK[Role(self.role)]
+        if self.counter_cap:
+            rank = min(rank, _RANK[Role.LENDER])
+        return self.is_active and rank >= _RANK[minimum]
 
     def has_valid_qualification(self, at: datetime | None = None) -> bool:
         """True, wenn zum Zeitpunkt `at` (Standard: jetzt) eine Sachkunde gültig war."""
@@ -407,6 +416,11 @@ class ClubDevice(models.Model):
         User, on_delete=models.PROTECT, related_name="+", null=True, blank=True
     )
     revoked_at = models.DateTimeField("widerrufen am", null=True, blank=True)
+    counter = models.BooleanField(
+        "Theke",
+        default=False,
+        help_text="Anmeldung mit QR-Code und PIN; höchstens Verleiher-Rechte (#126).",
+    )
 
     class Meta:
         verbose_name = "Vereinsgerät"
@@ -488,3 +502,78 @@ class AccountEvent(AppendOnlyModel):
 
     def __str__(self) -> str:
         return f"{self.get_kind_display()}: {self.user} am {self.at:%d.%m.%Y %H:%M}"
+
+
+class CounterCredential(models.Model):
+    """PIN und QR-Kennung eines Kontos für die Theke (#126). Nur Hashes, nie die Werte.
+
+    Die PIN ist mit Djangos Passwort-Hashern gespeichert, von der QR-Kennung nur die SHA-256.
+    Fehlversuche zählen hier; nach fünf ist die PIN gesperrt, bis eine neue gesetzt ist.
+    """
+
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="counter_credential", verbose_name="Konto"
+    )
+    pin_hash = models.CharField("PIN (Hash)", max_length=200, blank=True)
+    qr_hash = models.CharField("QR-Kennung (SHA-256)", max_length=64, blank=True)
+    failed_attempts = models.PositiveSmallIntegerField("Fehlversuche in Folge", default=0)
+    locked_at = models.DateTimeField("PIN gesperrt seit", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Theke-Zugang"
+        verbose_name_plural = "Theke-Zugänge"
+        constraints = (
+            models.UniqueConstraint(
+                fields=["qr_hash"], condition=~Q(qr_hash=""), name="accounts_counter_qr_unique"
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"Theke-Zugang von {self.user}"
+
+
+class CounterEventKind(models.TextChoices):
+    PIN_SET = "pin_set", "PIN gesetzt"
+    PIN_CLEARED = "pin_cleared", "PIN gelöscht"
+    QR_ISSUED = "qr_issued", "QR-Code ausgegeben"
+    QR_REVOKED = "qr_revoked", "QR-Code widerrufen"
+    LOGIN = "login", "an der Theke angemeldet"
+    FAILED = "failed", "falsche PIN"
+    LOCKED = "locked", "PIN gesperrt"
+
+
+class CounterEvent(AppendOnlyModel):
+    """Protokoll der Theke-Anmeldung (#126): nur angehängt, ohne PIN oder Kennung."""
+
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="+", verbose_name="Konto")
+    kind = models.CharField("Vorgang", max_length=20, choices=CounterEventKind.choices)
+    device = models.ForeignKey(
+        ClubDevice,
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="Gerät",
+    )
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="durch",
+    )
+    at = models.DateTimeField("Zeitpunkt", default=timezone.now)
+
+    class Meta:
+        verbose_name = "Theke-Vorgang"
+        verbose_name_plural = "Theke-Vorgänge"
+        ordering = ("at", "id")
+        constraints = (
+            models.CheckConstraint(
+                condition=Q(kind__in=CounterEventKind.values), name="accounts_counter_event_kind"
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.get_kind_display()}: {self.user}"

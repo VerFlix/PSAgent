@@ -53,7 +53,7 @@
   {% if devices %}
     <ul class="plain">
     {% for device in devices %}
-      <li>{{ device.name }} (seit {{ device.created_at|date:"d.m.Y" }})
+      <li>{{ device.name }}{% if device.counter %} · Theke{% endif %} (seit {{ device.created_at|date:"d.m.Y" }})
         <form method="post" data-yubikey="{% url 'accounts:yubikey_options' %}" action="{% url 'accounts:club_device_revoke' device.pk %}" class="inline">{% csrf_token %}
           <button type="submit" class="link danger">Widerrufen</button>
         </form>
@@ -66,7 +66,30 @@
     {% csrf_token %}
     <label for="id_name">Dieses Gerät als Vereinsgerät festlegen</label>
     <input id="id_name" name="name" maxlength="100" placeholder="z. B. Tablet Ausgabe" required>
+    <label><input type="checkbox" name="theke"> Theke: Anmeldung mit QR-Code und PIN, höchstens Verleiher-Rechte</label>
     <button type="submit">Festlegen</button>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
+{% if counter %}
+<section class="card">
+  <h2>Theke: PIN und QR-Code</h2>
+  <p>An der Theke meldest du dich mit deinem persönlichen QR-Code und einer 6-stelligen PIN an. Beides gilt nur an Theke-Geräten; nach 5 falschen PINs ist die PIN gesperrt, bis du eine neue setzt.</p>
+  <p>Stand: PIN {% if counter.locked %}gesperrt{% elif counter.has_pin %}gesetzt{% else %}nicht gesetzt{% endif %} · QR-Code {% if counter.has_qr %}ausgegeben{% else %}noch keiner{% endif %}</p>
+  {% if counter.in_pin_session %}
+    <p class="hint">PIN und QR-Code richtest du nach der Anmeldung mit Passwort oder Passkey ein, nicht in einer Sitzung per PIN.</p>
+  {% else %}
+  <form method="post" action="{% url 'accounts:counter_pin' %}">{% csrf_token %}
+    <label for="id_pin">Neue PIN (6 Ziffern)</label>
+    <input id="id_pin" name="pin" type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" required>
+    <label for="id_repeat">PIN wiederholen</label>
+    <input id="id_repeat" name="repeat" type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" required>
+    <button type="submit">PIN setzen</button>
+  </form>
+  <form method="post" action="{% url 'accounts:counter_qr' %}">{% csrf_token %}
+    <p class="hint">Der QR-Code wird nur jetzt erzeugt und als Karte (PDF) geladen; ein neuer macht den alten ungültig.</p>
+    <button type="submit">{% if counter.has_qr %}Neuen QR-Code drucken{% else %}QR-Code drucken{% endif %}</button>
   </form>
   {% endif %}
 </section>

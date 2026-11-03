@@ -8,11 +8,14 @@ app_name = "accounts"
 
 urlpatterns = [
     path("anmelden/", views.login_view, name="login"),
+    path("anmelden/theke/", views.counter_login, name="counter_login"),
     path("anmelden/passkey/optionen/", views.passkey_login_options, name="passkey_login_options"),
     path("anmelden/passkey/", views.passkey_login, name="passkey_login"),
     path("abmelden/", views.logout_view, name="logout"),
     path("konto/", views.account, name="account"),
     path("konto/stempel/", views.stamp, name="stamp"),
+    path("konto/theke/pin/", views.counter_pin, name="counter_pin"),
+    path("konto/theke/qr-code/", views.counter_qr, name="counter_qr"),
     path(
         "konto/passkey/optionen/",
         views.passkey_register_options,
@@ -57,6 +60,7 @@ urlpatterns = [
         name="user_passkey_revoke",
     ),
     path("verwaltung/nutzer/<int:pk>/stempel/", manage_views.user_stamp, name="user_stamp"),
+    path("verwaltung/nutzer/<int:pk>/theke/", manage_views.user_counter, name="user_counter"),
     path(
         "verwaltung/nutzer/<int:pk>/sachkunde/",
         manage_views.qualification_grant,

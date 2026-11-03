@@ -26,10 +26,18 @@ def _hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def register_device(name: str, *, actor: User, response: HttpResponse) -> ClubDevice:
-    """Legt das aktuelle Gerät als Vereinsgerät an und setzt das Cookie."""
+def register_device(
+    name: str, *, actor: User, response: HttpResponse, counter: bool = False
+) -> ClubDevice:
+    """Legt das aktuelle Gerät als Vereinsgerät an und setzt das Cookie.
+
+    `counter`: Theke-Gerät (#126), mit Anmeldung per QR-Code und PIN und höchstens
+    Verleiher-Rechten. Ändern heißt widerrufen und neu festlegen.
+    """
     token = secrets.token_urlsafe(32)
-    device = ClubDevice.objects.create(name=name.strip(), token_hash=_hash(token), created_by=actor)
+    device = ClubDevice.objects.create(
+        name=name.strip(), token_hash=_hash(token), created_by=actor, counter=counter
+    )
     response.set_cookie(
         settings.PSAGENT_CLUB_DEVICE_COOKIE,
         signing.dumps({"id": device.pk, "token": token}, salt=SALT),
