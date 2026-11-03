@@ -4,20 +4,23 @@ import logging
 
 from django.db import DatabaseError, connection
 from django.http import HttpRequest, HttpResponse, JsonResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.cache import add_never_cache_headers
 from django.views.decorators.http import require_GET, require_http_methods
 
 from accounts.confirm import requires_yubikey
 from accounts.rights import Right, has_right, public, requires
+from counter.views import is_counter
 from psagent import backup
 
 
 @requires(Right.ACCOUNT)
 @require_GET
 def home(request: HttpRequest) -> HttpResponse:
-    """Startseite nach der Anmeldung. Die Fachbereiche kommen mit den Paritäts-Issues dazu."""
+    """Startseite nach der Anmeldung; am Theke-Gerät die Theke (#127)."""
+    if is_counter(request):
+        return redirect("counter:home")
     return render(
         request,
         "home.html",

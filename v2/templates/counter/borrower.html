@@ -1,0 +1,60 @@
+{% extends "counter/base.html" %}
+{% load static %}
+{% block title %}Ausgabe: Entleiher{% endblock %}
+{% block theke %}
+<h1>Entleiher</h1>
+{% if borrower %}
+  <section class="card person">
+    <h2>{{ contact.name }}</h2>
+    <p>{% if contact.member_number %}Mitgliedsausweis verbunden{% else %}<a href="{% url 'lending:member_card' borrower.pk %}">Mitgliedsausweis verbinden</a>{% endif %}</p>
+    {% if gaps %}<p class="notice error" role="alert">Für die Ausgabe fehlt: {{ gaps|join:", " }}. Bitte unten eintragen.</p>{% endif %}
+    {% if confirmed and not gaps %}
+      <p class="notice info" role="status">Kontaktdaten bestätigt.</p>
+    {% elif not gaps %}
+      <form method="post">
+        {% csrf_token %}
+        <button type="submit" name="unveraendert" value="1" class="big primary">Kontaktdaten seit {{ contact.checked_at|date:"d.m.Y" }} unverändert (nachgefragt)</button>
+      </form>
+    {% endif %}
+    <details{% if gaps or contact_form.errors %} open{% endif %}>
+      <summary>Neue Angaben eintragen</summary>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="neue_angaben" value="1">
+        {% for error in contact_form.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+        {% for field in contact_form %}{% include "inventory/_field.html" %}{% endfor %}
+        <p class="hint">Leere Felder bleiben unverändert; die bisherigen Werte zeigt die Theke nicht an.</p>
+        <button type="submit">Neue Angaben speichern</button>
+      </form>
+    </details>
+    {% if not reservation %}
+      <form method="post">{% csrf_token %}<button type="submit" name="anderer" value="1">Andere Person</button></form>
+    {% endif %}
+  </section>
+{% else %}
+  <section class="card">
+    <label for="theke-suche">Name suchen (ab 3 Zeichen) oder Mitgliedsausweis scannen</label>
+    <input id="theke-suche" name="suche" type="search" autocomplete="off"
+           hx-get="{% url 'counter:borrower_search' %}" hx-trigger="input changed delay:300ms, search" hx-target="#treffer" hx-include="this">
+    {% include "lending/_card_scan.html" with target="theke-suche" %}
+    <div id="treffer" aria-live="polite"></div>
+  </section>
+  <section class="card">
+    <h2>Neue Person anlegen</h2>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="anlegen" value="1">
+      {% for error in person_form.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+      {% for field in person_form %}{% include "inventory/_field.html" %}{% endfor %}
+      {% include "lending/_card_scan.html" with target="id_member_number" label="Ausweis der neuen Person lesen" %}
+      <p class="hint">Für die Ausgabe nötig: Name, Adresse und E-Mail oder Telefon. Vom Ausweis wird nur die Mitgliedsnummer übernommen.</p>
+      <button type="submit" class="primary">Anlegen</button>
+    </form>
+  </section>
+{% endif %}
+<p class="theke-next">
+  {% if can_continue %}<a class="button big primary" href="{% url 'counter:checkout_sign' %}">Weiter: Unterschrift</a>
+  {% else %}<span class="button big disabled" aria-disabled="true">Weiter: Unterschrift</span>{% endif %}
+</p>
+<script src="{% static 'js/ausweis.js' %}" defer></script>
+{% endblock %}

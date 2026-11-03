@@ -1,0 +1,14 @@
+{% if too_short %}
+  <p class="hint">Mindestens 3 Zeichen eingeben.</p>
+{% elif found %}
+  <form method="post" action="{% url 'counter:checkout_borrower' %}">
+    {% csrf_token %}
+    <ul class="hits">
+      {% for borrower in found %}<li><button type="submit" name="waehlen" value="{{ borrower.pk }}" class="hit">{{ borrower.contact.name }}</button></li>{% endfor %}
+    </ul>
+  </form>
+{% elif card %}
+  <p class="hint">Dieser Mitgliedsausweis ist noch mit niemandem verbunden. Die Person per Name suchen oder unten neu anlegen.</p>
+{% else %}
+  <p class="hint">Niemand gefunden. Unten neu anlegen.</p>
+{% endif %}

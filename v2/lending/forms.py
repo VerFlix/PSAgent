@@ -35,6 +35,11 @@ class PeriodForm(forms.Form):
         return data
 
 
+# Ganze Zeile des Strichcodes zulassen (Handscanner ohne Skript); `members.normalize` behält nur
+# die 11 Ziffern vorn und verwirft den Rest, z. B. das Geburtsdatum (#125).
+CARD_LINE_MAX = 100
+
+
 class BorrowerForm(forms.Form):
     """Bekannter Entleiher (aus der Suche) oder neuer; Kontaktdaten eingeben oder bestätigen.
 
@@ -50,7 +55,9 @@ class BorrowerForm(forms.Form):
     email = forms.EmailField(label="E-Mail", required=False)
     phone = forms.CharField(label="Telefon", max_length=50, required=False)
     member_number = forms.CharField(
-        label="Mitgliedsnummer (DAV-Ausweis, nur bei neuer Person)", max_length=20, required=False
+        label="Mitgliedsnummer (DAV-Ausweis, nur bei neuer Person)",
+        max_length=CARD_LINE_MAX,
+        required=False,
     )
     contact_confirmed = forms.BooleanField(
         label="Kontaktdaten unverändert (nachgefragt)", required=False
@@ -139,13 +146,15 @@ class PersonForm(forms.Form):
     phone = forms.CharField(label="Telefon", max_length=50, required=False)
     email = forms.EmailField(label="E-Mail", required=False)
     member_number = forms.CharField(
-        label="Mitgliedsnummer (DAV-Ausweis scannen oder eintippen)", max_length=20, required=False
+        label="Mitgliedsnummer (DAV-Ausweis scannen oder eintippen)",
+        max_length=CARD_LINE_MAX,
+        required=False,
     )
 
 
 class MemberCardForm(forms.Form):
     member_number = forms.CharField(
-        label="Mitgliedsnummer (Ausweis scannen)", max_length=20, required=False
+        label="Mitgliedsnummer (Ausweis scannen)", max_length=CARD_LINE_MAX, required=False
     )
     name_checked = forms.BooleanField(
         label="Der Name auf dem Ausweis stimmt mit dieser Person überein", required=False

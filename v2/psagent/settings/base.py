@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "inventory",
     "inspections",
     "lending",
+    "counter",
     "emergency",
     "legacy",
     "privacy",
@@ -117,6 +118,9 @@ PSAGENT_ENROLLMENT_HOURS = 24
 PSAGENT_CLUB_NAME = env("PSAGENT_CLUB_NAME", "")
 # Adresse der App für die Links in QR-Etiketten (#14), z. B. https://psagent.<tailnet>.ts.net.
 PSAGENT_BASE_URL = env("PSAGENT_BASE_URL", "http://localhost:8000")
+# Anfang jeder EI im Verein; danach folgen Art-Kürzel, Nummer und ggf. Zusatz, z. B. DAV-HL-G-143.
+# Die Theke (#127) erkennt daran die Art eines Teils und füllt das EI-Feld damit vor.
+PSAGENT_EI_PREFIX = env("PSAGENT_EI_PREFIX", "DAV-HL-")
 # Löschfrist für Personendaten der Entleiher in Jahren nach Ende des Jahres der letzten
 # Aktivität (#63). Den Wert legt der Vorstand fest.
 # E-Mail (#72): im Betrieb über Microsoft 365 (mailer.graph), sonst in die Konsole. Absender ist

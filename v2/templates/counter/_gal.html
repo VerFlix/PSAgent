@@ -1,0 +1,1 @@
+<span class="gal">GAL: {% for document in part.documents.all %}<a href="{% if document.url %}{{ document.url }}{% else %}{% url 'inventory:document_open' document.pk %}{% endif %}" target="_blank" rel="noopener noreferrer">{{ document.title }}</a>{% if not forloop.last %}, {% endif %}{% empty %}<span class="error">keine</span>{% endfor %}</span>

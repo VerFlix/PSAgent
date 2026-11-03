@@ -12,6 +12,7 @@ urlpatterns = [
     # Ziel der QR-Etiketten (#14); kurz, damit der QR-Code klein bleibt.
     path("q/<path:ei>", inventory_views.scan_target, name="scan_target"),
     path("verleih/", include("lending.urls")),
+    path("theke/", include("counter.urls")),
     path("pruefung/", include("inspections.urls")),
     path("notbetrieb/", include("emergency.urls")),
     path("datenschutz/", include("privacy.urls")),

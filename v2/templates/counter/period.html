@@ -1,0 +1,19 @@
+{% extends "counter/base.html" %}
+{% block title %}Ausgabe: Dauer{% endblock %}
+{% block theke %}
+<h1>Ausgabe: Bis wann?</h1>
+<form method="post" class="chips">
+  {% csrf_token %}
+  {% for option in options %}
+    <button type="submit" name="tage" value="{{ option.days }}" class="chip{% if option.on %} on{% endif %}" aria-pressed="{{ option.on|yesno:'true,false' }}">{{ option.label }}<span>{{ option.date|date:"D d.m." }}</span></button>
+  {% endfor %}
+</form>
+<form method="post" class="card date-pick">
+  {% csrf_token %}
+  <label for="theke-datum">Anderes Rückgabedatum</label>
+  <input id="theke-datum" type="date" name="datum" min="{{ today|date:'Y-m-d' }}" value="{% if custom %}{{ chosen|date:'Y-m-d' }}{% endif %}" required>
+  <button type="submit">Datum übernehmen</button>
+</form>
+<p class="hint">Danach zeigt die Theke nur Teile, die bis dahin frei sind und deren nächste PSA-Prüfung danach liegt.</p>
+<p><a class="button big" href="{% url 'counter:checkout_reservations' %}">Reservierung abholen</a></p>
+{% endblock %}

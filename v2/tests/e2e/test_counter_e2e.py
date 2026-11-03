@@ -39,4 +39,6 @@ def test_lender_logs_in_at_the_counter(page: Page, site: str) -> None:
     page.get_by_label("Persönlicher QR-Code").fill(code)
     page.get_by_label("PIN", exact=True).fill(PIN)
     page.get_by_role("button", name="Anmelden").first.click()
-    expect(page.get_by_role("heading", name="Willkommen, Testperson Verleih")).to_be_visible()
+    # Ein Theke-Gerät startet nach der Anmeldung in der Theke-Ansicht (#127).
+    expect(page).to_have_url(f"{site}/theke/")
+    expect(page.get_by_role("button", name="Ausgabe")).to_be_visible()
