@@ -2,6 +2,18 @@
 {% block title %}Start{% endblock %}
 {% block content %}
 <h1>Willkommen, {{ user.get_full_name|default:user.username }}</h1>
+{% if own_expiry %}
+  <p class="message warning" role="status">{% if own_expiry.expired %}Deine Sachkunde ist am {{ own_expiry.until|date:"d.m.Y" }} abgelaufen. Prüfen, Signieren, Entsperren und Aussondern gehen erst wieder mit einer neuen Sachkunde.{% else %}Deine Sachkunde gilt noch bis {{ own_expiry.until|date:"d.m.Y" }} ({{ own_expiry.days_left }} Tag{{ own_expiry.days_left|pluralize:"e" }}). Bitte rechtzeitig verlängern und den Nachweis dem Admin geben.{% endif %}</p>
+{% endif %}
+{% if expiring %}
+  <section class="card">
+    <h2>Sachkunde läuft ab</h2>
+    <ul class="plain">
+      {% for notice in expiring %}<li><a href="{% url 'accounts:user_detail' notice.user.pk %}">{{ notice.user.get_full_name|default:notice.user.username }}</a>: {% if notice.expired %}abgelaufen am {{ notice.until|date:"d.m.Y" }}{% else %}gültig bis {{ notice.until|date:"d.m.Y" }} (noch {{ notice.days_left }} Tag{{ notice.days_left|pluralize:"e" }}){% endif %}</li>{% endfor %}
+    </ul>
+    <p class="hint">Verlängern heißt: in der Nutzerverwaltung einen neuen Eintrag anlegen (docs/runbooks/sachkunde.md).</p>
+  </section>
+{% endif %}
 <p><a href="{% url 'inventory:part_list' %}">Teile</a></p>
 {% if may_lend %}<p><a href="{% url 'lending:overview' %}">Anstehende Ausleihen</a> · <a href="{% url 'lending:new_booking' %}">Reservieren oder ausgeben</a></p>
 <p><a href="{% url 'emergency:index' %}">Notbetrieb und Notfallmappe</a></p>{% endif %}

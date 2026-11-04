@@ -9,7 +9,9 @@ from django.utils import timezone
 from django.utils.cache import add_never_cache_headers
 from django.views.decorators.http import require_GET, require_http_methods
 
+from accounts import expiry
 from accounts.confirm import requires_yubikey
+from accounts.models import Role, User
 from accounts.rights import Right, has_right, public, requires
 from counter.views import is_counter
 from psagent import backup
@@ -21,6 +23,7 @@ def home(request: HttpRequest) -> HttpResponse:
     """Startseite nach der Anmeldung; am Theke-Gerät die Theke (#127)."""
     if is_counter(request):
         return redirect("counter:home")
+    user = request.user if isinstance(request.user, User) else None
     return render(
         request,
         "home.html",
@@ -29,6 +32,8 @@ def home(request: HttpRequest) -> HttpResponse:
             "may_lend": has_right(request.user, Right.LEND),
             "may_hold": has_right(request.user, Right.ERASURE_HOLD),
             "may_inspect": has_right(request.user, Right.INSPECT),
+            "own_expiry": expiry.expiry(user) if user else None,
+            "expiring": expiry.overview(user) if user and user.has_role(Role.ADMIN) else [],
         },
     )
 
