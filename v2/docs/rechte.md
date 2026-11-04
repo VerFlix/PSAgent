@@ -29,6 +29,7 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 | Löschsperre für Entleiherdaten setzen und aufheben (mit Pflichtgrund) | ✓ | ✓ | – | – | – |
 | E-Mail-Erinnerungen bei Überfälligkeit für alle ein- und ausschalten | ✓ | – | – | – | – |
 | Sammelmail zu überfälligen Ausleihen: schalten, Empfänger pflegen, Testmail | ✓ | – | – | – | – |
+| Sammelmail zu neuen Sperren: schalten, Empfänger pflegen, Testmail | ✓ | – | – | – | – |
 | Höchstzahl und Höchstdauer der Verlängerungen einstellen | ✓ | – | – | – | – |
 | An der Theke anmelden (QR-Code + PIN oder Passwort), dort höchstens Verleiher-Rechte | – | – | ✓ | ✓ | – |
 | Eigene PIN setzen, eigenen QR-Code drucken (Theke) | – | – | ✓ | ✓ | – |
@@ -86,6 +87,10 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   Mail nennt Namen, aber keine Telefonnummer, E-Mail oder Adresse. Der Schalter „Erinnerungen
   für diesen Vorgang aus“ unterdrückt sie nicht. Die Testmail enthält keine Personendaten und
   braucht keine Bestätigung.
+- Sammelmail zu neuen Sperren (#141, Felix, 04.11.2026): eigene Empfängerliste, getrennt von der
+  Sammelmail zu überfälligen Ausleihen; Schalter und Empfänger pflegt nur der Admin, jede Änderung
+  mit YubiKey. Jede Sperre zählt (PC, Theke, PSA-Prüfung). Die Mail nennt Teil, EI, wer gesperrt
+  hat, Kommentar und Stand jetzt, aber keine Entleiher. Die Testmail braucht keine Bestätigung.
 - Ausleihe verlängern (#129, Felix, 01.11. und 04.11.2026): ab Verleiher, wie die Ausgabe,
   auch vor der Fälligkeit und bei Überfälligkeit, ohne Unterschrift; Grund zum Antippen
   (telefonisch, persönlich, per E-Mail), Kommentar freiwillig, auf Wunsch Bestätigung per Mail.

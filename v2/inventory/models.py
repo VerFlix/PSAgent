@@ -341,3 +341,57 @@ class PartEvent(AppendOnlyModel):
 
     def __str__(self) -> str:
         return f"{self.get_kind_display()}: {self.part} ({self.at:%d.%m.%Y %H:%M})"
+
+
+class LockDigestSetting(AppendOnlyModel):
+    """Sammelmail zu neuen Sperren an Vereinsadressen (#141): Schalter und Empfänger.
+
+    Getrennt von der Sammelmail zu überfälligen Ausleihen (#128), denn sie geht an andere
+    Postfächer (z. B. das der PSA-Sachkundigen). Es gilt der jüngste Eintrag; ohne Eintrag ist sie
+    aus. Jede Änderung bestätigt der Admin mit dem YubiKey.
+    """
+
+    enabled = models.BooleanField("Sammelmail an")
+    recipients = models.JSONField("Empfänger", default=list, blank=True)
+    at = models.DateTimeField("Zeitpunkt", default=timezone.now)
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="durch",
+    )
+
+    class Meta:
+        verbose_name = "Einstellung der Sammelmail zu Sperren"
+        verbose_name_plural = "Einstellungen der Sammelmail zu Sperren"
+        ordering = ("-at", "-id")
+
+    def __str__(self) -> str:
+        state = "an" if self.enabled else "aus"
+        return f"Sammelmail zu Sperren {state} ({len(self.recipients)} Adressen)"
+
+
+class LockDigestRun(AppendOnlyModel):
+    """Eine gesendete Sammelmail zu neuen Sperren (#141): Tag, Anzahlen und letzte Sperre.
+
+    `last_event` ist die jüngste Sperre in der Mail; die nächste nennt nur spätere Vorgänge. Kein
+    Inhalt, keine Adresse.
+    """
+
+    day = models.DateField("Stichtag", unique=True)
+    last_event = models.ForeignKey(
+        PartEvent, on_delete=models.PROTECT, related_name="+", verbose_name="letzte Sperre"
+    )
+    locks = models.PositiveIntegerField("Sperren")
+    recipients = models.PositiveSmallIntegerField("Empfänger")
+    sent_at = models.DateTimeField("gesendet am", default=timezone.now)
+
+    class Meta:
+        verbose_name = "Gesendete Sammelmail zu Sperren"
+        verbose_name_plural = "Gesendete Sammelmails zu Sperren"
+        ordering = ("-day",)
+
+    def __str__(self) -> str:
+        return f"Sammelmail zu Sperren {self.day:%d.%m.%Y}: {self.locks} Sperren"
