@@ -10,13 +10,15 @@ oder überschreiben dürfen sie sie bei Reservierung und Ausgabe trotzdem, ohne 
 Werte zu sehen. Angezeigt wird nur, was fehlt und seit wann die Daten unverändert sind.
 """
 
-from datetime import date
+import logging
+from dataclasses import dataclass
+from datetime import date, timedelta
 from typing import Any
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Prefetch
+from django.db.models import Prefetch, prefetch_related_objects
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
@@ -27,11 +29,13 @@ from accounts.models import User
 from accounts.rights import Right, has_right, requires
 from inventory.models import Component, Part, PartStatus
 from inventory.services import search_parts
-from lending import digest, members, receipts, reminders, services
+from lending import digest, extensions, members, receipts, reminders, services
 from lending.forms import (
     BorrowerForm,
     CancelForm,
     CheckoutForm,
+    ExtensionForm,
+    ExtensionLimitForm,
     MemberCardForm,
     PeriodForm,
     PersonForm,
@@ -42,8 +46,10 @@ from lending.models import (
     Borrower,
     BorrowerContact,
     DigestRun,
+    ExtensionLimit,
     Loan,
     LoanEvent,
+    LoanExtension,
     LoanStatus,
     Reminder,
 )
@@ -51,6 +57,8 @@ from lending.receipts import ReceiptKind
 from lending.services import LendingError
 from lending.signatures import svg
 from privacy.models import Erasure, ErasureHold
+
+logger = logging.getLogger(__name__)
 
 
 def _actor(request: HttpRequest) -> User:
@@ -435,6 +443,7 @@ def booking_detail(request: HttpRequest, pk: int) -> HttpResponse:
     booking = _booking(pk)
     loans = _loans(booking)
     today = services.today()
+    prefetch_related_objects(loans, "extensions__actor")
     rows = [
         {
             "loan": loan,
@@ -453,6 +462,7 @@ def booking_detail(request: HttpRequest, pk: int) -> HttpResponse:
         "reserved": [loan for loan in loans if loan.status == LoanStatus.RESERVED],
         "lent": [loan for loan in loans if loan.status == LoanStatus.LENT],
         "may_cancel": has_right(request.user, Right.CHANGE_OTHERS_RESERVATIONS, booking),
+        "may_extend": has_right(request.user, Right.EXTEND),
         "may_hold": has_right(request.user, Right.ERASURE_HOLD),
         "receipts": [
             kind
@@ -578,6 +588,113 @@ def booking_return(request: HttpRequest, pk: int) -> HttpResponse:
         text += f", davon {len(lock)} gesperrt"
     receipt = ReceiptKind.RETURN if form.cleaned_data["receipt"] else None
     return _done(request, booking, text + ".", receipt)
+
+
+@dataclass
+class ExtensionPage:
+    """Ergebnis von `extension_page`: Kontext zum Anzeigen oder die angelegten Verlängerungen."""
+
+    context: dict[str, Any]
+    created: list[LoanExtension]
+    confirm: bool = False
+
+
+def extension_page(request: HttpRequest, booking: Booking) -> ExtensionPage:
+    """Verlängern (#129), gemeinsam für PC und Theke: Teile wählen, neues Datum, Grund."""
+    lent = [loan for loan in _loans(booking) if loan.status == LoanStatus.LENT]
+    rules = extensions.limits()
+    latest = max((loan.end for loan in lent), default=services.today())
+    start = max(latest, services.today())
+    proposal = start + timedelta(days=min(7, rules.max_days))
+    form = ExtensionForm(request.POST or None, initial={"new_end": proposal})
+    chosen = {loan.pk for loan in lent}
+    if request.method == "POST":
+        chosen = {int(v) for v in request.POST.getlist("ausleihe") if v.isdigit()}
+    created: list[LoanExtension] = []
+    if request.method == "POST" and form.is_valid():
+        try:
+            created = extensions.extend(
+                [loan for loan in lent if loan.pk in chosen],
+                form.cleaned_data["new_end"],
+                actor=_actor(request),
+                reason=form.cleaned_data["reason"],
+                comment=form.cleaned_data["comment"],
+            )
+        except LendingError as error:
+            form.add_error(None, str(error))
+    rows = [{"loan": loan, "done": loan.extensions.count()} for loan in lent]
+    context = {"booking": booking, "rows": rows, "chosen": chosen, "form": form, "rules": rules}
+    confirm = bool(created) and bool(form.cleaned_data.get("confirm"))
+    return ExtensionPage(context, created, confirm)
+
+
+def send_extension_confirmation(created: list[LoanExtension]) -> tuple[int, str]:
+    """Bestätigung an den Entleiher; ein Fehler wird gemeldet, die Verlängerung bleibt gültig."""
+    message = extensions.confirmation(created)
+    if message is None:
+        return messages.WARNING, "Keine Bestätigung: Für den Entleiher ist keine E-Mail hinterlegt."
+    try:
+        message.send()
+    except Exception as error:
+        logger.warning("Bestätigung der Verlängerung nicht gesendet: %s", type(error).__name__)
+        return messages.WARNING, "Die Bestätigung ließ sich nicht senden."
+    return messages.SUCCESS, "Bestätigung per E-Mail gesendet."
+
+
+def extension_text(created: list[LoanExtension]) -> str:
+    count = len(created)
+    return f"Verlängert: {count} Teil{'e' if count != 1 else ''} bis {created[0].new_end:%d.%m.%Y}."
+
+
+@requires(Right.EXTEND)
+@require_http_methods(["GET", "POST"])
+def booking_extend(request: HttpRequest, pk: int) -> HttpResponse:
+    """Ausleihe verlängern (#129), ohne Unterschrift, im Rahmen der Grenzen."""
+    booking = _booking(pk)
+    page = extension_page(request, booking)
+    if not page.context["rows"] and not page.created:
+        messages.error(request, "In diesem Vorgang ist nichts ausgeliehen.")
+        return redirect("lending:booking_detail", pk=booking.pk)
+    if not page.created:
+        status = 400 if request.method == "POST" else 200
+        return render(request, "lending/booking_extend.html", page.context, status=status)
+    note = send_extension_confirmation(page.created) if page.confirm else None
+    logged_out = finish_operation(request)
+    messages.success(request, extension_text(page.created))
+    if note is not None:
+        messages.add_message(request, *note)
+    if logged_out:
+        return redirect("accounts:login")
+    return redirect("lending:booking_detail", pk=booking.pk)
+
+
+@requires(Right.EXTENSION_LIMITS)
+@requires_yubikey
+@require_http_methods(["GET", "POST"])
+def extension_limits(request: HttpRequest) -> HttpResponse:
+    """Grenzen für Verlängerungen (#129): nur Admin, jede Änderung mit YubiKey."""
+    current = extensions.limits()
+    form = ExtensionLimitForm(
+        request.POST or None,
+        initial={"max_count": current.max_count, "max_days": current.max_days},
+    )
+    if request.method == "POST" and form.is_valid():
+        try:
+            extensions.set_limits(
+                form.cleaned_data["max_count"], form.cleaned_data["max_days"], actor=_actor(request)
+            )
+        except LendingError as error:
+            form.add_error(None, str(error))
+        else:
+            messages.success(request, "Grenzen für Verlängerungen gespeichert.")
+            return redirect("lending:extension_limits")
+    context = {
+        "form": form,
+        "current": current,
+        "history": ExtensionLimit.objects.select_related("actor")[:10],
+    }
+    status = 400 if request.method == "POST" else 200
+    return render(request, "lending/extension_limits.html", context, status=status)
 
 
 @requires(Right.LEND)

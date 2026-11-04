@@ -421,11 +421,34 @@ Kuma, ein Fehler sofort (`deploy/melden.sh`, `docs/runbooks/monitoring.md`).
 4. Haben sich Dateien unter `deploy/systemd/` geändert, sie erneut kopieren und
    `sudo systemctl daemon-reload`.
 
-**Zurück auf die vorige Version:** `cat /etc/psagent/image.env.vorher`, dann Klon und
-`update.sh` mit diesem Tag. Das geht nur, wenn die neue Version keine Migration mitgebracht hat:
-Migrationen laufen nur vorwärts. Zurück über eine Migration hinweg heißt: Stand von vor dem Update
-wiederherstellen. Das kann `wiederherstellen.sh` noch nicht (es holt immer den neuesten Stand);
-dann bitte Felix fragen.
+### Wenn die neue Version Fehler hat
+
+Festlegung (Felix, 04.11.2026): **Nur vorwärts reparieren.** Die Datenbank wird wegen eines
+Fehlers nicht auf einen älteren Stand zurückgespielt; der Fehler wird mit einer neuen Version
+behoben.
+
+1. **Hat die neue Version eine Migration mitgebracht?**
+
+   ```bash
+   cd /opt/psagent && git diff --stat <vorige Version>..<neue Version> -- 'v2/*/migrations/'
+   ```
+
+   Die Versionen stehen in `/etc/psagent/image.env.vorher` und `/etc/psagent/image.env`
+   (`sha-<commit>`; für `git diff` nur den Commit nehmen).
+2. **Ohne Migration:** zurück auf die vorige Version, `cat /etc/psagent/image.env.vorher`, dann
+   Klon auf diesen Commit und `sudo v2/deploy/update.sh <vorige Version>`. Danach den Fehler als
+   Issue melden.
+3. **Mit Migration:** nicht zurück. Migrationen laufen nur vorwärts; die alte Version passt nicht
+   zur neuen Datenbank.
+   - Fehler als Issue melden (ohne Personendaten), Fix in der Cloud, nach dem Merge wie oben
+     einspielen.
+   - Lässt sich bis dahin nicht verleihen: Notbetrieb (`notbetrieb.md`).
+   - Nur wenn **Daten beschädigt** sind (nicht bloß ein Fehler in der Oberfläche): Felix und
+     Vorstand entscheiden über eine Wiederherstellung (`sicherung.md`, Ernstfall). Was nach dem
+     Stand der Sicherung erfasst wurde, geht dabei verloren.
+
+Darum vor jedem Update sichern (Schritt 2 oben): Die Sicherung belegt den Stand davor, auch wenn
+man sie nur selten braucht.
 
 ## 9. Prüfliste nach der Einrichtung
 

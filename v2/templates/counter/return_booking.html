@@ -3,6 +3,7 @@
 {% block title %}Rückgabe{% endblock %}
 {% block theke %}
 <h1>Rückgabe: {{ borrower }}</h1>
+{% if may_extend %}<p><a class="button" href="{% url 'counter:extend' booking.pk %}">Verlängern statt zurückgeben</a></p>{% endif %}
 <form method="post" id="ei-form" class="card sign" action="{% url 'counter:return_booking' booking.pk %}">
   {% csrf_token %}
   {% if problem %}<p class="notice error" role="alert">{{ problem }}</p>{% endif %}

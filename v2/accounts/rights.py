@@ -38,6 +38,7 @@ class Right(StrEnum):
     VIEW_CONTACTS = "view_contacts"
     LEND = "lend"
     CHANGE_OTHERS_RESERVATIONS = "change_others_reservations"
+    EXTEND = "extend"
     CREATE_BORROWER = "create_borrower"
     LINK_MEMBER_CARD = "link_member_card"
     CHANGE_MEMBER_CARD = "change_member_card"
@@ -55,6 +56,7 @@ class Right(StrEnum):
     REMINDERS = "reminders"
     OVERDUE_DIGEST = "overdue_digest"
     LOCK_DIGEST = "lock_digest"
+    EXTENSION_LIMITS = "extension_limits"
     COUNTER_LOGIN = "counter_login"
     COUNTER_CREDENTIALS = "counter_credentials"
     COUNTER_SETTINGS = "counter_settings"
@@ -122,6 +124,7 @@ RIGHTS: dict[Right, Rule] = {
         scope=_own,
         scope_label="nur eigene",
     ),
+    Right.EXTEND: Rule("Ausleihe verlängern (im Rahmen der Grenzen)", Role.LENDER),
     Right.CREATE_BORROWER: Rule("Entleiher anlegen, auch ohne Ausleihe", Role.LENDER),
     Right.LINK_MEMBER_CARD: Rule("Mitgliedsausweis mit Entleiher verbinden", Role.LENDER),
     Right.CHANGE_MEMBER_CARD: Rule(
@@ -178,6 +181,9 @@ RIGHTS: dict[Right, Rule] = {
     ),
     Right.LOCK_DIGEST: Rule(
         "Sammelmail zu neuen Sperren: schalten, Empfänger pflegen, Testmail", Role.ADMIN
+    ),
+    Right.EXTENSION_LIMITS: Rule(
+        "Höchstzahl und Höchstdauer der Verlängerungen einstellen", Role.ADMIN
     ),
     Right.COUNTER_LOGIN: Rule(
         "An der Theke anmelden (QR-Code + PIN oder Passwort), dort höchstens Verleiher-Rechte",

@@ -4,6 +4,9 @@ Takt (Festlegung Felix, 17.10.2026): am ersten Tag nach der geplanten Rückgabe,
 und nach 14 Tagen; höchstens 3 Mails je Ausleihe und je Lauf höchstens eine, auch wenn der
 tägliche Lauf (`manage.py erinnerungen`) einige Tage ausfiel. Eine Mail je Ausleihvorgang.
 
+Nach einer Verlängerung (#129) zählt der Takt ab dem neuen Datum neu; die schon gesendeten
+Erinnerungen bleiben im Protokoll (`Reminder.extension` gibt die Runde an).
+
 Abschaltbar für alle (nur Admin) und je Vorgang (ab Verleiher, etwa wenn der Entleiher schon
 angerufen hat). Gespeichert wird nur, welche Erinnerung wann rausging (`Reminder`).
 """
@@ -24,6 +27,7 @@ from lending.models import (
     Booking,
     BorrowerContact,
     Loan,
+    LoanExtension,
     LoanStatus,
     Reminder,
     ReminderSwitch,
@@ -68,6 +72,18 @@ def set_booking_enabled(booking: Booking, on: bool, *, actor: User | None) -> Re
     return ReminderSwitch.objects.create(booking=booking, enabled=on, actor=actor)
 
 
+def _round(loan: Loan) -> LoanExtension | None:
+    """Die jüngste Verlängerung; ab ihr zählen die Erinnerungen neu (#129)."""
+    extensions = sorted(loan.extensions.all(), key=lambda extension: (extension.at, extension.pk))
+    return extensions[-1] if extensions else None
+
+
+def _sent(loan: Loan) -> int:
+    current = _round(loan)
+    wanted = current.pk if current else None
+    return sum(1 for reminder in loan.reminders.all() if reminder.extension_id == wanted)
+
+
 def _next_number(loan: Loan, sent: int, on: date) -> int | None:
     number = sent + 1
     if number > len(OFFSETS) or on < loan.end + timedelta(days=OFFSETS[number - 1]):
@@ -80,13 +96,13 @@ def due(on: date) -> list[Due]:
     loans = (
         Loan.objects.filter(status=LoanStatus.LENT)
         .select_related("booking", "part")
-        .prefetch_related("reminders", "part__components")
+        .prefetch_related("reminders", "extensions", "part__components")
         .order_by("booking_id", "part__name", "pk")
     )
     grouped: dict[int, list[tuple[Loan, int]]] = defaultdict(list)
     bookings: dict[int, Booking] = {}
     for loan in loans:
-        number = _next_number(loan, len(loan.reminders.all()), on)
+        number = _next_number(loan, _sent(loan), on)
         if number is not None:
             grouped[loan.booking_id].append((loan, number))
             bookings[loan.booking_id] = loan.booking
@@ -141,7 +157,8 @@ def run(on: date | None = None, *, dry_run: bool = False) -> list[Due]:
             )
             continue
         Reminder.objects.bulk_create(
-            Reminder(loan=loan, number=number) for loan, number in entry.loans
+            Reminder(loan=loan, number=number, extension=_round(loan))
+            for loan, number in entry.loans
         )
         result.append(entry)
     return result

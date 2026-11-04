@@ -12,6 +12,7 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 | Kontaktdaten der Entleiher sehen | ✓ | ✓ | nur laufende Ausleihen | nur laufende Ausleihen | – |
 | Reservieren, ausgeben, zurücknehmen | ✓ | ✓ | ✓ | ✓ | – |
 | Reservierungen anderer ändern oder stornieren | ✓ | ✓ | ✓ | nur eigene | – |
+| Ausleihe verlängern (im Rahmen der Grenzen) | ✓ | ✓ | ✓ | ✓ | – |
 | Entleiher anlegen, auch ohne Ausleihe | ✓ | ✓ | ✓ | ✓ | – |
 | Mitgliedsausweis mit Entleiher verbinden | ✓ | ✓ | ✓ | ✓ | – |
 | Verbindung zum Mitgliedsausweis lösen oder ändern | ✓ | ✓ | ✓ | – | – |
@@ -29,6 +30,7 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 | E-Mail-Erinnerungen bei Überfälligkeit für alle ein- und ausschalten | ✓ | – | – | – | – |
 | Sammelmail zu überfälligen Ausleihen: schalten, Empfänger pflegen, Testmail | ✓ | – | – | – | – |
 | Sammelmail zu neuen Sperren: schalten, Empfänger pflegen, Testmail | ✓ | – | – | – | – |
+| Höchstzahl und Höchstdauer der Verlängerungen einstellen | ✓ | – | – | – | – |
 | An der Theke anmelden (QR-Code + PIN oder Passwort), dort höchstens Verleiher-Rechte | – | – | ✓ | ✓ | – |
 | Eigene PIN setzen, eigenen QR-Code drucken (Theke) | – | – | ✓ | ✓ | – |
 | Theke einstellen: Art-Kürzel, Schnellzugriff, nach Größe, Vorauswahl der Leihdauer | ✓ | – | – | – | – |
@@ -89,6 +91,14 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   Sammelmail zu überfälligen Ausleihen; Schalter und Empfänger pflegt nur der Admin, jede Änderung
   mit YubiKey. Jede Sperre zählt (PC, Theke, PSA-Prüfung). Die Mail nennt Teil, EI, wer gesperrt
   hat, Kommentar und Stand jetzt, aber keine Entleiher. Die Testmail braucht keine Bestätigung.
+- Ausleihe verlängern (#129, Felix, 01.11. und 04.11.2026): ab Verleiher, wie die Ausgabe,
+  auch vor der Fälligkeit und bei Überfälligkeit, ohne Unterschrift; Grund zum Antippen
+  (telefonisch, persönlich, per E-Mail), Kommentar freiwillig, auf Wunsch Bestätigung per Mail.
+  Für das neue Datum gelten die Regeln der Ausgabe. Grenzen (Höchstzahl je Ausleihe,
+  Höchstdauer je Verlängerung; ohne Eintrag 1 und 14 Tage) stellt nur der Admin ein, jede
+  Änderung mit dem YubiKey, nur angehängt (`ExtensionLimit`). Jede Verlängerung ist ein
+  angehängter Eintrag in der Hash-Kette (`LoanExtension`); der Zeitraum der Ausleihe ändert sich
+  nur so.
 - Löschsperre (Felix, 17.10.2026): Admin und PSA-Sachkundige, für einen konkreten Schadensfall
   oder Rechtsstreit, mit Pflichtgrund; Setzen und Aufheben werden nur angehängt.
 - Eine Reservierung ausgeben, die jemand anderes angelegt hat, ist Verleihen, kein Ändern.
