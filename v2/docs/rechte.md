@@ -28,6 +28,7 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 | Löschsperre für Entleiherdaten setzen und aufheben (mit Pflichtgrund) | ✓ | ✓ | – | – | – |
 | E-Mail-Erinnerungen bei Überfälligkeit für alle ein- und ausschalten | ✓ | – | – | – | – |
 | Sammelmail zu überfälligen Ausleihen: schalten, Empfänger pflegen, Testmail | ✓ | – | – | – | – |
+| Sammelmail zu neuen Sperren: schalten, Empfänger pflegen, Testmail | ✓ | – | – | – | – |
 | An der Theke anmelden (QR-Code + PIN oder Passwort), dort höchstens Verleiher-Rechte | – | – | ✓ | ✓ | – |
 | Eigene PIN setzen, eigenen QR-Code drucken (Theke) | – | – | ✓ | ✓ | – |
 | Theke einstellen: Art-Kürzel, Schnellzugriff, nach Größe, Vorauswahl der Leihdauer | ✓ | – | – | – | – |
@@ -84,6 +85,10 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   Mail nennt Namen, aber keine Telefonnummer, E-Mail oder Adresse. Der Schalter „Erinnerungen
   für diesen Vorgang aus“ unterdrückt sie nicht. Die Testmail enthält keine Personendaten und
   braucht keine Bestätigung.
+- Sammelmail zu neuen Sperren (#141, Felix, 04.11.2026): eigene Empfängerliste, getrennt von der
+  Sammelmail zu überfälligen Ausleihen; Schalter und Empfänger pflegt nur der Admin, jede Änderung
+  mit YubiKey. Jede Sperre zählt (PC, Theke, PSA-Prüfung). Die Mail nennt Teil, EI, wer gesperrt
+  hat, Kommentar und Stand jetzt, aber keine Entleiher. Die Testmail braucht keine Bestätigung.
 - Löschsperre (Felix, 17.10.2026): Admin und PSA-Sachkundige, für einen konkreten Schadensfall
   oder Rechtsstreit, mit Pflichtgrund; Setzen und Aufheben werden nur angehängt.
 - Eine Reservierung ausgeben, die jemand anderes angelegt hat, ist Verleihen, kein Ändern.

@@ -15,31 +15,22 @@ der Versand, wird nichts gespeichert und der Lauf meldet einen Fehler; der näch
 erneut.
 """
 
-import logging
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
 
 from django.conf import settings
-from django.core.exceptions import ValidationError
-from django.core.mail import EmailMessage
-from django.core.validators import validate_email
 from django.template.loader import render_to_string
-from django.urls import reverse
 
 from accounts.models import User
 from accounts.rights import Right, require
 from lending import services
 from lending.models import Booking, DigestRun, DigestSetting, Loan, LoanStatus
-
-logger = logging.getLogger(__name__)
-
-MAX_RECIPIENTS = 10
-
-
-class DigestError(RuntimeError):
-    """Einstellung ungültig oder Versand gescheitert; der Text sagt, warum (ohne Adresse)."""
+from mailer.digests import MAX_RECIPIENTS as MAX_RECIPIENTS
+from mailer.digests import DigestError as DigestError
+from mailer.digests import absolute_link, send_each
+from mailer.digests import clean_recipients as clean_recipients
 
 
 @dataclass
@@ -86,25 +77,6 @@ def enabled() -> bool:
     return bool(setting and setting.enabled and setting.recipients)
 
 
-def clean_recipients(addresses: Sequence[str]) -> list[str]:
-    """Leerzeichen weg, Doppelte (ohne Groß-/Kleinschreibung) weg, jede Adresse geprüft."""
-    result: list[str] = []
-    seen: set[str] = set()
-    for raw in addresses:
-        address = raw.strip()
-        if not address or address.lower() in seen:
-            continue
-        try:
-            validate_email(address)
-        except ValidationError as error:
-            raise DigestError(f"„{address}“ ist keine gültige E-Mail-Adresse.") from error
-        seen.add(address.lower())
-        result.append(address)
-    if len(result) > MAX_RECIPIENTS:
-        raise DigestError(f"Höchstens {MAX_RECIPIENTS} Adressen.")
-    return result
-
-
 def configure(on: bool, addresses: Sequence[str], *, actor: User | None) -> DigestSetting:
     """Neuer Stand von Schalter und Empfängern; nur Admin (die Ansicht verlangt den YubiKey)."""
     require(actor, Right.OVERDUE_DIGEST)
@@ -112,10 +84,6 @@ def configure(on: bool, addresses: Sequence[str], *, actor: User | None) -> Dige
     if on and not cleaned:
         raise DigestError("Mindestens eine Adresse eintragen, sonst lässt sich nichts senden.")
     return DigestSetting.objects.create(enabled=on, recipients=cleaned, actor=actor)
-
-
-def _link(name: str, *args: object) -> str:
-    return str(settings.PSAGENT_BASE_URL).rstrip("/") + reverse(name, args=args)
 
 
 def overdue(on: date) -> list[Entry]:
@@ -137,7 +105,7 @@ def overdue(on: date) -> list[Entry]:
             booking=booking,
             name=booking.borrower.display_name,
             days=max((on - loan.end).days for loan in group),
-            link=_link("lending:booking_detail", booking.pk),
+            link=absolute_link("lending:booking_detail", booking.pk),
         )
         for loan in group:
             eis = ", ".join(str(c.ei) for c in loan.part.components.all())
@@ -149,18 +117,6 @@ def overdue(on: date) -> list[Entry]:
 def _subject(count: int, on: date) -> str:
     noun = "überfälliger Ausleihvorgang" if count == 1 else "überfällige Ausleihvorgänge"
     return f"PSAgent: {count} {noun} ({on:%d.%m.%Y})"
-
-
-def _send(messages: list[EmailMessage]) -> None:
-    failed = 0
-    for message in messages:
-        try:
-            message.send()
-        except Exception as error:
-            failed += 1
-            logger.warning("Sammelmail nicht gesendet: %s", type(error).__name__)
-    if failed:
-        raise DigestError(f"Sammelmail an {failed} von {len(messages)} Adresse(n) gescheitert.")
 
 
 def run(on: date | None = None, *, dry_run: bool = False) -> Result:
@@ -181,11 +137,11 @@ def run(on: date | None = None, *, dry_run: bool = False) -> Result:
         "club": settings.PSAGENT_CLUB_NAME,
         "entries": entries,
         "count_text": "1 Vorgang" if len(entries) == 1 else f"{len(entries)} Vorgänge",
-        "settings_link": _link("lending:digest_settings"),
+        "settings_link": absolute_link("lending:digest_settings"),
     }
     body = render_to_string("mail/sammelmail.txt", context)
     subject = _subject(len(entries), day)
-    _send([EmailMessage(subject=subject, body=body, to=[address]) for address in addresses])
+    send_each(subject, body, addresses)
     DigestRun.objects.create(day=day, bookings=len(entries), recipients=len(addresses))
     return Result(sent=True, bookings=len(entries), recipients=len(addresses))
 
@@ -196,10 +152,11 @@ def send_test(*, actor: User | None) -> int:
     addresses = recipients()
     if not addresses:
         raise DigestError("Es sind keine Empfänger eingetragen.")
-    body = render_to_string(
-        "mail/sammelmail_test.txt",
-        {"club": settings.PSAGENT_CLUB_NAME, "settings_link": _link("lending:digest_settings")},
-    )
+    context = {
+        "club": settings.PSAGENT_CLUB_NAME,
+        "settings_link": absolute_link("lending:digest_settings"),
+    }
+    body = render_to_string("mail/sammelmail_test.txt", context)
     subject = "PSAgent: Testmail der Sammelmail zu überfälligen Ausleihen"
-    _send([EmailMessage(subject=subject, body=body, to=[address]) for address in addresses])
+    send_each(subject, body, addresses)
     return len(addresses)

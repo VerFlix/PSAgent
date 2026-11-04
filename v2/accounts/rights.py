@@ -54,6 +54,7 @@ class Right(StrEnum):
     ERASURE_HOLD = "erasure_hold"
     REMINDERS = "reminders"
     OVERDUE_DIGEST = "overdue_digest"
+    LOCK_DIGEST = "lock_digest"
     COUNTER_LOGIN = "counter_login"
     COUNTER_CREDENTIALS = "counter_credentials"
     COUNTER_SETTINGS = "counter_settings"
@@ -174,6 +175,9 @@ RIGHTS: dict[Right, Rule] = {
     ),
     Right.OVERDUE_DIGEST: Rule(
         "Sammelmail zu überfälligen Ausleihen: schalten, Empfänger pflegen, Testmail", Role.ADMIN
+    ),
+    Right.LOCK_DIGEST: Rule(
+        "Sammelmail zu neuen Sperren: schalten, Empfänger pflegen, Testmail", Role.ADMIN
     ),
     Right.COUNTER_LOGIN: Rule(
         "An der Theke anmelden (QR-Code + PIN oder Passwort), dort höchstens Verleiher-Rechte",

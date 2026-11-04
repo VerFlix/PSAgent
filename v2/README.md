@@ -137,6 +137,10 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
   Vereinsadressen (Name des Entleihers, Teile, Tage, Link; ohne Kontaktdaten), je Adresse eine
   Mail. Schalter, Empfänger und Testmail: Admin unter `/verleih/sammelmail/`, Änderungen mit
   YubiKey. Scheitert der Versand, endet der Befehl mit Fehler (Monitoring).
+  Sammelmail zu neuen Sperren (#141): Derselbe Befehl schickt täglich alle Sperren seit der
+  letzten Mail (PC, Theke, PSA-Prüfung) mit Teil, EI, wer, Kommentar, Stand jetzt und Link, ohne
+  Entleiher, an eine eigene Empfängerliste (z. B. PSA-Sachkundige). Schalter, Empfänger und
+  Testmail: Admin unter `/teile/sperr-sammelmail/`, Änderungen mit YubiKey.
 - Hash-Kette (#15): Jede neue Zeile einer Tabelle, die nur angehängt wird, bekommt in derselben
   Transaktion ein Kettenglied mit ihrer Prüfsumme und dem Hash des Vorgängers (`core/chain.py`).
   `uv run python manage.py kette_pruefen` zeigt den Kettenkopf und meldet geänderte, gelöschte,

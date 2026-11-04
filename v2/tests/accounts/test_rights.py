@@ -51,6 +51,7 @@ EXPECTED: dict[Right, str] = {
     Right.ERASURE_HOLD: "+ + - - -",
     Right.REMINDERS: "+ - - - -",
     Right.OVERDUE_DIGEST: "+ - - - -",
+    Right.LOCK_DIGEST: "+ - - - -",
     Right.COUNTER_LOGIN: "- - + + -",
     Right.COUNTER_CREDENTIALS: "- - + + -",
     Right.COUNTER_SETTINGS: "+ - - - -",
