@@ -139,6 +139,10 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
   Vereinsadressen (Name des Entleihers, Teile, Tage, Link; ohne Kontaktdaten), je Adresse eine
   Mail. Schalter, Empfänger und Testmail: Admin unter `/verleih/sammelmail/`, Änderungen mit
   YubiKey. Scheitert der Versand, endet der Befehl mit Fehler (Monitoring).
+  Sammelmail zu neuen Sperren (#141): Derselbe Befehl schickt täglich alle Sperren seit der
+  letzten Mail (PC, Theke, PSA-Prüfung) mit Teil, EI, wer, Kommentar, Stand jetzt und Link, ohne
+  Entleiher, an eine eigene Empfängerliste (z. B. PSA-Sachkundige). Schalter, Empfänger und
+  Testmail: Admin unter `/teile/sperr-sammelmail/`, Änderungen mit YubiKey.
 - Ausleihe verlängern (#129, ab Verleiher): in der Detailansicht des Vorgangs („Verlängern“) und
   an der Theke bei „Rückgabe“ und „Heute“. Ohne Unterschrift, auch bei Überfälligkeit; Grund
   antippen (telefonisch, persönlich, per E-Mail), Bestätigung per Mail auf Wunsch. Für das neue

@@ -11,7 +11,7 @@ from accounts.models import Role
 from counter.models import CounterSetting
 from lending.services import reserve
 from tests.e2e.conftest import add_yubikey, assert_fits_width, sign_in
-from tests.e2e.test_theke_e2e import TABLET, known_borrower, ready_part
+from tests.e2e.test_theke_e2e import TABLET, choose_period, known_borrower, ready_part
 from tests.e2e.test_theke_return_e2e import lent_since
 
 pytestmark = [pytest.mark.e2e, pytest.mark.django_db(transaction=True)]
@@ -61,5 +61,5 @@ def test_admin_sets_helmets_by_size_and_two_weeks(page: Page, site: str) -> None
     page.goto(f"{site}/theke/")
     page.get_by_role("button", name="Ausgabe").click()
     expect(page.get_by_role("button", name="2 Wochen")).to_have_attribute("aria-pressed", "true")
-    page.get_by_role("button", name="2 Wochen").click()
+    choose_period(page, "2 Wochen")
     expect(page.get_by_role("button", name="Helm Größe M hinzufügen, 1 frei")).to_be_visible()
