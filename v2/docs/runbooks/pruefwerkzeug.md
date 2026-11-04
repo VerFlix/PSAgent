@@ -24,6 +24,7 @@ Ergebnis und Rückgabewert:
 | nicht prüfbar | 2 | Etwas ließ sich nicht prüfen, z. B. fehlende Einstellung; der Grund steht dabei |
 
 Ein Befund ist ein Sicherheitsvorfall: nichts ändern, Ausgabe aufheben, Vorstand informieren.
+Wie es weitergeht: `docs/runbooks/vorfall-kette.md`.
 
 ## 1. Einstellungen
 
