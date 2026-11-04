@@ -137,6 +137,13 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
   Vereinsadressen (Name des Entleihers, Teile, Tage, Link; ohne Kontaktdaten), je Adresse eine
   Mail. Schalter, Empfänger und Testmail: Admin unter `/verleih/sammelmail/`, Änderungen mit
   YubiKey. Scheitert der Versand, endet der Befehl mit Fehler (Monitoring).
+- Ausleihe verlängern (#129, ab Verleiher): in der Detailansicht des Vorgangs („Verlängern“) und
+  an der Theke bei „Rückgabe“ und „Heute“. Ohne Unterschrift, auch bei Überfälligkeit; Grund
+  antippen (telefonisch, persönlich, per E-Mail), Bestätigung per Mail auf Wunsch. Für das neue
+  Datum gelten die Regeln der Ausgabe. Grenzen (ohne Einstellung 1 Verlängerung, höchstens 14
+  Tage) stellt der Admin unter `/verleih/verlaengerung/grenzen/` ein, mit YubiKey. Jede
+  Verlängerung ist ein angehängter Eintrag in der Hash-Kette; die Datenbank lässt ein späteres
+  Ende nur mit diesem Eintrag zu. Erinnerungen zählen ab dem neuen Datum neu.
 - Hash-Kette (#15): Jede neue Zeile einer Tabelle, die nur angehängt wird, bekommt in derselben
   Transaktion ein Kettenglied mit ihrer Prüfsumme und dem Hash des Vorgängers (`core/chain.py`).
   `uv run python manage.py kette_pruefen` zeigt den Kettenkopf und meldet geänderte, gelöschte,

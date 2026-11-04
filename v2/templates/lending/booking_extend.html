@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Verlängern{% endblock %}
+{% block content %}
+<h1>Ausleihvorgang #{{ booking.pk }} verlängern</h1>
+<p>Entleiher: <strong>{{ booking.borrower.display_name }}</strong></p>
+<form method="post" class="card">
+  {% csrf_token %}
+  {% include "lending/_extension_form.html" %}
+  <button type="submit" class="primary">Verlängern</button>
+</form>
+<p><a href="{% url 'lending:booking_detail' booking.pk %}">Abbrechen</a></p>
+{% endblock %}

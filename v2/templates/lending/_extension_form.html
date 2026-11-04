@@ -1,0 +1,18 @@
+{# Verlängern (#129), gemeinsam für PC und Theke. Erwartet rows, chosen, form, rules. #}
+{% for error in form.non_field_errors %}<p class="error notice" role="alert">{{ error }}</p>{% endfor %}
+<p class="hint">Höchstens {{ rules.max_count }} Verlängerung{{ rules.max_count|pluralize:"en" }} je Teil, je höchstens {{ rules.max_days }} Tage. Keine Unterschrift nötig; es gelten dieselben Regeln wie bei der Ausgabe (nicht reserviert, nicht gesperrt, PSA-Prüfung erst danach).</p>
+<ul class="lines">
+  {% for row in rows %}
+    <li class="line"><label class="check big"><input type="checkbox" name="ausleihe" value="{{ row.loan.pk }}"{% if row.loan.pk in chosen %} checked{% endif %}>
+      <span><strong>{% for component in row.loan.part.components.all %}{{ component.ei }}{% if not forloop.last %}, {% endif %}{% endfor %}</strong> {{ row.loan.part.name }}
+        <span class="note">bisher bis {{ row.loan.end|date:"d.m.Y" }}{% if row.done %} · schon {{ row.done }}-mal verlängert{% endif %}</span></span></label></li>
+  {% endfor %}
+</ul>
+{% with field=form.new_end %}{% include "inventory/_field.html" %}{% endwith %}
+<fieldset class="reasons">
+  <legend>Grund</legend>
+  <div class="chips-small">{% for choice in form.reason %}<label class="reason">{{ choice.tag }} {{ choice.choice_label }}</label>{% endfor %}</div>
+  {% for error in form.reason.errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+</fieldset>
+{% with field=form.comment %}{% include "inventory/_field.html" %}{% endwith %}
+<label class="check big">{{ form.confirm }} {{ form.confirm.label }}</label>

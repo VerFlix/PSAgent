@@ -18,6 +18,7 @@ urlpatterns = [
     path("ausgabe/reservierungen/", views.checkout_reservations, name="checkout_reservations"),
     path("rueckgabe/", returns.returns, name="returns"),
     path("rueckgabe/<int:pk>/", returns.return_booking, name="return_booking"),
+    path("rueckgabe/<int:pk>/verlaengern/", returns.extend_booking, name="extend"),
     path("schaden/", returns.damage_report, name="damage_report"),
     path("heute/", today.today_view, name="today"),
     path("einstellungen/", settings_views.counter_settings, name="settings"),

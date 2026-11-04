@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Grenzen für Verlängerungen{% endblock %}
+{% block content %}
+<h1>Grenzen für Verlängerungen</h1>
+<p>Wie oft eine Ausleihe verlängert werden darf und wie viele Tage höchstens auf einmal. Gilt für
+  alle ab Verleiher, am PC und an der Theke. Höchstzahl 0 schaltet das Verlängern ab. Jede Änderung
+  bestätigst du mit deinem YubiKey; der alte Stand bleibt im Verlauf.</p>
+<section class="card">
+  <p>Zurzeit: höchstens {{ current.max_count }} Verlängerung{{ current.max_count|pluralize:"en" }}, je höchstens {{ current.max_days }} Tage{% if not current.setting %} (Startwert){% endif %}.</p>
+  <form method="post" data-yubikey="{% url 'accounts:yubikey_options' %}">
+    {% csrf_token %}
+    {% for error in form.non_field_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+    {% for field in form %}{% include "inventory/_field.html" %}{% endfor %}
+    <button type="submit" class="primary">Speichern (mit YubiKey)</button>
+  </form>
+</section>
+<section class="card">
+  <h2>Verlauf</h2>
+  {% if history %}
+    <ul class="plain">{% for entry in history %}<li>{{ entry.at|date:"d.m.Y H:i" }}{% if entry.actor %} · {{ entry.actor }}{% endif %}: höchstens {{ entry.max_count }}-mal je {{ entry.max_days }} Tage</li>{% endfor %}</ul>
+  {% else %}<p>Noch nie geändert; es gelten 1 Verlängerung und höchstens 14 Tage.</p>{% endif %}
+</section>
+<p><a href="{% url 'lending:overview' %}">Zurück zu „Anstehende Ausleihen“</a></p>
+{% endblock %}

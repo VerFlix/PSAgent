@@ -9,7 +9,7 @@
 <p>
   {% if reserved %}<a href="{% url 'lending:booking_checkout' booking.pk %}">Reservierung ausgeben</a>{% endif %}
   {% if reserved and lent %} · {% endif %}
-  {% if lent %}<a href="{% url 'lending:booking_return' booking.pk %}">Zurücknehmen</a>{% endif %}
+  {% if lent %}<a href="{% url 'lending:booking_return' booking.pk %}">Zurücknehmen</a>{% if may_extend %} · <a href="{% url 'lending:booking_extend' booking.pk %}">Verlängern</a>{% endif %}{% endif %}
 </p>
 {% endif %}
 
@@ -40,6 +40,7 @@
 <section class="card">
   <h2>{{ row.loan.part.name }}</h2>
   <p>{{ row.loan.start|date:"d.m.Y" }} – {{ row.loan.end|date:"d.m.Y" }} · <span class="status status-{{ row.loan.status }}">{{ row.loan.get_status_display }}</span>{% if row.overdue %} <span class="status status-locked">überfällig</span>{% endif %}</p>
+  {% for extension in row.loan.extensions.all %}<p class="hint">Verlängert am {{ extension.at|date:"d.m.Y" }} ({{ extension.get_reason_display }}{% if extension.actor %}, {{ extension.actor.get_full_name|default:extension.actor.username }}{% endif %}): bis {{ extension.old_end|date:"d.m.Y" }} → bis {{ extension.new_end|date:"d.m.Y" }}{% if forloop.first %} · bei der Ausgabe unterschrieben: bis {{ extension.old_end|date:"d.m.Y" }}{% endif %}{% if extension.comment %}<br>{{ extension.comment }}{% endif %}</p>{% endfor %}
   {% if row.events %}
   <div class="table-scroll"><table class="list">
     <thead><tr><th>Vorgang</th><th>durch</th><th>Angaben</th><th>Unterschrift</th></tr></thead>

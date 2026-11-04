@@ -7,6 +7,7 @@ from typing import Any
 from django import forms
 
 from lending import services
+from lending.models import ExtensionReason
 from privacy.notice import NO_NAMES
 
 
@@ -158,4 +159,34 @@ class MemberCardForm(forms.Form):
     )
     name_checked = forms.BooleanField(
         label="Der Name auf dem Ausweis stimmt mit dieser Person überein", required=False
+    )
+
+
+class ExtensionForm(forms.Form):
+    """Ausleihe verlängern (#129): neues Datum, Grund zum Antippen, Kommentar, Bestätigung."""
+
+    new_end = forms.DateField(
+        label="Neu zurück bis",
+        # Das Datumsfeld des Browsers erwartet JJJJ-MM-TT, sonst bleibt der Vorschlag leer.
+        widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+    )
+    reason = forms.ChoiceField(
+        label="Grund", choices=ExtensionReason.choices, widget=forms.RadioSelect
+    )
+    comment = forms.CharField(
+        label="Kommentar (freiwillig)",
+        max_length=500,
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
+        help_text=NO_NAMES,
+    )
+    confirm = forms.BooleanField(
+        label="Bestätigung per E-Mail an den Entleiher", required=False, initial=True
+    )
+
+
+class ExtensionLimitForm(forms.Form):
+    max_count = forms.IntegerField(label="Höchstzahl je Ausleihe", min_value=0, max_value=10)
+    max_days = forms.IntegerField(
+        label="Höchstdauer je Verlängerung (Tage)", min_value=1, max_value=90
     )
