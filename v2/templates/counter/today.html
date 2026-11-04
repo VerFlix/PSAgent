@@ -21,8 +21,9 @@
     {% if returns %}
       <ul class="hits">
         {% for row in returns %}
-          <li><a class="hit button{% if row.late %} late{% endif %}" href="{% url 'counter:return_booking' row.booking.pk %}">{{ row.name }}
-            <span>{{ row.count }} Teil{{ row.count|pluralize:"e" }} · {% if row.late %}{{ row.late }} Tag{{ row.late|pluralize:"e" }} überfällig{% else %}fällig heute{% endif %}</span></a></li>
+          <li class="hit-row"><a class="hit button{% if row.late %} late{% endif %}" href="{% url 'counter:return_booking' row.booking.pk %}">{{ row.name }}
+            <span>{{ row.count }} Teil{{ row.count|pluralize:"e" }} · {% if row.late %}{{ row.late }} Tag{{ row.late|pluralize:"e" }} überfällig{% else %}fällig heute{% endif %}</span></a>
+            <a class="button" href="{% url 'counter:extend' row.booking.pk %}" aria-label="{{ row.name }}: verlängern">Verlängern</a></li>
         {% endfor %}
       </ul>
     {% else %}

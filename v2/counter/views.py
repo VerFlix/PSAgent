@@ -534,10 +534,10 @@ def finish(
     *,
     booking: Booking | None = None,
     receipt: ReceiptKind | None = None,
+    note: tuple[int, str] | None = None,
 ) -> HttpResponse:
     """Vorgang abgeschlossen: ggf. Quittung, Meldung, am Vereinsgerät abmelden (#127)."""
     clear(request)
-    note = None
     if booking is not None and receipt is not None:
         try:
             note = (messages.SUCCESS, receipts.send(booking, receipt))

@@ -239,7 +239,8 @@ def test_part_locked_after_reservation_cannot_be_checked_out(
         ("UPDATE lending_loan SET status = 'cancelled'", "nicht erlaubt"),
         (
             "UPDATE lending_loan SET period = daterange('2030-01-01', '2030-01-02')",
-            "nur der Status",
+            # Seit #129 nur durch eine angehängte Verlängerung (Migration 0009).
+            "nur durch eine Verlängerung",
         ),
         ("UPDATE lending_loan SET part_id = part_id", "nur der Status"),
         ("DELETE FROM lending_loan", "nicht gelöscht"),

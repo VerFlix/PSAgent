@@ -1,0 +1,11 @@
+{% extends "counter/base.html" %}
+{% block title %}Verlängern{% endblock %}
+{% block theke %}
+<h1>Verlängern: {{ booking.borrower.display_name }}</h1>
+<form method="post" class="card sign">
+  {% csrf_token %}
+  {% include "lending/_extension_form.html" %}
+  <p class="sign-actions"><a class="button" href="{% url 'counter:return_booking' booking.pk %}">Zur Rückgabe</a>
+    <button type="submit" class="primary big">Verlängern</button></p>
+</form>
+{% endblock %}

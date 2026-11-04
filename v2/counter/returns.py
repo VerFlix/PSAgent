@@ -19,7 +19,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
-from accounts.rights import Right, requires
+from accounts.rights import Right, has_right, requires
 from counter import kinds, stock
 from counter.damage import DamageError, lock_comment
 from counter.forms import DamageForm
@@ -31,6 +31,7 @@ from lending.forms import ReturnForm
 from lending.models import Booking, Loan, LoanStatus
 from lending.receipts import ReceiptKind
 from lending.services import LendingError
+from lending.views import extension_page, extension_text, send_extension_confirmation
 
 
 def _entry_context() -> dict[str, Any]:
@@ -180,6 +181,7 @@ def return_booking(request: HttpRequest, pk: int) -> HttpResponse:
         "form": shown,
         "damage": damage,
         "problem": problem,
+        "may_extend": has_right(request.user, Right.EXTEND),
         **_entry_context(),
     }
     status = 400 if form is not None else 200
@@ -268,3 +270,19 @@ def damage_report(request: HttpRequest) -> HttpResponse:
     }
     status = 400 if problem and "sperren" in post else 200
     return render(request, "counter/damage.html", context, status=status)
+
+
+@requires(Right.EXTEND)
+@require_http_methods(["GET", "POST"])
+def extend_booking(request: HttpRequest, pk: int) -> HttpResponse:
+    """Verlängern an der Theke (#129): bei der Rückgabe und unter „Heute“; Regeln wie am PC."""
+    booking = get_object_or_404(Booking.objects.select_related("borrower"), pk=pk)
+    page = extension_page(request, booking)
+    if not page.context["rows"] and not page.created:
+        messages.error(request, "In diesem Vorgang ist nichts mehr ausgeliehen.")
+        return redirect("counter:returns")
+    if not page.created:
+        status = 400 if request.method == "POST" else 200
+        return render(request, "counter/extend.html", page.context, status=status)
+    note = send_extension_confirmation(page.created) if page.confirm else None
+    return finish(request, extension_text(page.created), note=note)

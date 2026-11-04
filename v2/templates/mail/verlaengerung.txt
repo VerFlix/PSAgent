@@ -1,0 +1,14 @@
+{% autoescape off %}Hallo {{ name }},
+
+{% if club %}{{ club }} bestätigt{% else %}wir bestätigen{% endif %} die Verlängerung (Ausleihvorgang #{{ booking.pk }}):
+{% for item in items %}
+- {{ item.extension.loan.part.name }}{% if item.eis %} (EI {{ item.eis }}){% endif %}
+  bisher zurück bis {{ item.extension.old_end|date:"d.m.Y" }}, jetzt zurück bis {{ item.extension.new_end|date:"d.m.Y" }}
+{% endfor %}
+Bitte die Teile bis zum neuen Tag zurückbringen. Besondere Vorkommnisse (z. B. harter Sturz,
+Kontakt mit Chemikalien) bitte bei der Rückgabe angeben.
+
+Bei Fragen einfach auf diese E-Mail antworten.
+
+{{ notice }}
+{% endautoescape %}

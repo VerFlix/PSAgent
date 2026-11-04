@@ -417,13 +417,26 @@ class Reminder(AppendOnlyModel):
     )
     number = models.PositiveSmallIntegerField("Nummer")
     sent_at = models.DateTimeField("gesendet am", default=timezone.now)
+    # Takt nach einer Verlängerung (#129): Die Erinnerungen zählen ab dem neuen Datum neu.
+    extension = models.ForeignKey(
+        "LoanExtension",
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="nach Verlängerung",
+    )
 
     class Meta:
         verbose_name = "Erinnerung"
         verbose_name_plural = "Erinnerungen"
         ordering = ("sent_at", "id")
         constraints = (
-            models.UniqueConstraint(fields=["loan", "number"], name="lending_reminder_once"),
+            models.UniqueConstraint(
+                fields=["loan", "extension", "number"],
+                name="lending_reminder_once_per_round",
+                nulls_distinct=False,
+            ),
             models.CheckConstraint(
                 condition=Q(number__gte=1, number__lte=3), name="lending_reminder_number"
             ),
@@ -553,3 +566,85 @@ class MemberCardEvent(AppendOnlyModel):
 
     def __str__(self) -> str:
         return f"{self.get_kind_display()}: Entleiher #{self.borrower_id}"
+
+
+class ExtensionReason(models.TextChoices):
+    PHONE = "phone", "telefonisch"
+    IN_PERSON = "in_person", "persönlich"
+    EMAIL = "email", "per E-Mail"
+
+
+class LoanExtension(AppendOnlyModel):
+    """Verlängerung einer laufenden Ausleihe (#129). Wird nur angehängt, in der Hash-Kette.
+
+    Der Zeitraum der Ausleihe ändert sich nur über diesen Eintrag (`lending.extensions`); das bei
+    der Ausgabe unterschriebene Datum steht im ersten Eintrag als `old_end` bzw. ohne Eintrag in
+    der Ausleihe. Keine Unterschrift (Festlegung Felix, 01.11.2026).
+    """
+
+    loan = models.ForeignKey(
+        Loan, on_delete=models.PROTECT, related_name="extensions", verbose_name="Ausleihe"
+    )
+    old_end = models.DateField("bisher zurück bis")
+    new_end = models.DateField("neu zurück bis")
+    reason = models.CharField("Grund", max_length=20, choices=ExtensionReason.choices)
+    comment = models.TextField("Kommentar", blank=True)
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="durch",
+    )
+    at = models.DateTimeField("Zeitpunkt", default=timezone.now)
+
+    class Meta:
+        verbose_name = "Verlängerung"
+        verbose_name_plural = "Verlängerungen"
+        ordering = ("at", "id")
+        constraints = (
+            models.CheckConstraint(
+                condition=Q(new_end__gt=models.F("old_end")), name="lending_extension_later"
+            ),
+            models.CheckConstraint(
+                condition=Q(reason__in=ExtensionReason.values), name="lending_extension_reason"
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"Verlängerung {self.loan}: {self.old_end} → {self.new_end}"
+
+
+class ExtensionLimit(AppendOnlyModel):
+    """Grenzen für Verlängerungen (#129): Höchstzahl je Ausleihe, Höchstdauer je Verlängerung.
+
+    Es gilt der jüngste Eintrag; ohne Eintrag 1 Verlängerung mit höchstens 14 Tagen. Ändern darf
+    nur der Admin, jede Änderung mit dem YubiKey (Festlegung Felix, 01.11.2026).
+    """
+
+    max_count = models.PositiveSmallIntegerField("Höchstzahl je Ausleihe")
+    max_days = models.PositiveSmallIntegerField("Höchstdauer je Verlängerung (Tage)")
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="durch",
+    )
+    at = models.DateTimeField("Zeitpunkt", default=timezone.now)
+
+    class Meta:
+        verbose_name = "Grenze für Verlängerungen"
+        verbose_name_plural = "Grenzen für Verlängerungen"
+        ordering = ("-at", "-id")
+        constraints = (
+            models.CheckConstraint(
+                condition=Q(max_count__lte=10, max_days__gte=1, max_days__lte=90),
+                name="lending_extension_limit_range",
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"höchstens {self.max_count}-mal je {self.max_days} Tage"

@@ -15,6 +15,7 @@ Theke-Gerät ist sie für Touch vergrößert (Knöpfe mindestens 48 px).
 | Verfügbarkeit und Kalender sehen (ohne Personendaten) | „Kalender“; in der Ausgabe nur freie Teile (**Ausgabe → Teile**) |
 | Kontaktdaten der Entleiher sehen | nur laufende Ausleihen: „Vorgänge“ → Vorgang; an der Theke selbst nur Namen |
 | Reservieren, ausgeben, zurücknehmen | **Ausgabe** (vier Schritte), **Reservierung abholen**, **Rückgabe**, **Heute**; „Reservieren“ (normale Ansicht) |
+| Ausleihe verlängern (im Rahmen der Grenzen) | **Rückgabe → Verlängern statt zurückgeben**, **Heute → Verlängern**; am PC Vorgang → Verlängern |
 | Reservierungen anderer ändern oder stornieren | nur eigene: „Vorgänge“ → Vorgang → stornieren |
 | Entleiher anlegen, auch ohne Ausleihe | **Ausgabe → Entleiher → Neue Person anlegen**; „Person anlegen“ |
 | Mitgliedsausweis mit Entleiher verbinden | **Ausgabe → Entleiher** (Ausweis scannen, neue Person); „Mitgliedsausweis verbinden“ |
