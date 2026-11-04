@@ -147,8 +147,8 @@ def test_belts_by_size_exact_first_then_narrowest(
     start(client_lender)
 
     for _ in range(3):
-        client_lender.post(PARTS, {"gurt": "M"})
-    refused = client_lender.post(PARTS, {"gurt": "M"}, follow=True).content.decode()
+        client_lender.post(PARTS, {"groesse": "G:M"})
+    refused = client_lender.post(PARTS, {"groesse": "G:M"}, follow=True).content.decode()
 
     assert chosen_eis(client_lender) == ["DAV-HL-G-2", "DAV-HL-G-3", "DAV-HL-G-1"]
     assert "keiner frei" in refused
@@ -160,8 +160,8 @@ def test_belt_without_size_and_kids_sizes(client_lender: Client, make_part: Make
     make_part("DAV-HL-G-3", size="XS-XL")
     start(client_lender)
 
-    client_lender.post(PARTS, {"gurt": ""})
-    client_lender.post(PARTS, {"gurt": "K1"})
+    client_lender.post(PARTS, {"groesse": "G:"})
+    client_lender.post(PARTS, {"groesse": "G:K1"})
 
     assert chosen_eis(client_lender) == ["DAV-HL-G-1", "DAV-HL-G-2"]
 
@@ -257,7 +257,7 @@ def test_swapped_belt_keeps_its_size(client_lender: Client, make_part: MakePart)
     make_part("DAV-HL-G-3", size="M-L")
     start(client_lender)
 
-    client_lender.post(PARTS, {"gurt": "M"})
+    client_lender.post(PARTS, {"groesse": "G:M"})
     client_lender.post(PARTS, {"tauschen": "0"})
     assert chosen_eis(client_lender) == ["DAV-HL-G-3"]
     client_lender.post(PARTS, {"tauschen": "0"})

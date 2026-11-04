@@ -34,7 +34,8 @@ CONFIRMED = [(name, url) for name, url, _ in PROTECTED if needs_confirmation(url
 # Lesen und die Optionen selbst brauchen keine Bestätigung; die Sicherung (ZIP) schon.
 NOT_CONFIRMED = {"accounts:users", "accounts:user_detail", "accounts:yubikey_options"}
 # Außerhalb der Nutzerverwaltung: Empfänger der Sammelmail (#128, Festlegung Felix 01.11.2026).
-CONFIRMED_ELSEWHERE = {"lending:digest_settings"}
+# Ebenso die Theke-Einstellungen (#127, Festlegung Felix 03.11.2026).
+CONFIRMED_ELSEWHERE = {"lending:digest_settings", "counter:settings"}
 
 
 def options(client: Client, path: str) -> Any:

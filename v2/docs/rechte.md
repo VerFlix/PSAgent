@@ -30,6 +30,7 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
 | Sammelmail zu überfälligen Ausleihen: schalten, Empfänger pflegen, Testmail | ✓ | – | – | – | – |
 | An der Theke anmelden (QR-Code + PIN oder Passwort), dort höchstens Verleiher-Rechte | – | – | ✓ | ✓ | – |
 | Eigene PIN setzen, eigenen QR-Code drucken (Theke) | – | – | ✓ | ✓ | – |
+| Theke einstellen: Art-Kürzel, Schnellzugriff, nach Größe, Vorauswahl der Leihdauer | ✓ | – | – | – | – |
 | Nutzer, Rollen, Sachkunde-Zertifikate verwalten | ✓ | – | – | – | – |
 | Signierte Einträge ändern oder löschen | niemand | niemand | niemand | niemand | niemand |
 
@@ -102,6 +103,11 @@ schlägt fehl, wenn beide auseinanderlaufen; erzeugt wird sie mit
   (Kurzkontrolle, GAL bereitgestellt, Unterschrift, bei bekannten Entleihern „unverändert
   (nachgefragt)“ oder neue Angaben). Der laufende Vorgang steht in der Sitzung nur mit
   Verweisen, ohne Personendaten.
+- Theke-Einstellungen (#127, Felix, 03.11.2026): Art-Kürzel, Schnellzugriff, „nach Größe“ und
+  die Vorauswahl der Leihdauer pflegt nur der Admin; jede Änderung bestätigt er mit dem YubiKey
+  (wie die Sammelmail), gespeichert wird nur angehängt (`CounterSetting`). Personendaten stehen
+  dort keine. Ohne Eintrag gelten die Startwerte (G, KS, H im Schnellzugriff, G nach Größe,
+  1 Woche).
 - Rückgabe und Schaden melden an der Theke (#127, Felix, 03.11.2026): Rückgabe ab Verleiher wie
   am PC (Kurzprüfung, Name, Unterschrift; Parität 17), auch teilweise. Ein Schaden bei der
   Rückgabe sperrt das Teil (Recht „Sperren“); dafür reicht der angetippte Grund, bei

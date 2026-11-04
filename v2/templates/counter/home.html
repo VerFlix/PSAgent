@@ -9,9 +9,10 @@
   </form>
   <a class="tile tile-ret" href="{% url 'counter:returns' %}">Rückgabe<span>Offene Ausleihen, auch teilweise</span></a>
   <a class="tile tile-dmg" href="{% url 'counter:damage_report' %}">Schaden melden<span>Teil wählen und sperren</span></a>
-  <a class="tile tile-today" href="{% url 'lending:overview' %}">Heute<span>Abholungen und Rückgaben</span></a>
+  <a class="tile tile-today" href="{% url 'counter:today' %}">Heute<span>Abholungen, Rückgaben, Bestand</span></a>
 </div>
 <ul class="theke-more">
   {% for label, name in more %}<li><a class="button" href="{% url name %}">{{ label }}</a></li>{% endfor %}
+  {% if may_configure %}<li><a class="button" href="{% url 'counter:settings' %}">Theke-Einstellungen</a></li>{% endif %}
 </ul>
 {% endblock %}

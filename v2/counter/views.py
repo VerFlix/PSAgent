@@ -21,7 +21,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from accounts.devices import finish_operation
 from accounts.models import User
 from accounts.rights import Right, has_right, requires
-from counter import kinds, stock
+from counter import config, kinds, stock
 from counter.cart import Cart, Line, clear, load, save
 from counter.forms import ContactForm, PersonForm
 from inventory.models import Part
@@ -32,8 +32,7 @@ from lending.models import Booking, Borrower, BorrowerContact, Loan, LoanStatus
 from lending.receipts import ReceiptKind
 from lending.services import LendingError
 
-DURATIONS = ((1, "Morgen"), (3, "3 Tage"), (7, "1 Woche"), (14, "2 Wochen"))
-DEFAULT_DAYS = 7  # Vorauswahl wie im Prototyp; die übliche Leihdauer ist noch offen (#127)
+DURATIONS = config.DURATIONS
 WANTED = [*ADULT, *KIDS, stock.NO_SIZE]  # Größen-Tasten für Gurte; "" = ohne Größenangabe
 MORE = (
     ("Reservieren", "lending:new_booking"),
@@ -80,7 +79,8 @@ def _int(post: QueryDict, key: str) -> int | None:
 @require_GET
 def home(request: HttpRequest) -> HttpResponse:
     """Startseite der Theke: vier große Kacheln, darunter die übrigen Bereiche."""
-    return render(request, "counter/home.html", {"more": MORE})
+    context = {"more": MORE, "may_configure": has_right(request.user, Right.COUNTER_SETTINGS)}
+    return render(request, "counter/home.html", context)
 
 
 # --- Schritte ---
@@ -177,7 +177,7 @@ def checkout_period(request: HttpRequest) -> HttpResponse:
             cart.end = end
             save(request, cart)
             return redirect("counter:checkout_parts")
-    chosen = cart.end or today + timedelta(days=DEFAULT_DAYS)
+    chosen = cart.end or today + timedelta(days=config.default_days())
     options = [
         {"days": days, "label": label, "date": today + timedelta(days=days)}
         for days, label in DURATIONS
@@ -199,10 +199,6 @@ def _quick(code: str) -> kinds.Kind | None:
     return kind if kind is not None and kind.quick else None
 
 
-def _sized() -> kinds.Kind:
-    return next(kind for kind in kinds.quick_kinds() if kind.sized)
-
-
 def _wanted_label(wanted: str) -> str:
     return f"Größe {size_label(wanted)}" if wanted else "ohne Größenangabe"
 
@@ -212,11 +208,11 @@ def _change_parts(cart: Cart, end: date, post: QueryDict) -> Notice | None:
     taken = set(cart.part_ids())
     until = f"bis {end:%d.%m.%Y}"
 
-    if "gurt" in post:
-        wanted = post["gurt"]
-        if wanted not in WANTED:
-            return Notice("error", "Unbekannte Größe.")
-        kind = _sized()
+    if "groesse" in post:
+        code, _, wanted = post.get("groesse", "").partition(":")
+        kind = _quick(code)
+        if kind is None or not kind.sized or wanted not in WANTED:
+            return Notice("error", "Unbekannte Art oder Größe.")
         match = stock.for_size(stock.offers(kind, end), wanted, taken)
         if not match:
             return Notice("error", f"{kind.label} ({_wanted_label(wanted)}): {until} keiner frei.")
@@ -353,7 +349,7 @@ def _parts_context(cart: Cart, end: date) -> dict[str, Any]:
         "lines": rows,
         "can_continue": bool(rows) and not any(row["problems"] for row in rows),
         "prefix": kinds.ei_prefix(),
-        "all_kinds": kinds.KINDS,
+        "all_kinds": kinds.all_kinds(),
         "digits": "1234567890",
         "steps": _steps(cart, 2),
     }
@@ -625,6 +621,31 @@ def _cart_parts(cart: Cart) -> list[Part]:
     return [found[pk] for pk in cart.part_ids() if pk in found]
 
 
+def pickup_rows() -> list[dict[str, Any]]:
+    """Vorgänge mit Reservierungen ab heute oder früher (zum Abholen), nach Beginn sortiert."""
+    today = services.today()
+    pending = Loan.objects.filter(status=LoanStatus.RESERVED, period__startswith__lte=today)
+    bookings = []
+    for booking in (
+        Booking.objects.filter(loans__in=pending)
+        .distinct()
+        .select_related("borrower")
+        .order_by("pk")
+    ):
+        loans = [loan for loan in booking.loans.all() if loan.status == LoanStatus.RESERVED]
+        bookings.append(
+            {
+                "booking": booking,
+                "name": booking.borrower.display_name,
+                "count": len(loans),
+                "start": min(loan.start for loan in loans),
+                "end": max(loan.end for loan in loans),
+            }
+        )
+    bookings.sort(key=lambda row: (row["start"], row["name"]))
+    return bookings
+
+
 @requires(Right.LEND)
 @require_http_methods(["GET", "POST"])
 def checkout_reservations(request: HttpRequest) -> HttpResponse:
@@ -646,24 +667,7 @@ def checkout_reservations(request: HttpRequest) -> HttpResponse:
         )
         save(request, cart)
         return redirect("counter:checkout_borrower")
-    bookings = []
-    for booking in (
-        Booking.objects.filter(loans__in=pending)
-        .distinct()
-        .select_related("borrower")
-        .order_by("pk")
-    ):
-        loans = [loan for loan in booking.loans.all() if loan.status == LoanStatus.RESERVED]
-        bookings.append(
-            {
-                "booking": booking,
-                "name": booking.borrower.display_name,
-                "count": len(loans),
-                "start": min(loan.start for loan in loans),
-                "end": max(loan.end for loan in loans),
-            }
-        )
-    bookings.sort(key=lambda row: (row["start"], row["name"]))
+    bookings = pickup_rows()
     context = {"bookings": bookings}
     return render(request, "counter/reservations.html", context)
 

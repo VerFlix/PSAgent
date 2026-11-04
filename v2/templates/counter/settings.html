@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Theke-Einstellungen{% endblock %}
+{% block content %}
+<h1>Theke-Einstellungen</h1>
+<p>Die Theke erkennt die Art eines Teils am Kürzel in der EI, z. B. „G“ in DAV-HL-G-143. Hier pflegst
+  du die Kürzel, welche Arten im Schnellzugriff stehen (höchstens {{ max_quick }}) und welche man dort
+  nach Größe wählt. Jede Änderung bestätigst du mit deinem YubiKey; der alte Stand bleibt im
+  Verlauf.</p>
+<form method="post" class="card" data-yubikey="{% url 'accounts:yubikey_options' %}">
+  {% csrf_token %}
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  {{ formset.management_form }}
+  {% for error in formset.non_form_errors %}<p class="error" role="alert">{{ error }}</p>{% endfor %}
+  <div class="table-scroll"><table class="list">
+    <thead><tr><th>Kürzel</th><th>Name</th><th>Schnellzugriff</th><th>nach Größe</th><th>entfernen</th></tr></thead>
+    <tbody>
+      {% for form in formset %}
+        <tr>
+          <td>{{ form.code.as_widget }}{% for error in form.code.errors %}<span class="error">{{ error }}</span>{% endfor %}</td>
+          <td>{{ form.label.as_widget }}</td>
+          <td><label class="check">{{ form.quick }} <span class="visually-hidden">Schnellzugriff {{ form.code.value|default:"neu" }}</span></label></td>
+          <td><label class="check">{{ form.sized }} <span class="visually-hidden">nach Größe {{ form.code.value|default:"neu" }}</span></label></td>
+          <td>{% if form.DELETE %}<label class="check">{{ form.DELETE }} <span class="visually-hidden">{{ form.code.value|default:"Zeile" }} entfernen</span></label>{% endif %}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="hint">„nach Größe“ nutzt die Größen am Bauteil (XS–XL, Bereiche, K1/K2) und geht nur mit Schnellzugriff. Teile mit einem entfernten Kürzel gibt die Theke weiter über „Anderes Teil“ aus.</p>
+  {% with field=duration.default_days %}{% include "inventory/_field.html" %}{% endwith %}
+  <button type="submit" class="primary">Speichern (mit YubiKey)</button>
+</form>
+<section class="card">
+  <h2>Verlauf</h2>
+  {% if history %}
+    <ul class="plain">{% for entry in history %}<li>{{ entry.at|date:"d.m.Y H:i" }}{% if entry.actor %} · {{ entry.actor }}{% endif %}: {% for kind in entry.kinds %}{{ kind.code }}{% if kind.quick %}*{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %} · Vorauswahl {{ entry.default_days }} Tag{{ entry.default_days|pluralize:"e" }}</li>{% endfor %}</ul>
+    <p class="hint">* im Schnellzugriff</p>
+  {% else %}
+    <p>Noch nie geändert; es gelten die Startwerte.</p>
+  {% endif %}
+</section>
+<p><a href="{% url 'counter:home' %}">Zur Theke</a></p>
+{% endblock %}
