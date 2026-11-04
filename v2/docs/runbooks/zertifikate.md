@@ -94,7 +94,7 @@ aufnehmen, auch nicht mit neuem Zertifikat.
 ## 6. Abgleichen
 
 - Täglich: Die Zeugen-Mail nennt alle Fingerabdrücke. Der Vorstand vergleicht mit der
-  Papierliste; ein unbekannter Fingerabdruck ist ein Sicherheitsvorfall.
+  Papierliste; ein unbekannter Fingerabdruck ist ein Sicherheitsvorfall (`vorfall-kette.md`).
 - Jederzeit: `uv run python manage.py kette_pruefen` meldet Zeilen der Liste, die an der App
   vorbei geändert, gelöscht oder eingefügt wurden. Mit `--fingerabdruecke <Datei>` vergleicht er
   die Liste in PSAgent mit der abgetippten Papierliste (`docs/runbooks/pruefwerkzeug.md`).

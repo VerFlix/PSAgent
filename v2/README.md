@@ -48,6 +48,8 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
   Adresse 15 Minuten gesperrt.
 - Konten legt ein Admin unter „Nutzer verwalten“ an (`/verwaltung/nutzer/`): Rolle,
   Aktiv-Status, Sachkunde und Passkeys der anderen, jeweils mit Begründung und Protokoll.
+  60 Tage vor Ablauf einer Sachkunde zeigt die Startseite der Person und dem Admin einen
+  Hinweis (#26); Verlängern und Widerrufen: `docs/runbooks/sachkunde.md`.
   Zugang gibt es nur über einen Einmal-Link (72 Stunden gültig): Admin und PSA-Sachkundige
   richten damit einen Passkey ein, die übrigen Rollen wahlweise einen Passkey oder ein eigenes
   Passwort. Ein neuer Link macht ältere ungültig.
@@ -160,7 +162,8 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
   Änderung, nur anhängbar, verkettet), mit
   `--zeugen` die Zeugen-Mails (`.eml`) bzw. Kopf-Dateien und mit `--fingerabdruecke` die
   Papierliste der Signaturzertifikate. Ergebnis unverändert (0), verändert (1) oder nicht prüfbar
-  (2). Ablauf: `docs/runbooks/pruefwerkzeug.md`; welche Manipulationen das findet:
+  (2). Ablauf: `docs/runbooks/pruefwerkzeug.md`, bei einem Befund
+  `docs/runbooks/vorfall-kette.md`; welche Manipulationen das findet:
   `docs/manipulationen.md`. Einen einzelnen signierten Bericht prüft das Signier-Tool auch ohne
   Server: `signieren pruefen <Bericht.pdf> --tsa-ca … --fingerabdruecke …`.
 - Prüfmodus (Parität 7, `/pruefung/runde/`, nur mit gültiger Sachkunde): Prüfungsrunde beginnen,

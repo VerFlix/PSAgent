@@ -120,7 +120,7 @@ Abnahme von #24: Jeder Fehler führt zu einer Meldung auf dem Handy. Ergebnis un
 | Zustand | `journalctl -u psagent-zustand -n 20` nennt den Grund (Container, WAL-Archiv, Platz, SMART). Meldet die SSD einen Defekt: Ersatz-SSD einbauen, neu installieren, aus der Sicherung wiederherstellen (`sicherung.md`, Ernstfall). |
 | Sicherung | `journalctl -u psagent-sicherung`; `sicherung.md` |
 | Kettenkopf | Zeitstempeldienst und Mail prüfen; `kettenkopf.md` |
-| Kette prüfen | **Sicherheitsvorfall:** nichts ändern; `pruefwerkzeug.md` |
+| Kette prüfen | **Sicherheitsvorfall:** nichts ändern; `vorfall-kette.md` |
 | Löschfristen, Erinnerungen, Notfallmappe | `journalctl -u 'psagent-befehl@<befehl>.service'` |
 
 ## Ergebnisse der Abnahme
