@@ -47,6 +47,16 @@ def sign(page: Page) -> None:
     page.mouse.up()
 
 
+def choose_period(page: Page, label: str) -> None:
+    """Leihdauer antippen und warten, bis Schritt „Teile“ samt Skripten geladen ist.
+
+    `theke.js` kommt mit `defer`: Ein Klick auf eine Art-Taste, bevor das Skript läuft, geht
+    verloren (in der CI einmal passiert, EI „DAV-HL-21“ statt „DAV-HL-S-21“).
+    """
+    page.get_by_role("button", name=label).click()
+    page.wait_for_url("**/theke/ausgabe/teile/")
+
+
 def follow(page: Page, link: str) -> None:
     """Link antippen und warten, bis die neue Seite samt htmx geladen ist."""
     page.get_by_role("link", name=link).click()
@@ -72,7 +82,7 @@ def test_checkout_with_belt_sizes(page: Page, site: str) -> None:
     page.goto(f"{site}/theke/")
     assert_fits_width(page)
     page.get_by_role("button", name="Ausgabe").click()
-    page.get_by_role("button", name="1 Woche").click()
+    choose_period(page, "1 Woche")
 
     page.get_by_role("button", name="Klettergurt Größe M hinzufügen, 2 frei").click()
     expect(page.get_by_text("DAV-HL-G-2")).to_be_visible()
@@ -104,7 +114,7 @@ def test_other_part_by_keypad_and_new_person(page: Page, site: str) -> None:
 
     page.goto(f"{site}/theke/")
     page.get_by_role("button", name="Ausgabe").click()
-    page.get_by_role("button", name="3 Tage").click()
+    choose_period(page, "3 Tage")
     page.get_by_role("button", name="Art Seil").click()
     page.get_by_role("button", name="Ziffer 2").click()
     page.get_by_role("button", name="Ziffer 1").click()
@@ -134,7 +144,7 @@ def test_unknown_ei_keeps_the_entry(page: Page, site: str) -> None:
 
     page.goto(f"{site}/theke/")
     page.get_by_role("button", name="Ausgabe").click()
-    page.get_by_role("button", name="1 Woche").click()
+    choose_period(page, "1 Woche")
     page.locator("#ei-eingabe").fill("DAV-HL-H-999")
     page.get_by_role("button", name="Hinzufügen", exact=True).click()
 
