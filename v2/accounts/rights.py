@@ -55,6 +55,7 @@ class Right(StrEnum):
     ERASURE_HOLD = "erasure_hold"
     REMINDERS = "reminders"
     OVERDUE_DIGEST = "overdue_digest"
+    LOCK_DIGEST = "lock_digest"
     EXTENSION_LIMITS = "extension_limits"
     COUNTER_LOGIN = "counter_login"
     COUNTER_CREDENTIALS = "counter_credentials"
@@ -177,6 +178,9 @@ RIGHTS: dict[Right, Rule] = {
     ),
     Right.OVERDUE_DIGEST: Rule(
         "Sammelmail zu überfälligen Ausleihen: schalten, Empfänger pflegen, Testmail", Role.ADMIN
+    ),
+    Right.LOCK_DIGEST: Rule(
+        "Sammelmail zu neuen Sperren: schalten, Empfänger pflegen, Testmail", Role.ADMIN
     ),
     Right.EXTENSION_LIMITS: Rule(
         "Höchstzahl und Höchstdauer der Verlängerungen einstellen", Role.ADMIN

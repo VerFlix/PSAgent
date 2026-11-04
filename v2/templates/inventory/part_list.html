@@ -3,6 +3,7 @@
 {% block content %}
 <h1>Teile</h1>
 <p>{% if may_create %}<a href="{% url 'inventory:product_create' %}">Produkt anlegen</a> · <a href="{% url 'inventory:system_create' %}">System anlegen</a> · {% endif %}<a href="{% url 'inventory:part_archive' %}">Archiv ausgesonderter Teile</a></p>
+{% if may_configure_lock_digest %}<p class="hint"><a href="{% url 'inventory:lock_digest_settings' %}">Sammelmail zu neuen Sperren einstellen</a></p>{% endif %}
 <form method="get" class="card search">
   <label for="q">Suche (Bezeichnung, EI, Hersteller, Seriennummer)</label>
   <input id="q" name="q" value="{{ query }}" type="search">

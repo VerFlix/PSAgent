@@ -130,6 +130,12 @@ Adressen eintragen, „Sammelmail senden“ anhaken, mit YubiKey speichern, dann
 Nur Postfächer des Vereins eintragen: Die Mail enthält Namen von Entleihern. Scheitert der
 Versand, endet `erinnerungen` mit Fehler, und Uptime Kuma meldet das.
 
+**Sammelmail zu neuen Sperren (#141):** Derselbe Lauf schickt, wenn eingeschaltet, alle Sperren
+seit der letzten Mail an eine eigene Empfängerliste, z. B. das Postfach der PSA-Sachkundigen.
+Einrichten als Admin unter „Teile“ → „Sammelmail zu neuen Sperren einstellen“, wie oben. Die
+Mail nennt keine Entleiher. Scheitert eine der beiden Sammelmails, läuft die andere trotzdem;
+`erinnerungen` endet dann mit Fehler.
+
 ## Fehlerbilder
 
 | Meldung | Ursache |

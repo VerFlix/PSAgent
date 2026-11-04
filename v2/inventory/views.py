@@ -19,10 +19,11 @@ from django.utils import timezone
 from django.utils.text import slugify
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
+from accounts.confirm import requires_yubikey
 from accounts.models import User
 from accounts.rights import Right, has_right, requires
 from inspections.services import next_inspection_due
-from inventory import documents, export, labels, sizes
+from inventory import documents, export, labels, lock_digest, sizes
 from inventory.forms import (
     CommentForm,
     ComponentEditFormSet,
@@ -40,6 +41,7 @@ from inventory.models import (
     Component,
     Document,
     EventKind,
+    LockDigestRun,
     Part,
     PartEvent,
     PartStatus,
@@ -58,6 +60,7 @@ from inventory.services import (
     update_component,
 )
 from inventory.timeline import actor_name, timeline
+from mailer.digests import MAX_RECIPIENTS, DigestError
 
 COMPONENTS = "bauteile"
 
@@ -96,6 +99,7 @@ def part_list(request: HttpRequest) -> HttpResponse:
         "size": size,
         "size_filters": [(value, label) for value, label in sizes.SIZE_CHOICES if "-" not in value],
         "may_create": has_right(request.user, Right.MANAGE_PARTS),
+        "may_configure_lock_digest": has_right(request.user, Right.LOCK_DIGEST),
     }
     return render(request, "inventory/part_list.html", context)
 
@@ -560,3 +564,47 @@ def scan_target(request: HttpRequest, ei: str) -> HttpResponse:
             status=410,
         )
     return redirect("inventory:part_detail", component.part.pk)
+
+
+@requires(Right.LOCK_DIGEST)
+@requires_yubikey
+@require_http_methods(["GET", "POST"])
+def lock_digest_settings(request: HttpRequest) -> HttpResponse:
+    """Sammelmail zu neuen Sperren (#141): Schalter und Empfänger, nur mit YubiKey."""
+    setting = lock_digest.current()
+    error = ""
+    on = setting.enabled if setting else False
+    text = "\n".join(setting.recipients) if setting else ""
+    if request.method == "POST":
+        on = request.POST.get("an") == "on"
+        text = request.POST.get("empfaenger", "")
+        try:
+            lock_digest.configure(on, text.splitlines(), actor=_actor(request))
+        except DigestError as problem:
+            error = str(problem)
+        else:
+            state = "an" if on else "aus"
+            messages.success(request, f"Sammelmail zu Sperren {state}, Empfänger gespeichert.")
+            return redirect("inventory:lock_digest_settings")
+    context = {
+        "setting": setting,
+        "on": on,
+        "text": text,
+        "error": error,
+        "maximum": MAX_RECIPIENTS,
+        "runs": LockDigestRun.objects.all()[:10],
+    }
+    return render(request, "inventory/lock_digest_settings.html", context)
+
+
+@requires(Right.LOCK_DIGEST)
+@require_POST
+def lock_digest_test(request: HttpRequest) -> HttpResponse:
+    """Testmail ohne Inhalt an die eingetragenen Empfänger."""
+    try:
+        count = lock_digest.send_test(actor=_actor(request))
+    except DigestError as problem:
+        messages.error(request, str(problem))
+    else:
+        messages.success(request, f"Testmail an {count} Adresse(n) gesendet.")
+    return redirect("inventory:lock_digest_settings")

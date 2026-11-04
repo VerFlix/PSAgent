@@ -1,0 +1,13 @@
+{% autoescape off %}Neu erfasste Sperren seit {{ since|date:"d.m.Y H:i" }}{% if club %} ({{ club }}){% endif %}: {{ count_text }}
+
+{% for item in items %}- {{ item.name }}{% if item.eis %} (EI {{ item.eis }}){% endif %}
+  gesperrt am {{ item.event.at|date:"d.m.Y H:i" }}{% if item.actor %} von {{ item.actor }}{% endif %}{% if item.from_inspection %}, aus einer PSA-Prüfung{% endif %}
+  Kommentar: {{ item.comment }}
+  Stand jetzt: {{ item.status }}
+  {{ item.link }}
+
+{% endfor %}Gesperrte Teile sind nicht verleihbar. Entsperren darf nur, wer eine gültige Sachkunde hat.
+Diese Mail nennt keine Entleiher.
+
+Empfänger und Schalter: {{ settings_link }}
+{% endautoescape %}

@@ -1,9 +1,10 @@
-"""Verwaltungsbefehl: Erinnerungen bei Überfälligkeit und Sammelmail senden (täglicher Timer).
+"""Verwaltungsbefehl: Erinnerungen bei Überfälligkeit und Sammelmails senden (täglicher Timer).
 
-Erinnerungen an Entleiher (#72) und die Sammelmail an Vereinsadressen (#128) haben je einen
-eigenen Schalter. Die Ausgabe nennt Vorgänge nur mit Nummer und Empfänger nur als Anzahl, damit
-im Protokoll des Timers keine Namen oder Adressen stehen. Scheitert die Sammelmail, endet der
-Befehl mit Fehler; das meldet der Herzschlag des Timers an das Monitoring (#24).
+Erinnerungen an Entleiher (#72), die Sammelmail zu überfälligen Ausleihen (#128) und die
+Sammelmail zu neuen Sperren (#141) haben je einen eigenen Schalter. Die Ausgabe nennt Vorgänge
+nur mit Nummer und Empfänger nur als Anzahl, damit im Protokoll des Timers keine Namen oder
+Adressen stehen. Scheitert eine Sammelmail, läuft die andere trotzdem, und der Befehl endet mit
+Fehler; das meldet der Herzschlag des Timers an das Monitoring (#24).
 """
 
 from datetime import date
@@ -11,7 +12,9 @@ from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 
+from inventory import lock_digest
 from lending import digest, reminders
+from mailer.digests import DigestError
 
 
 def _bookings(number: int, *, dative: bool = False) -> str:
@@ -21,7 +24,7 @@ def _bookings(number: int, *, dative: bool = False) -> str:
 
 
 class Command(BaseCommand):
-    help = "Sendet fällige E-Mail-Erinnerungen und die Sammelmail zu überfälligen Ausleihen."
+    help = "Sendet fällige E-Mail-Erinnerungen und die Sammelmails (überfällig, neue Sperren)."
 
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
@@ -35,7 +38,17 @@ class Command(BaseCommand):
         dry_run = options["probelauf"]
         on = options["stichtag"]
         self._reminders(on, dry_run)
-        self._digest(on, dry_run)
+        errors = []
+        for label, step in (
+            ("Sammelmail", self._digest),
+            ("Sammelmail zu Sperren", self._lock_digest),
+        ):
+            try:
+                step(on, dry_run)
+            except DigestError as error:
+                errors.append(f"{label}: {error}")
+        if errors:
+            raise CommandError(" ".join(errors))
 
     def _reminders(self, on: date | None, dry_run: bool) -> None:
         if not reminders.enabled():
@@ -50,10 +63,7 @@ class Command(BaseCommand):
             self.stdout.write(f"{len(result)} Erinnerung(en) gesendet.")
 
     def _digest(self, on: date | None, dry_run: bool) -> None:
-        try:
-            result = digest.run(on, dry_run=dry_run)
-        except digest.DigestError as error:
-            raise CommandError(f"Sammelmail: {error}") from error
+        result = digest.run(on, dry_run=dry_run)
         if result.sent:
             self.stdout.write(
                 f"Sammelmail: {_bookings(result.bookings)} "
@@ -66,3 +76,18 @@ class Command(BaseCommand):
             )
         else:
             self.stdout.write(f"Sammelmail: nicht gesendet ({result.reason}).")
+
+    def _lock_digest(self, on: date | None, dry_run: bool) -> None:
+        result = lock_digest.run(on, dry_run=dry_run)
+        if result.sent:
+            self.stdout.write(
+                f"Sammelmail zu Sperren: {result.locks} Sperre(n) "
+                f"an {result.recipients} Adresse(n) gesendet."
+            )
+        elif dry_run and result.locks:
+            self.stdout.write(
+                f"Probelauf: Sammelmail zu Sperren mit {result.locks} Sperre(n) "
+                f"an {result.recipients} Adresse(n)."
+            )
+        else:
+            self.stdout.write(f"Sammelmail zu Sperren: nicht gesendet ({result.reason}).")

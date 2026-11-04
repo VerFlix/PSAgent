@@ -1,0 +1,7 @@
+{% autoescape off %}Das ist eine Testmail{% if club %} von PSAgent ({{ club }}){% else %} von PSAgent{% endif %}.
+
+An diese Adresse geht künftig jeden Morgen eine Sammelmail, wenn seit der letzten Mail Teile
+gesperrt wurden: mit Teil, EI, Zeitpunkt, Kommentar und Link zur Teileseite, ohne Entleiher.
+
+Empfänger und Schalter: {{ settings_link }}
+{% endautoescape %}
