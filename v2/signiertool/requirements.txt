@@ -252,9 +252,9 @@ pycparser==3.12 ; implementation_name != 'PyPy' and platform_python_implementati
     --hash=sha256:a076f3f489b39b43ed13563a1dafe42447445bec2e294154ec5c57fcdda4c85e \
     --hash=sha256:f03387877eab82ce01bbdfd0ba7252ee55a90b1c708d5129e2ce915475cf1db6
     # via cffi
-pyhanko==0.38.0 \
-    --hash=sha256:267d6d3fa460b0f0e9c5362a2d7979dccbe1e6b1f8d89ba0818dd0c45b5f300e \
-    --hash=sha256:60abfdf6114e4ad64bb413491848af4a276231b563cb9f268e8dbfbcd47e586f
+pyhanko==0.38.1 \
+    --hash=sha256:27348b2bb5c6756402102a930b3404a1ccce4d1102f81e56399df268dd90f70d \
+    --hash=sha256:723fdf1a6e27be72d0d7fbf65deccf03aeaa6fafbdddc5c698b6b2eba06c543d
     # via psagent-signieren
 pyhanko-certvalidator==0.33.0 \
     --hash=sha256:72d3b830c0427a7aae45873ba7b4e34cb86caed451eff9dfb4394a69e93bb169 \
