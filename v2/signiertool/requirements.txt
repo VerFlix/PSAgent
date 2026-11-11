@@ -285,9 +285,9 @@ tzlocal==5.4.5 \
     --hash=sha256:ba976898bad27945178c9ca25c222c19e322b30c10342b9f40b46714f70d2d5f \
     --hash=sha256:ecab534f6d65d9deb4c4ea52c121ab6dd5958e9b878e71dcb102578269752454
     # via pyhanko
-uritools==6.1.3 \
-    --hash=sha256:136f113e76e53f85bf2d9cce0c3d40ceec775d0409e7d6de9b28f046a7d42838 \
-    --hash=sha256:3a498e7e85ef3249343d5710618d641a414da0fbae6d23053ada7976ee83ea5f
+uritools==7.0.0 \
+    --hash=sha256:110b773e3f8fbaebcdcbe1377d04e418b1985adf69deeca4ed569f3e328cbf48 \
+    --hash=sha256:41a5d1c0ff82d73fc3c59a34e8103f699791d41fff9e3bd272a055249641b889
     # via pyhanko-certvalidator
 yarl==1.25.1 \
     --hash=sha256:03dd38de09bc213e9a8b29761eec33ee1d5318dac0e49d8af36e4d27830e23a7 \
