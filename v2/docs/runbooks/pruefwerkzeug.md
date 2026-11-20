@@ -40,7 +40,7 @@ Fehlt eine davon, endet der Lauf mit „nicht prüfbar“ und nennt die Einstell
 ## 2. Regelmäßig auf dem Server
 
 ```bash
-uv run python manage.py kette_pruefen
+sudo /opt/psagent/v2/deploy/manage.sh kette_pruefen
 ```
 
 Täglich nach `kettenkopf` per Timer; ein Rückgabewert ungleich 0 meldet Uptime Kuma sofort

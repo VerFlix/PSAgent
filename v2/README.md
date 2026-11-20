@@ -57,7 +57,7 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
   gültig, ebenfalls protokolliert:
 
   ```bash
-  uv run python manage.py passkey_einrichtung <benutzername>
+  sudo /opt/psagent/v2/deploy/manage.sh passkey_einrichtung <benutzername>
   ```
 
 - Weitere Passkeys verwaltet jede Person unter „Konto“. Der letzte Passkey eines Admins oder
@@ -75,8 +75,8 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
   `PSAGENT_CLUB_NAME` (siehe `.env.example`).
 - Notbetrieb (`/notbetrieb/`, ab Verleiher): Notfallmappe als PDF mit allen Teilen, anstehenden
   Ausleihen (Entleiher nur mit Namen) und leeren Formularen mit fortlaufender Formularnummer.
-  Für die wöchentliche Fassung im Betrieb einen Timer auf
-  `uv run python manage.py notfallmappe` setzen. Gespeichert bleiben die letzten 5 Mappen.
+  Die wöchentliche Fassung erzeugt im Betrieb der Timer `psagent-notfallmappe.timer` (montags
+  06:00, `docs/runbooks/server-einrichten.md`, Schritt 7). Gespeichert bleiben die letzten 5 Mappen.
   Offline-Kopie: Auf Vereinsgeräten hält ein Service Worker die neueste Mappe bereit; ohne
   Verbindung öffnet sie sich unter `/notbetrieb/mappe/neueste.pdf` (Lesezeichen anlegen). Andere
   Geräte richten das auf der Seite „Notbetrieb“ von Hand ein. Service Worker brauchen HTTPS

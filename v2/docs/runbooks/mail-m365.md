@@ -106,7 +106,7 @@ Ausgehend braucht der Server nur HTTPS zu `login.microsoftonline.com` und `graph
 ## 7. Testversand
 
 ```bash
-uv run python manage.py sendtestemail <eigene Adresse>
+sudo /opt/psagent/v2/deploy/manage.sh sendtestemail <eigene Adresse>
 ```
 
 Danach prüfen:
@@ -118,10 +118,11 @@ Danach prüfen:
 
 ## 8. Erinnerungen bei Überfälligkeit
 
-Einen täglichen Timer auf `uv run python manage.py erinnerungen` setzen, z. B. um 9 Uhr. Zuerst
-mit `--probelauf` prüfen. Die Ausgabe nennt nur Vorgangsnummern. Schlägt ein Versand fehl,
-versucht es der nächste Lauf erneut. Ausschalten für alle: Admin auf der Seite „Anstehende
-Ausleihen“.
+Täglich um 9 Uhr startet der Timer `psagent-erinnerungen.timer` den Befehl `erinnerungen`
+(`server-einrichten.md`, Schritt 7). Zuerst von Hand prüfen:
+`sudo /opt/psagent/v2/deploy/manage.sh erinnerungen --probelauf`. Die Ausgabe nennt nur
+Vorgangsnummern. Schlägt ein Versand fehl, versucht es der nächste Lauf erneut. Ausschalten für
+alle: Admin auf der Seite „Anstehende Ausleihen“.
 
 **Sammelmail an Vereinsadressen (#128):** Derselbe Lauf schickt, wenn eingeschaltet, eine Liste
 aller überfälligen Vorgänge an die eingetragenen Adressen (je Adresse eine eigene Mail).

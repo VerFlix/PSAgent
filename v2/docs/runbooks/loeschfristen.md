@@ -38,15 +38,16 @@ Nie gelöscht wird bei:
 2. Nach einer Änderung eine neue Notfallmappe erzeugen; der Datenschutzhinweis steht auf jedem
    Ausleihformular.
 3. Den ersten Lauf als Probelauf starten:
-   `uv run python manage.py loeschfristen --probelauf`. Die Ausgabe nennt nur Nummern.
-4. Einen täglichen Timer auf `uv run python manage.py loeschfristen` setzen, z. B. um 3 Uhr.
-   Die Ausgabe landet im Journal und enthält keine Namen.
+   `sudo /opt/psagent/v2/deploy/manage.sh loeschfristen --probelauf`. Die Ausgabe nennt nur
+   Nummern.
+4. Täglich um 3 Uhr startet der Timer `psagent-loeschfristen.timer` den Befehl `loeschfristen`
+   (`server-einrichten.md`, Schritt 7). Die Ausgabe landet im Journal und enthält keine Namen.
 
 ## Löschen auf Antrag (Art. 17 DSGVO)
 
-`uv run python manage.py loeschfristen --entleiher <Nummer>` löscht sofort, außer bei offener
-Ausleihe, offenem Klärungsfall oder Löschsperre. Die Nummer steht in der Detailansicht des
-Ausleihvorgangs.
+`sudo /opt/psagent/v2/deploy/manage.sh loeschfristen --entleiher <Nummer>` löscht sofort, außer
+bei offener Ausleihe, offenem Klärungsfall oder Löschsperre. Die Nummer steht in der
+Detailansicht des Ausleihvorgangs.
 
 ## Löschsperre (Art. 17 Abs. 3 lit. e, Art. 18 DSGVO)
 

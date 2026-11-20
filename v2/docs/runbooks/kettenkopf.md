@@ -23,9 +23,10 @@ Kostenlose Dienste sind z. B. DigiCert, Sectigo oder FreeTSA. Für den gewählte
 1. Adresse eintragen: `PSAGENT_TSA_URL`.
 2. Das Zertifikat der Zertifizierungsstelle des Dienstes von dessen Webseite laden, den
    Fingerabdruck mit der Angabe des Anbieters vergleichen und als PEM ablegen, z. B.
-   `/etc/psagent/tsa-ca.pem`. Pfad in `PSAGENT_TSA_CA_PATH` eintragen. PSAgent vertraut nur
-   dieser Stelle.
-3. Probelauf: `uv run python manage.py kettenkopf`. Er muss „mit Zeitstempel“ melden.
+   `/etc/psagent/certs/tsa-ca.pem`. Pfad in `PSAGENT_TSA_CA_PATH` eintragen. PSAgent vertraut
+   nur dieser Stelle.
+3. Probelauf: `sudo /opt/psagent/v2/deploy/manage.sh kettenkopf`. Er muss „mit Zeitstempel“
+   melden.
 
 ## 2. Zeugen-Postfach und Ablage
 
@@ -37,9 +38,10 @@ Kostenlose Dienste sind z. B. DigiCert, Sectigo oder FreeTSA. Für den gewählte
 
 ## 3. Täglicher Timer
 
-Einmal täglich `uv run python manage.py kettenkopf`, z. B. um 23:50 Uhr. Scheitert ein
-Schritt, laufen die anderen trotzdem, und der Befehl endet mit Fehler; Uptime Kuma meldet das
-sofort, auch eine nicht versandte Zeugen-Mail (`docs/runbooks/monitoring.md`).
+Einmal täglich `kettenkopf`, über den Timer `psagent-kettenkopf.timer` um 23:50 Uhr
+(`server-einrichten.md`, Schritt 7). Scheitert ein Schritt, laufen die anderen trotzdem, und der
+Befehl endet mit Fehler; Uptime Kuma meldet das sofort, auch eine nicht versandte Zeugen-Mail
+(`docs/runbooks/monitoring.md`).
 
 Fällt der Zeitstempeldienst einen Tag aus, geht der Kopf trotzdem per Mail raus. Der nächste
 Stempel deckt alles davor mit ab. Ab 2 Tagen ohne gültigen Stempel meldet `kette_pruefen` einen
@@ -47,10 +49,12 @@ Befund.
 
 ## 4. Prüfen
 
-- In PSAgent (Admin): `uv run python manage.py kette_pruefen`. Der Befehl prüft die Kette, alle
-  festgehaltenen Köpfe und ihre Zeitstempel und alle Prüfberichte. Zeugen-Mails und Kopf-Dateien
-  liest er mit `--zeugen <Datei oder Ordner>`, einzelne Köpfe gehen mit `--kopf <Nummer>:<Hash>`
-  (beides mehrfach). Ablauf: `docs/runbooks/pruefwerkzeug.md`.
+- In PSAgent (Admin): `sudo /opt/psagent/v2/deploy/manage.sh kette_pruefen`. Der Befehl prüft
+  die Kette, alle festgehaltenen Köpfe und ihre Zeitstempel und alle Prüfberichte. Zeugen-Mails
+  und Kopf-Dateien liest er mit `--zeugen <Datei oder Ordner>`, einzelne Köpfe gehen mit
+  `--kopf <Nummer>:<Hash>` (beides mehrfach). Er läuft im Container und sieht nur eingebundene
+  Ordner; die Kopf-Dateien des Servers liegen dort unter demselben Pfad
+  `/var/lib/psagent/kettenkopf`. Ablauf: `docs/runbooks/pruefwerkzeug.md`.
 - Unabhängig von PSAgent (Vorstand): Jede Zeugen-Mail enthält den Stempel als Base64-Block und
   die OpenSSL-Befehle, um ihn gegen den Hash zu prüfen.
 - Einmal im Quartal: die Zeugen-Mails des Quartals mit `--zeugen` prüfen
