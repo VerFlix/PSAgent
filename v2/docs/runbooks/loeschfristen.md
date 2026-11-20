@@ -12,7 +12,7 @@ Löschsperre. Das ist keine Rechtsberatung.
 
 ## Was die App löscht
 
-Der Befehl `uv run python manage.py loeschfristen` löscht je fälligem Entleiher:
+Der Befehl `loeschfristen` löscht je fälligem Entleiher:
 
 - Kontaktdaten (Name, Adresse, E-Mail, Telefon)
 - Name und Strichliste aller Unterschriften zu seinen Ausleihen
@@ -34,7 +34,8 @@ Nie gelöscht wird bei:
 ## Einrichten (lokal mit Felix, auf dem Server)
 
 1. Wert setzen: `PSAGENT_RETENTION_YEARS` (Standard 3). Der Wert muss zum Beschluss des
-   Vorstands passen.
+   Vorstands passen. Läuft die App schon, danach die Container neu erstellen
+   (`server-einrichten.md`, Schritt 5.2).
 2. Nach einer Änderung eine neue Notfallmappe erzeugen; der Datenschutzhinweis steht auf jedem
    Ausleihformular.
 3. Den ersten Lauf als Probelauf starten:

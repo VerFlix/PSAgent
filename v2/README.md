@@ -124,16 +124,16 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
 - PDF-Dokumente je Teil (Teileseite, Kasten „Dokumente“): Einsatzdokumentation ab Trainer;
   PD und Haftungsausschluss nur mit gültiger Sachkunde, mit Name und Briefkopf/Stempel aus
   dem Konto der erzeugenden Person.
-- Datenschutz (#63): Name, Kontaktdaten und Unterschrift eines Entleihers löscht
-  `uv run python manage.py loeschfristen` nach `PSAGENT_RETENTION_YEARS` Jahren (Standard 3) ab
-  Ende des Jahres der letzten Ausleihe; im Betrieb täglich per Timer, zuerst mit `--probelauf`.
+- Datenschutz (#63): Name, Kontaktdaten und Unterschrift eines Entleihers löscht der Befehl
+  `loeschfristen` nach `PSAGENT_RETENTION_YEARS` Jahren (Standard 3) ab Ende des Jahres der
+  letzten Ausleihe; im Betrieb täglich per Timer, zuerst mit `--probelauf`.
   Löschsperre für Schadensfälle in der Detailansicht des Ausleihvorgangs, Übersicht unter
   `/datenschutz/` (ab PSA-Sachkundig). Details: `docs/runbooks/loeschfristen.md`.
 - E-Mail (#72): Quittung nach Ausgabe und Rückgabe auf Wunsch (Häkchen), erneut sendbar in der
   Detailansicht. Im Betrieb über Microsoft 365 (Graph, Zertifikat, nur ein Postfach, keine Kopie
   in „Gesendete Elemente“), sonst in die Konsole. Einrichtung: `docs/runbooks/mail-m365.md`.
-  Erinnerung bei Überfälligkeit: `uv run python manage.py erinnerungen` täglich per Timer (am Tag
-  nach der geplanten Rückgabe, dann nach 7 und 14 Tagen, höchstens 3); abschaltbar für alle
+  Erinnerung bei Überfälligkeit: Befehl `erinnerungen` täglich per Timer (am Tag nach der
+  geplanten Rückgabe, dann nach 7 und 14 Tagen, höchstens 3); abschaltbar für alle
   (Admin, Seite „Anstehende Ausleihen“) und je Vorgang (Detailansicht).
   Sammelmail (#128): Derselbe Befehl schickt täglich eine Liste aller überfälligen Vorgänge an
   Vereinsadressen (Name des Entleihers, Teile, Tage, Link; ohne Kontaktdaten), je Adresse eine
@@ -152,12 +152,12 @@ Secret-Scan mit gitleaks und ein Docker-Build für amd64 (Server) und arm64.
   Ende nur mit diesem Eintrag zu. Erinnerungen zählen ab dem neuen Datum neu.
 - Hash-Kette (#15): Jede neue Zeile einer Tabelle, die nur angehängt wird, bekommt in derselben
   Transaktion ein Kettenglied mit ihrer Prüfsumme und dem Hash des Vorgängers (`core/chain.py`).
-  `uv run python manage.py kette_pruefen` zeigt den Kettenkopf und meldet geänderte, gelöschte,
+  Der Befehl `kette_pruefen` zeigt den Kettenkopf und meldet geänderte, gelöschte,
   eingefügte oder vertauschte Vorgänge; mit `--kopf <Nummer>:<Hash>` (mehrfach) zusätzlich, ob
   ein früher festgehaltener Kopf noch passt (Kürzen, Neuberechnen). Spalten dürfen zu solchen
   Tabellen hinzukommen; entfernen oder umbenennen bricht die Kette und braucht eine eigene
   Entscheidung.
-- Zeuge (#16, #17): `uv run python manage.py kettenkopf` hält täglich den Kettenkopf mit
+- Zeuge (#16, #17): Der Befehl `kettenkopf` hält täglich den Kettenkopf mit
   Zeitstempel nach RFC 3161 fest, schreibt ihn als Datei für Unraid und mailt ihn an das
   Zeugen-Postfach des Vorstands; `kette_pruefen` prüft die festgehaltenen Köpfe und Stempel mit.
   Einrichtung: `docs/runbooks/kettenkopf.md`.

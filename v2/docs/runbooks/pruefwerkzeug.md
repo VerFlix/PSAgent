@@ -43,8 +43,9 @@ Fehlt eine davon, endet der Lauf mit „nicht prüfbar“ und nennt die Einstell
 sudo /opt/psagent/v2/deploy/manage.sh kette_pruefen
 ```
 
-Täglich nach `kettenkopf` per Timer; ein Rückgabewert ungleich 0 meldet Uptime Kuma sofort
-(`docs/runbooks/monitoring.md`).
+Der Timer `psagent-kette-pruefen.timer` startet den Befehl täglich um 00:10 Uhr, nach
+`kettenkopf` (`server-einrichten.md`, Schritt 7); ein Rückgabewert ungleich 0 meldet Uptime Kuma
+sofort (`docs/runbooks/monitoring.md`).
 
 ## 3. Einmal im Quartal mit dem Zeugen
 

@@ -307,6 +307,26 @@ Die App läuft im Container als Benutzer 10001; PostgreSQL richtet seinen Ordner
    Passwort und Schlüssel mit `openssl rand -base64 32` bzw. `48` erzeugen (Felix, nicht
    Claude) und zusätzlich im Tresor ablegen. Ohne `POSTGRES_PASSWORD` lässt sich die Datenbank
    nicht wiederherstellen (#25).
+
+   **Spätere Änderungen an `/etc/psagent/psagent.env`** wirken erst, wenn die Container neu
+   erstellt sind: Docker übernimmt die Werte nur beim Erstellen. `manage.sh` und die Timer
+   laufen im bestehenden Container und sehen bis dahin die alten Werte. Nach jeder Änderung:
+
+   ```bash
+   cd /opt/psagent/v2/deploy
+   sudo docker compose --env-file /etc/psagent/image.env up -d --force-recreate app
+   ```
+
+   - Die Datenbank liest die WAL-G-Werte (`WALG_SSH_PREFIX`, `SSH_USERNAME`, `SSH_PORT`).
+     Ändern sie sich, `db` mit nennen: `… up -d --force-recreate db app`. Nach einer Änderung an
+     der Datei erstellt Compose `db` meist ohnehin mit neu, weil beide Dienste sie lesen (in der
+     Cloud mit Compose 5.7 beobachtet); die Daten bleiben.
+   - `POSTGRES_PASSWORD` wirkt nur beim allerersten Start der Datenbank und darf danach nicht
+     geändert werden.
+   - Nicht `update.sh` mit der laufenden Version nehmen: Es überschreibt
+     `/etc/psagent/image.env.vorher`, und der Weg zurück auf die vorige Version (Schritt 8) fehlt.
+
+   **Noch nicht am Gerät erprobt** (lokal mit Felix).
 3. Zertifikate nach `/etc/psagent/certs/` (Pfade wie in der Vorlage): Zeitstempeldienst
    (`docs/runbooks/kettenkopf.md`), Yubico (`docs/runbooks/zertifikate.md`), Graph-Schlüssel
    (`docs/runbooks/mail-m365.md`). Der Graph-Schlüssel ist geheim:

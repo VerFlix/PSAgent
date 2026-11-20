@@ -89,7 +89,7 @@ zweiten `False`.
 
 ## 6. PSAgent konfigurieren
 
-Umgebungsvariablen auf dem Server (Vorlage `.env.example`):
+In `/etc/psagent/psagent.env` (Vorlage `deploy/psagent.env.example`):
 
 ```
 PSAGENT_MAIL_BACKEND=mailer.graph.GraphEmailBackend
@@ -100,6 +100,8 @@ PSAGENT_GRAPH_CLIENT_ID=<Anwendungs-ID>
 PSAGENT_GRAPH_CERT_PATH=/etc/psagent/certs/graph.pem
 PSAGENT_GRAPH_CERT_THUMBPRINT=<Fingerabdruck>
 ```
+
+Läuft die App schon, danach die Container neu erstellen (`server-einrichten.md`, Schritt 5.2).
 
 Ausgehend braucht der Server nur HTTPS zu `login.microsoftonline.com` und `graph.microsoft.com`.
 
