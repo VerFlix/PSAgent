@@ -350,7 +350,8 @@ Die App läuft im Container als Benutzer 10001; PostgreSQL richtet seinen Ordner
    `PSAGENT_YUBIKEY_SERIALS` bleibt leer, bis die YubiKeys da sind (`zertifikate.md`).
 
 4. Sicherung einrichten, **bevor** die Datenbank zum ersten Mal startet:
-   `docs/runbooks/sicherung.md`, Abschnitte 1–3 (ohne den Timer, der kommt in Schritt 7).
+   `docs/runbooks/sicherung.md`, Abschnitte 1–3 (ohne den Timer, der kommt in Schritt 7). Die
+   Prüfung und erste Sicherung aus Abschnitt 3 erst nach Schritt 6.3.
 
 ## 6. Image holen und starten
 
@@ -371,6 +372,8 @@ Die App läuft im Container als Benutzer 10001; PostgreSQL richtet seinen Ordner
    `update.sh` holt das Image, startet die Datenbank, migriert, startet die App und wartet, bis
    `/healthz` antwortet. Die vorige Version steht danach in `/etc/psagent/image.env.vorher`.
    Ältere Images löscht es; die laufende und die vorige Version bleiben für ein Zurück.
+
+   Danach die Sicherung prüfen: `sicherung.md`, Abschnitt 3, „Prüfen und erste Sicherung“.
 4. HTTPS im Tailnet einschalten (bleibt nach Neustarts bestehen):
 
    ```bash
@@ -412,12 +415,13 @@ Die App läuft im Container als Benutzer 10001; PostgreSQL richtet seinen Ordner
 | `psagent-notfallmappe.timer` | `notfallmappe` | montags 06:00 |
 | `psagent-zustand.timer` | `zustand.sh` (App, Datenbank, WAL-Archiv, Platz) | stündlich, :17 |
 
-Verpasste Läufe (Server aus) holt systemd nach dem Start nach. Vor dem Einschalten jeden Befehl
-einmal von Hand laufen lassen, die Löschfristen zuerst als Probelauf
-(`docs/runbooks/loeschfristen.md`):
+Verpasste Läufe (Server aus) holt systemd nach dem Start nach. Vor dem Einschalten die Befehle
+unten einmal von Hand laufen lassen, Löschfristen und Erinnerungen als Probelauf
+(`docs/runbooks/loeschfristen.md`, `docs/runbooks/mail-m365.md`):
 
 ```bash
 sudo /opt/psagent/v2/deploy/manage.sh loeschfristen --probelauf
+sudo /opt/psagent/v2/deploy/manage.sh erinnerungen --probelauf
 sudo /opt/psagent/v2/deploy/manage.sh kettenkopf
 sudo /opt/psagent/v2/deploy/manage.sh kette_pruefen
 
@@ -450,14 +454,21 @@ behoben.
 1. **Hat die neue Version eine Migration mitgebracht?**
 
    ```bash
-   cd /opt/psagent && git diff --stat <vorige Version>..<neue Version> -- 'v2/*/migrations/'
+   cd /opt/psagent && sudo git diff --stat <vorige Version>..<neue Version> -- 'v2/*/migrations/*'
    ```
 
    Die Versionen stehen in `/etc/psagent/image.env.vorher` und `/etc/psagent/image.env`
    (`sha-<commit>`; für `git diff` nur den Commit nehmen).
-2. **Ohne Migration:** zurück auf die vorige Version, `cat /etc/psagent/image.env.vorher`, dann
-   Klon auf diesen Commit und `sudo v2/deploy/update.sh <vorige Version>`. Danach den Fehler als
-   Issue melden.
+2. **Ohne Migration:** zurück auf die vorige Version, wie in Schritt 6.3:
+
+   ```bash
+   sudo cat /etc/psagent/image.env.vorher     # PSAGENT_IMAGE_TAG=sha-<commit>
+   cd /opt/psagent
+   sudo git checkout <commit>
+   sudo v2/deploy/update.sh sha-<commit>
+   ```
+
+   Danach den Fehler als Issue melden.
 3. **Mit Migration:** nicht zurück. Migrationen laufen nur vorwärts; die alte Version passt nicht
    zur neuen Datenbank.
    - Fehler als Issue melden (ohne Personendaten), Fix in der Cloud, nach dem Merge wie oben
