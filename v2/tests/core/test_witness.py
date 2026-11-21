@@ -102,7 +102,9 @@ def test_mail_and_file_hold_head_and_token_only(tsa: Authority, tmp_path: Path) 
     body = message.body
     assert head.head_hash in body and f"Nummer {head.seq}" in body
     assert "Geheimer" not in body and "Kim" not in body  # keine Personendaten
-    assert f"--kopf {head.seq}:{head.head_hash}" in body
+    command = "sudo /opt/psagent/v2/deploy/manage.sh kette_pruefen"
+    assert f"{command} --kopf {head.seq}:{head.head_hash}" in body
+    assert "uv run" not in body  # auf dem Server gibt es kein uv
     encoded = "".join(line for line in body.splitlines() if len(line) == 64 and " " not in line)
     assert head.token is not None
     assert base64.b64decode(encoded + "=" * (-len(encoded) % 4))[:2] == bytes(head.token)[:2]

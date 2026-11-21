@@ -74,8 +74,9 @@ def report(witness: WitnessHead) -> str:
         "Diese Nachricht bitte unverändert aufbewahren. Sie belegt den Stand der Hash-Kette",
         "unabhängig vom PSAgent-Server.",
         "",
-        "Prüfen in PSAgent (Admin):",
-        f"  uv run python manage.py kette_pruefen --kopf {witness.seq}:{witness.head_hash}",
+        "Prüfen in PSAgent (Admin, auf dem Server):",
+        "  sudo /opt/psagent/v2/deploy/manage.sh kette_pruefen"
+        f" --kopf {witness.seq}:{witness.head_hash}",
     ]
     lines += _certificates()
     if witness.token is not None:

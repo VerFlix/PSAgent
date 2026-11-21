@@ -156,7 +156,7 @@ def check(
             f"Inhalt (SHA-256): {values.content_sha256}",
             f"Kettenkopf: {head}",
             "Auf dem Server prüfen (Ergebnisse, Sachkunde, Kette):",
-            f"  uv run python manage.py kette_pruefen --kopf {head}",
+            f"  sudo /opt/psagent/v2/deploy/manage.sh kette_pruefen --kopf {head}",
         ]
     return result
 
