@@ -81,8 +81,8 @@ jobs:
             uv sync
             echo "lock_generated=true" >> "$GITHUB_OUTPUT"
           fi
-      - name: SoftHSM und OpenSC für die Tests des Signier-Tools (#38)
-        run: sudo apt-get update -q && sudo apt-get install -y -q softhsm2 opensc
+      - name: SoftHSM und OpenSC für die Tests des Signier-Tools (#38), rsync für Unraid (#23)
+        run: sudo apt-get update -q && sudo apt-get install -y -q softhsm2 opensc rsync
       - name: Django-Systemprüfung
         run: uv run python manage.py check --fail-level WARNING
         env:
