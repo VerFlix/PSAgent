@@ -26,7 +26,8 @@ Sie enthält nur öffentliche Schlüssel, darf sich aber nicht unbemerkt ändern
    entweder in dieselbe Datei legen oder beim Aufnehmen mit hochladen.
 2. Die Seriennummern der zugelassenen YubiKeys (`ykman list --serials`) durch Komma getrennt in
    `PSAGENT_YUBIKEY_SERIALS` eintragen. Ein YubiKey, der hier fehlt, signiert nicht mehr, auch
-   wenn sein Zertifikat in der Liste steht.
+   wenn sein Zertifikat in der Liste steht. Läuft die App schon, danach die Container neu
+   erstellen (`server-einrichten.md`, Schritt 5.2).
 
 Beides liegt außerhalb der Datenbank. Wer nur die Datenbank ändern kann, bringt so keinen
 fremden Schlüssel unter.
@@ -89,8 +90,9 @@ Ein Zertifikat gilt nur zusammen mit gültiger Sachkunde der Person (Abschnitt �
 YubiKey verloren oder Person scheidet aus: Nutzerverwaltung → Person → „Widerrufen“, mit
 Begründung. „widerrufen ab“ darf zurückliegen (seit wann verloren), nicht in der Zukunft.
 Signaturen davor bleiben gültig, Signaturen ab dann nicht. Danach die Seriennummer aus
-`PSAGENT_YUBIKEY_SERIALS` streichen. Ein widerrufener Schlüssel lässt sich nicht wieder
-aufnehmen, auch nicht mit neuem Zertifikat.
+`PSAGENT_YUBIKEY_SERIALS` streichen und die Container neu erstellen (`server-einrichten.md`,
+Schritt 5.2); sonst gilt die Seriennummer in der laufenden App weiter.
+Ein widerrufener Schlüssel lässt sich nicht wieder aufnehmen, auch nicht mit neuem Zertifikat.
 
 ## 6. Abgleichen
 

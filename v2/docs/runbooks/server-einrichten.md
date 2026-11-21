@@ -227,7 +227,8 @@ sudo tailscale up --hostname=psagent      # mit dem Konto des neuen Tailnets anm
 Danach die Punkte aus 2. im neuen Tailnet wiederholen, in `/etc/psagent/psagent.env` alle
 Zeilen mit `psagent.<tailnet>.ts.net` anpassen (`DJANGO_ALLOWED_HOSTS`,
 `DJANGO_CSRF_TRUSTED_ORIGINS`, `PSAGENT_WEBAUTHN_RP_ID`, `PSAGENT_WEBAUTHN_ORIGINS`,
-`PSAGENT_BASE_URL`) und alle Geräte (Unraid, PCs, Tablet) ebenfalls umziehen.
+`PSAGENT_BASE_URL`) und alle Geräte (Unraid, PCs, Tablet) ebenfalls umziehen. Läuft die App
+schon, danach die Container neu erstellen (Schritt 5.2).
 
 **Name wird nicht gefunden** („Could not resolve hostname psagent.<tailnet>.ts.net“), auf dem
 eigenen Rechner prüfen:
@@ -373,7 +374,8 @@ Die App läuft im Container als Benutzer 10001; PostgreSQL richtet seinen Ordner
    `/healthz` antwortet. Die vorige Version steht danach in `/etc/psagent/image.env.vorher`.
    Ältere Images löscht es; die laufende und die vorige Version bleiben für ein Zurück.
 
-   Danach die Sicherung prüfen: `sicherung.md`, Abschnitt 3, „Prüfen und erste Sicherung“.
+   Danach die Sicherung prüfen: `sicherung.md`, Abschnitt 3, „Prüfen und erste Sicherung“, ohne
+   den Timer (der kommt in Schritt 7).
 4. HTTPS im Tailnet einschalten (bleibt nach Neustarts bestehen):
 
    ```bash
@@ -468,7 +470,9 @@ behoben.
    sudo v2/deploy/update.sh sha-<commit>
    ```
 
-   Danach den Fehler als Issue melden.
+   Bei `git checkout` den Commit ohne `sha-` nehmen. Haben sich zwischen den Versionen Dateien
+   unter `deploy/systemd/` geändert, sie wie in Punkt 4 oben erneut kopieren und
+   `sudo systemctl daemon-reload`. Danach den Fehler als Issue melden.
 3. **Mit Migration:** nicht zurück. Migrationen laufen nur vorwärts; die alte Version passt nicht
    zur neuen Datenbank.
    - Fehler als Issue melden (ohne Personendaten), Fix in der Cloud, nach dem Merge wie oben
