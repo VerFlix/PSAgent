@@ -84,7 +84,8 @@ def test_unchanged_report(
     assert f"Runde: {report.round_id}" in text
     head = f"{report.protocol.chain_seq}:{report.protocol.chain_hash}"
     assert f"Kettenkopf: {head}" in text
-    assert f"kette_pruefen --kopf {head}" in text
+    assert f"sudo /opt/psagent/v2/deploy/manage.sh kette_pruefen --kopf {head}" in text
+    assert "uv run" not in text  # auf dem Server gibt es kein uv
     assert f"{report.stamped_at:%d.%m.%Y %H:%M}" in text
     assert report.certificate.sha256 in text
 
