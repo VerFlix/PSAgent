@@ -138,7 +138,7 @@ SSH_USERNAME=psagent-sicherung
 SSH_PORT=22
 ```
 
-Prüfen und erste Sicherung:
+Prüfen und erste Sicherung, erst wenn PSAgent läuft (`server-einrichten.md`, Schritt 6.3):
 
 ```bash
 cd /opt/psagent/v2/deploy

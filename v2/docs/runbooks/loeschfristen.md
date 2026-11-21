@@ -12,7 +12,7 @@ Löschsperre. Das ist keine Rechtsberatung.
 
 ## Was die App löscht
 
-Der Befehl `uv run python manage.py loeschfristen` löscht je fälligem Entleiher:
+Der Befehl `loeschfristen` löscht je fälligem Entleiher:
 
 - Kontaktdaten (Name, Adresse, E-Mail, Telefon)
 - Name und Strichliste aller Unterschriften zu seinen Ausleihen
@@ -34,19 +34,21 @@ Nie gelöscht wird bei:
 ## Einrichten (lokal mit Felix, auf dem Server)
 
 1. Wert setzen: `PSAGENT_RETENTION_YEARS` (Standard 3). Der Wert muss zum Beschluss des
-   Vorstands passen.
+   Vorstands passen. Läuft die App schon, danach die Container neu erstellen
+   (`server-einrichten.md`, Schritt 5.2).
 2. Nach einer Änderung eine neue Notfallmappe erzeugen; der Datenschutzhinweis steht auf jedem
    Ausleihformular.
 3. Den ersten Lauf als Probelauf starten:
-   `uv run python manage.py loeschfristen --probelauf`. Die Ausgabe nennt nur Nummern.
-4. Einen täglichen Timer auf `uv run python manage.py loeschfristen` setzen, z. B. um 3 Uhr.
-   Die Ausgabe landet im Journal und enthält keine Namen.
+   `sudo /opt/psagent/v2/deploy/manage.sh loeschfristen --probelauf`. Die Ausgabe nennt nur
+   Nummern.
+4. Täglich um 3 Uhr startet der Timer `psagent-loeschfristen.timer` den Befehl `loeschfristen`
+   (`server-einrichten.md`, Schritt 7). Die Ausgabe landet im Journal und enthält keine Namen.
 
 ## Löschen auf Antrag (Art. 17 DSGVO)
 
-`uv run python manage.py loeschfristen --entleiher <Nummer>` löscht sofort, außer bei offener
-Ausleihe, offenem Klärungsfall oder Löschsperre. Die Nummer steht in der Detailansicht des
-Ausleihvorgangs.
+`sudo /opt/psagent/v2/deploy/manage.sh loeschfristen --entleiher <Nummer>` löscht sofort, außer
+bei offener Ausleihe, offenem Klärungsfall oder Löschsperre. Die Nummer steht in der
+Detailansicht des Ausleihvorgangs.
 
 ## Löschsperre (Art. 17 Abs. 3 lit. e, Art. 18 DSGVO)
 
