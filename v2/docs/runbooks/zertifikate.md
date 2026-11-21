@@ -21,12 +21,13 @@ Sie enthält nur öffentliche Schlüssel, darf sich aber nicht unbemerkt ändern
 
 1. Das Wurzelzertifikat der Yubico-PIV-Bescheinigung von `developers.yubico.com/PKI/` laden,
    den Fingerabdruck mit der Angabe von Yubico vergleichen und als PEM ablegen, z. B.
-   `/etc/psagent/yubico-piv-ca.pem`. Pfad in `PSAGENT_YUBICO_CA_PATH` eintragen. Neuere
+   `/etc/psagent/certs/yubico-piv-ca.pem`. Pfad in `PSAGENT_YUBICO_CA_PATH` eintragen. Neuere
    YubiKeys (ab Firmware 5.7.4) haben eine längere Kette: Das Zwischenzertifikat von Yubico
    entweder in dieselbe Datei legen oder beim Aufnehmen mit hochladen.
 2. Die Seriennummern der zugelassenen YubiKeys (`ykman list --serials`) durch Komma getrennt in
    `PSAGENT_YUBIKEY_SERIALS` eintragen. Ein YubiKey, der hier fehlt, signiert nicht mehr, auch
-   wenn sein Zertifikat in der Liste steht.
+   wenn sein Zertifikat in der Liste steht. Läuft die App schon, danach die Container neu
+   erstellen (`server-einrichten.md`, Schritt 5.2).
 
 Beides liegt außerhalb der Datenbank. Wer nur die Datenbank ändern kann, bringt so keinen
 fremden Schlüssel unter.
@@ -55,7 +56,8 @@ Jede Änderung in der Nutzerverwaltung bestätigt der Admin mit einem YubiKey. D
 Passkey, dessen Herstellerbescheinigung (FIDO-Attestation) von Yubico stammt:
 
 1. Das Wurzelzertifikat der FIDO-Bescheinigung von `developers.yubico.com/PKI/` laden, den
-   Fingerabdruck vergleichen, als PEM ablegen und in `PSAGENT_YUBICO_FIDO_CA_PATH` eintragen.
+   Fingerabdruck vergleichen, als PEM ablegen, z. B. `/etc/psagent/certs/yubico-fido-ca.pem`,
+   und in `PSAGENT_YUBICO_FIDO_CA_PATH` eintragen.
 2. Unter „Konto“ den YubiKey als Passkey einrichten. Der Browser fragt, ob die Website Marke
    und Modell des Schlüssels sehen darf: zulassen. Ein schon vorher eingerichteter Passkey zählt
    nicht; dann denselben YubiKey noch einmal einrichten (z. B. „YubiKey 1 (bescheinigt)“).
@@ -63,8 +65,8 @@ Passkey, dessen Herstellerbescheinigung (FIDO-Attestation) von Yubico stammt:
    niemand mit einer übernommenen Sitzung einen eigenen YubiKey unterschieben:
 
    ```bash
-   uv run python manage.py yubikey_freigeben <Benutzername>            # zeigt die Kandidaten
-   uv run python manage.py yubikey_freigeben <Benutzername> --passkey <Nummer>
+   sudo /opt/psagent/v2/deploy/manage.sh yubikey_freigeben <Benutzername>   # zeigt die Kandidaten
+   sudo /opt/psagent/v2/deploy/manage.sh yubikey_freigeben <Benutzername> --passkey <Nummer>
    ```
 
    Nur den Passkey freigeben, den man eben selbst eingerichtet hat (Bezeichnung und Uhrzeit).
@@ -88,13 +90,15 @@ Ein Zertifikat gilt nur zusammen mit gültiger Sachkunde der Person (Abschnitt �
 YubiKey verloren oder Person scheidet aus: Nutzerverwaltung → Person → „Widerrufen“, mit
 Begründung. „widerrufen ab“ darf zurückliegen (seit wann verloren), nicht in der Zukunft.
 Signaturen davor bleiben gültig, Signaturen ab dann nicht. Danach die Seriennummer aus
-`PSAGENT_YUBIKEY_SERIALS` streichen. Ein widerrufener Schlüssel lässt sich nicht wieder
-aufnehmen, auch nicht mit neuem Zertifikat.
+`PSAGENT_YUBIKEY_SERIALS` streichen und die Container neu erstellen (`server-einrichten.md`,
+Schritt 5.2); sonst gilt die Seriennummer in der laufenden App weiter.
+Ein widerrufener Schlüssel lässt sich nicht wieder aufnehmen, auch nicht mit neuem Zertifikat.
 
 ## 6. Abgleichen
 
 - Täglich: Die Zeugen-Mail nennt alle Fingerabdrücke. Der Vorstand vergleicht mit der
   Papierliste; ein unbekannter Fingerabdruck ist ein Sicherheitsvorfall (`vorfall-kette.md`).
-- Jederzeit: `uv run python manage.py kette_pruefen` meldet Zeilen der Liste, die an der App
-  vorbei geändert, gelöscht oder eingefügt wurden. Mit `--fingerabdruecke <Datei>` vergleicht er
-  die Liste in PSAgent mit der abgetippten Papierliste (`docs/runbooks/pruefwerkzeug.md`).
+- Jederzeit: `sudo /opt/psagent/v2/deploy/manage.sh kette_pruefen` meldet Zeilen der Liste, die
+  an der App vorbei geändert, gelöscht oder eingefügt wurden. Mit `--fingerabdruecke <Datei>`
+  vergleicht er die Liste in PSAgent mit der abgetippten Papierliste
+  (`docs/runbooks/pruefwerkzeug.md`).

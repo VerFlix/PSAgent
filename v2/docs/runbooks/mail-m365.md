@@ -89,7 +89,7 @@ zweiten `False`.
 
 ## 6. PSAgent konfigurieren
 
-Umgebungsvariablen auf dem Server (Vorlage `.env.example`):
+In `/etc/psagent/psagent.env` (Vorlage `deploy/psagent.env.example`):
 
 ```
 PSAGENT_MAIL_BACKEND=mailer.graph.GraphEmailBackend
@@ -101,12 +101,14 @@ PSAGENT_GRAPH_CERT_PATH=/etc/psagent/certs/graph.pem
 PSAGENT_GRAPH_CERT_THUMBPRINT=<Fingerabdruck>
 ```
 
+Läuft die App schon, danach die Container neu erstellen (`server-einrichten.md`, Schritt 5.2).
+
 Ausgehend braucht der Server nur HTTPS zu `login.microsoftonline.com` und `graph.microsoft.com`.
 
 ## 7. Testversand
 
 ```bash
-uv run python manage.py sendtestemail <eigene Adresse>
+sudo /opt/psagent/v2/deploy/manage.sh sendtestemail <eigene Adresse>
 ```
 
 Danach prüfen:
@@ -118,10 +120,11 @@ Danach prüfen:
 
 ## 8. Erinnerungen bei Überfälligkeit
 
-Einen täglichen Timer auf `uv run python manage.py erinnerungen` setzen, z. B. um 9 Uhr. Zuerst
-mit `--probelauf` prüfen. Die Ausgabe nennt nur Vorgangsnummern. Schlägt ein Versand fehl,
-versucht es der nächste Lauf erneut. Ausschalten für alle: Admin auf der Seite „Anstehende
-Ausleihen“.
+Täglich um 9 Uhr startet der Timer `psagent-erinnerungen.timer` den Befehl `erinnerungen`
+(`server-einrichten.md`, Schritt 7). Zuerst von Hand prüfen:
+`sudo /opt/psagent/v2/deploy/manage.sh erinnerungen --probelauf`. Die Ausgabe nennt nur
+Vorgangsnummern. Schlägt ein Versand fehl, versucht es der nächste Lauf erneut. Ausschalten für
+alle: Admin auf der Seite „Anstehende Ausleihen“.
 
 **Sammelmail an Vereinsadressen (#128):** Derselbe Lauf schickt, wenn eingeschaltet, eine Liste
 aller überfälligen Vorgänge an die eingetragenen Adressen (je Adresse eine eigene Mail).

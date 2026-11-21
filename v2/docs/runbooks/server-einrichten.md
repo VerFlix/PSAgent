@@ -227,7 +227,8 @@ sudo tailscale up --hostname=psagent      # mit dem Konto des neuen Tailnets anm
 Danach die Punkte aus 2. im neuen Tailnet wiederholen, in `/etc/psagent/psagent.env` alle
 Zeilen mit `psagent.<tailnet>.ts.net` anpassen (`DJANGO_ALLOWED_HOSTS`,
 `DJANGO_CSRF_TRUSTED_ORIGINS`, `PSAGENT_WEBAUTHN_RP_ID`, `PSAGENT_WEBAUTHN_ORIGINS`,
-`PSAGENT_BASE_URL`) und alle Geräte (Unraid, PCs, Tablet) ebenfalls umziehen.
+`PSAGENT_BASE_URL`) und alle Geräte (Unraid, PCs, Tablet) ebenfalls umziehen. Läuft die App
+schon, danach die Container neu erstellen (Schritt 5.2).
 
 **Name wird nicht gefunden** („Could not resolve hostname psagent.<tailnet>.ts.net“), auf dem
 eigenen Rechner prüfen:
@@ -307,6 +308,26 @@ Die App läuft im Container als Benutzer 10001; PostgreSQL richtet seinen Ordner
    Passwort und Schlüssel mit `openssl rand -base64 32` bzw. `48` erzeugen (Felix, nicht
    Claude) und zusätzlich im Tresor ablegen. Ohne `POSTGRES_PASSWORD` lässt sich die Datenbank
    nicht wiederherstellen (#25).
+
+   **Spätere Änderungen an `/etc/psagent/psagent.env`** wirken erst, wenn die Container neu
+   erstellt sind: Docker übernimmt die Werte nur beim Erstellen. `manage.sh` und die Timer
+   laufen im bestehenden Container und sehen bis dahin die alten Werte. Nach jeder Änderung:
+
+   ```bash
+   cd /opt/psagent/v2/deploy
+   sudo docker compose --env-file /etc/psagent/image.env up -d --force-recreate app
+   ```
+
+   - Die Datenbank liest die WAL-G-Werte (`WALG_SSH_PREFIX`, `SSH_USERNAME`, `SSH_PORT`).
+     Ändern sie sich, `db` mit nennen: `… up -d --force-recreate db app`. Nach einer Änderung an
+     der Datei erstellt Compose `db` meist ohnehin mit neu, weil beide Dienste sie lesen (in der
+     Cloud mit Compose 5.7 beobachtet); die Daten bleiben.
+   - `POSTGRES_PASSWORD` wirkt nur beim allerersten Start der Datenbank und darf danach nicht
+     geändert werden.
+   - Nicht `update.sh` mit der laufenden Version nehmen: Es überschreibt
+     `/etc/psagent/image.env.vorher`, und der Weg zurück auf die vorige Version (Schritt 8) fehlt.
+
+   **Noch nicht am Gerät erprobt** (lokal mit Felix).
 3. Zertifikate nach `/etc/psagent/certs/` (Pfade wie in der Vorlage): Zeitstempeldienst
    (`docs/runbooks/kettenkopf.md`), Yubico (`docs/runbooks/zertifikate.md`), Graph-Schlüssel
    (`docs/runbooks/mail-m365.md`). Der Graph-Schlüssel ist geheim:
@@ -330,7 +351,8 @@ Die App läuft im Container als Benutzer 10001; PostgreSQL richtet seinen Ordner
    `PSAGENT_YUBIKEY_SERIALS` bleibt leer, bis die YubiKeys da sind (`zertifikate.md`).
 
 4. Sicherung einrichten, **bevor** die Datenbank zum ersten Mal startet:
-   `docs/runbooks/sicherung.md`, Abschnitte 1–3 (ohne den Timer, der kommt in Schritt 7).
+   `docs/runbooks/sicherung.md`, Abschnitte 1–3 (ohne den Timer, der kommt in Schritt 7). Die
+   Prüfung und erste Sicherung aus Abschnitt 3 erst nach Schritt 6.3.
 
 ## 6. Image holen und starten
 
@@ -351,6 +373,9 @@ Die App läuft im Container als Benutzer 10001; PostgreSQL richtet seinen Ordner
    `update.sh` holt das Image, startet die Datenbank, migriert, startet die App und wartet, bis
    `/healthz` antwortet. Die vorige Version steht danach in `/etc/psagent/image.env.vorher`.
    Ältere Images löscht es; die laufende und die vorige Version bleiben für ein Zurück.
+
+   Danach die Sicherung prüfen: `sicherung.md`, Abschnitt 3, „Prüfen und erste Sicherung“, ohne
+   den Timer (der kommt in Schritt 7).
 4. HTTPS im Tailnet einschalten (bleibt nach Neustarts bestehen):
 
    ```bash
@@ -392,12 +417,13 @@ Die App läuft im Container als Benutzer 10001; PostgreSQL richtet seinen Ordner
 | `psagent-notfallmappe.timer` | `notfallmappe` | montags 06:00 |
 | `psagent-zustand.timer` | `zustand.sh` (App, Datenbank, WAL-Archiv, Platz) | stündlich, :17 |
 
-Verpasste Läufe (Server aus) holt systemd nach dem Start nach. Vor dem Einschalten jeden Befehl
-einmal von Hand laufen lassen, die Löschfristen zuerst als Probelauf
-(`docs/runbooks/loeschfristen.md`):
+Verpasste Läufe (Server aus) holt systemd nach dem Start nach. Vor dem Einschalten die Befehle
+unten einmal von Hand laufen lassen, Löschfristen und Erinnerungen als Probelauf
+(`docs/runbooks/loeschfristen.md`, `docs/runbooks/mail-m365.md`):
 
 ```bash
 sudo /opt/psagent/v2/deploy/manage.sh loeschfristen --probelauf
+sudo /opt/psagent/v2/deploy/manage.sh erinnerungen --probelauf
 sudo /opt/psagent/v2/deploy/manage.sh kettenkopf
 sudo /opt/psagent/v2/deploy/manage.sh kette_pruefen
 
@@ -430,14 +456,23 @@ behoben.
 1. **Hat die neue Version eine Migration mitgebracht?**
 
    ```bash
-   cd /opt/psagent && git diff --stat <vorige Version>..<neue Version> -- 'v2/*/migrations/'
+   cd /opt/psagent && sudo git diff --stat <vorige Version>..<neue Version> -- 'v2/*/migrations/*'
    ```
 
    Die Versionen stehen in `/etc/psagent/image.env.vorher` und `/etc/psagent/image.env`
    (`sha-<commit>`; für `git diff` nur den Commit nehmen).
-2. **Ohne Migration:** zurück auf die vorige Version, `cat /etc/psagent/image.env.vorher`, dann
-   Klon auf diesen Commit und `sudo v2/deploy/update.sh <vorige Version>`. Danach den Fehler als
-   Issue melden.
+2. **Ohne Migration:** zurück auf die vorige Version, wie in Schritt 6.3:
+
+   ```bash
+   sudo cat /etc/psagent/image.env.vorher     # PSAGENT_IMAGE_TAG=sha-<commit>
+   cd /opt/psagent
+   sudo git checkout <commit>
+   sudo v2/deploy/update.sh sha-<commit>
+   ```
+
+   Bei `git checkout` den Commit ohne `sha-` nehmen. Haben sich zwischen den Versionen Dateien
+   unter `deploy/systemd/` geändert, sie wie in Punkt 4 oben erneut kopieren und
+   `sudo systemctl daemon-reload`. Danach den Fehler als Issue melden.
 3. **Mit Migration:** nicht zurück. Migrationen laufen nur vorwärts; die alte Version passt nicht
    zur neuen Datenbank.
    - Fehler als Issue melden (ohne Personendaten), Fix in der Cloud, nach dem Merge wie oben
