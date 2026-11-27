@@ -23,6 +23,7 @@ Uptime Kuma auf Unraid überwacht den Server auf zwei Wegen und meldet per ntfy 
 | WAL-Archiv hängt (Unraid weg), Platte fast voll, Container ungesund, SSD meldet Defekt (SMART) | Herzschlag „Zustand“ | nach etwa einer Stunde |
 | Zeugen-Mail oder Zeitstempel gescheitert | Herzschlag „Kettenkopf“ | sofort |
 | Hash-Kette verändert oder nicht prüfbar | Herzschlag „Kette prüfen“ | sofort |
+| Versionsstand auf Unraid gescheitert oder auffällig (leer, veraltet, geschrumpft; `sicherung.md`, Abschnitt 2) | Herzschlag „Versionsstände“ (von Unraid selbst) | sofort |
 | Löschfristen, Erinnerungen, Notfallmappe gescheitert | je ein Herzschlag | sofort |
 | Ein Timer läuft gar nicht | sein Herzschlag bleibt aus | nach seinem Abstand |
 
@@ -55,6 +56,7 @@ zufälliges Thema wählen (unten) oder ntfy selbst auf Unraid betreiben.
 | Löschfristen | Push | 90000 s |
 | Erinnerungen | Push | 90000 s |
 | Notfallmappe | Push | 608400 s (7 Tage plus 1 Stunde) |
+| Versionsstände | Push | 90000 s; die Push-Adresse kommt nicht auf den Server, sondern in das User Script auf Unraid (`sicherung.md`, Abschnitt 2) |
 
 Bei jedem Push-Monitor zeigt Uptime Kuma eine „Push URL“. Für den Server wird nur der Teil vor dem
 `?` gebraucht, z. B. `http://<unraid>.<tailnet>.ts.net:3001/api/push/AbCd1234`.

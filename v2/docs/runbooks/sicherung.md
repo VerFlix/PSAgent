@@ -20,8 +20,8 @@ prüft Daten, Dateien und Hash-Kette.
   Kettenköpfe und die Verwaltungsangaben von WAL-G (Zeitpunkte, Größen, Dateinamen der Datenbank,
   keine Inhalte).
 - **Aufbewahrung:** Der Server behält die letzten 30 Vollsicherungen (etwa 30 Tage) samt WAL und die
-  letzten 30 Datei-Archive und löscht ältere. Die Monatsstände (12 Monate) halten die Snapshots
-  auf Unraid, die der Server nicht löschen kann.
+  letzten 30 Datei-Archive und löscht ältere. Die Monatsstände (12 Monate) halten die
+  Versionsstände auf Unraid (Abschnitt 2), die der Server nicht löschen kann.
 - **Datenverlust im Ernstfall:** Datenbank höchstens die letzte Minute; Dateien, die seit der
   letzten Nacht hochgeladen wurden (GAL, Scans), fehlen und müssen neu hochgeladen werden.
 - **Löschfristen (#63):** Was `loeschfristen` löscht, verschwindet mit dem Ende der Aufbewahrung
@@ -58,12 +58,119 @@ gpg --fingerprint sicherung@verein.example
 
 ## 2. Unraid vorbereiten (lokal)
 
-- Eigener Share für die Sicherung auf einem Pool mit Snapshots (ZFS oder btrfs).
-- Eigener Benutzer `psagent-sicherung`, nur SFTP (`ForceCommand internal-sftp`), nur mit
-  Schlüssel; in `authorized_keys` kommt `ssh_key.pub` vom Server (Abschnitt 3).
-- Snapshots täglich, aufbewahrt 30 Tage täglich und 12 Monate monatlich. Der SFTP-Benutzer darf
-  Snapshots weder sehen noch löschen.
-- Unraid im Tailnet; Richtlinie wie oben.
+Der Server darf in seiner Sicherung löschen, denn er räumt alte Stände selbst auf. Ein gehackter
+Server könnte also alles löschen oder überschreiben. Dagegen legt Unraid selbst jeden Tag einen
+**Versionsstand** an, den der Server nicht erreicht: `deploy/unraid/versionen.sh`. Aufbewahrt
+werden 30 Tage täglich und 12 Monate monatlich (je Monat der erste Stand). Dateien, die seit dem
+Vortag gleich sind, legt das Skript als Hardlink an; sie kosten keinen weiteren Platz. Das geht
+auf XFS-Platten, Snapshots braucht es nicht.
+
+Festlegung (Felix, 21.11.2026): Unraid hat nur XFS-Platten, darum Versionsstände statt
+Snapshots. Mit einem ZFS- oder btrfs-Pool gingen statt dessen Snapshots mit derselben
+Aufbewahrung, die der SFTP-Benutzer weder sehen noch löschen darf.
+
+1. **Zwei Shares**, beide ohne SMB- und NFS-Freigabe (Export: No):
+   - `psagent-sicherung`: Hier schreibt der Server.
+   - `psagent-versionen`: die Versionsstände. Unter „Included disk(s)“ genau **eine** Platte
+     wählen, z. B. `disk1`; Hardlinks gehen nur innerhalb einer Platte.
+2. **SFTP-Ziel für den Server:** nur SFTP, nur mit dem Schlüssel des Servers, sichtbar nur der
+   eigene Ordner, erreichbar nur über Tailscale. Unraids eigener sshd taugt dafür nicht: Er
+   erlaubt nur root, lauscht nur im LAN, und `ForceCommand internal-sftp` allein sperrt den
+   Benutzer nicht in seinen Ordner. Festlegung (Felix, 27.11.2026): ein eigener SFTP-Container,
+   umgesetzt mit #177. Bis dahin kein anderes SFTP-Ziel einrichten.
+3. **Skript auf den USB-Stick von Unraid**, im selben Stand wie der Klon auf dem Server. Auf dem
+   Server den Commit und die Prüfsumme anzeigen:
+
+   ```bash
+   sudo git -C /opt/psagent rev-parse HEAD
+   sha256sum /opt/psagent/v2/deploy/unraid/versionen.sh
+   ```
+
+   Auf Unraid (Terminal, als root), `<commit>` von oben:
+
+   ```bash
+   mkdir -p /boot/config/psagent
+   curl -fsSL https://raw.githubusercontent.com/VerFlix/PSAgent/<commit>/v2/deploy/unraid/versionen.sh \
+       -o /boot/config/psagent/versionen.sh
+   sha256sum /boot/config/psagent/versionen.sh
+   ```
+
+   Beide Prüfsummen müssen gleich sein.
+4. **Täglich um 05:00 starten**, nach der Sicherung um 02:00: Plugin „User Scripts“ (aus den
+   Apps), neues Skript `psagent-versionen`, Zeitplan „Custom“ mit `0 5 * * *`, Inhalt:
+
+   ```bash
+   #!/bin/bash
+   export PSAGENT_VERSIONEN_PUSH=http://127.0.0.1:3001/api/push/<Schlüssel>
+   bash /boot/config/psagent/versionen.sh /mnt/user/psagent-sicherung /mnt/disk1/psagent-versionen
+   ```
+
+   `disk1` durch die Platte aus Punkt 1 ersetzen. Das Ziel muss unter `/mnt/diskN/` stehen, nicht
+   unter `/mnt/user/`; sonst bricht das Skript ab. Die Push-Adresse stammt vom Monitor
+   „Versionsstände“ in Uptime Kuma (`monitoring.md`, Abschnitt 2), mit `127.0.0.1:3001` als
+   Host, weil Uptime Kuma auf Unraid selbst läuft. Ohne die Zeile meldet das Skript nur an Unraid.
+5. **Meldungen:** Scheitert das Skript, meldet es das in Unraid (Glocke oben rechts) und an
+   Uptime Kuma. Per Mail kommt die Unraid-Meldung nur, wenn Unraid unter „Settings → Notification
+   Settings“ Mails für Warnungen und Alarme schickt. Das Protokoll zeigt „User Scripts“ unter
+   „Show Log“.
+6. **Probelauf** nach der ersten Sicherung (`server-einrichten.md`, Schritt 6.3): in „User
+   Scripts“ auf „Run Script“. Die Ausgabe endet mit „Behalten: 1 Stand. Belegt: …“. Danach
+   `ls -l /mnt/disk1/psagent-versionen/` zeigt einen Ordner mit dem heutigen Datum, und
+   `ls -ld` zeigt `drwx------ root root`. Der Monitor „Versionsstände“ steht auf grün.
+7. Unraid im Tailnet; Richtlinie wie oben.
+
+Ein zweiter Lauf am selben Tag ändert nichts. Bricht ein Lauf ab, bleibt nur der Ordner
+`.unfertig` liegen; der nächste Lauf ersetzt ihn.
+
+### Prüfung vor dem Aufräumen
+
+Bevor das Skript alte Stände löscht, prüft es den neuen. Es gibt zwei Arten von Befunden.
+
+**Befunde am Inhalt.** Sie bleiben offen, bis jemand sie bestätigt. Auffällig ist ein Stand, wenn
+
+- er leer ist,
+- eine Datei, die es gestern schon gab, heute anders ist. Datei-Archive, Kettenköpfe und die
+  Objekte von WAL-G schreibt der Server nur einmal. Einzige harmlose Ausnahme: Ein
+  WAL-Abschnitt wurde wiederholt hochgeladen, weil die erste Bestätigung verloren ging.
+- eine Kettenkopf-Datei von gestern fehlt (die löscht der Server nie),
+- Zeitstempel in der Zukunft liegen oder
+- er kleiner als die Hälfte des letzten unauffälligen Stands ist.
+
+**Veraltet.** Die neueste Datei ist älter als 26 Stunden, die Sicherung um 02:00 kam also nicht
+an. Das erledigt sich mit der nächsten Sicherung von selbst.
+
+Bei einem Befund legt das Skript den Stand trotzdem an, **löscht aber nichts**, meldet „Sicherung
+auf Unraid auffällig“ (Unraid und Uptime Kuma) und endet mit Fehler. Befunde am Inhalt merkt sich
+`psagent-versionen/.befund`. Bis jemand sie bestätigt, meldet das Skript jeden Tag „Offener
+Befund vom …“ und löscht weiter nichts.
+
+Grund: Ein gehackter Server könnte seine Sicherung löschen oder ersetzen und dazu seine eigenen
+Meldungen abschalten. Ohne diese Prüfung wären nach 30 Tagen auch die täglichen Stände von vor dem
+Angriff weg. Was die Prüfung erkennt, braucht keinen Schlüssel: Größe und Zeitstempel kann der
+Server fälschen, eine geänderte Datei von gestern oder einen fehlenden Kettenkopf nicht verbergen.
+
+Grenzen: Wer das Verfahren kennt, kann es umgehen, etwa indem er nur neue Dateien in passender
+Größe hinzufügt. Die Monatsstände bleiben dann trotzdem 12 Monate erhalten. Ob der Inhalt stimmt,
+zeigt nur die Wiederherstellungsprobe (Abschnitt 5).
+
+Bei einer Meldung:
+
+1. Auf dem Server nachsehen, ob die Sicherung läuft: `journalctl -u psagent-sicherung -n 50`.
+   Läuft der Server gar nicht (Urlaub, Ausfall), ist „veraltet“ erklärt. Die Meldung verschwindet
+   mit der nächsten Sicherung.
+2. Befund am Inhalt ohne Erklärung: als möglichen Angriff behandeln (`vorfall-kette.md`) und
+   nichts auf Unraid löschen. Ein Vergleich hilft, z. B.
+   `diff -rq /mnt/disk1/psagent-versionen/<gestern> /mnt/disk1/psagent-versionen/<heute>`.
+3. Ist der Befund erklärt, ihn einmal von Hand bestätigen. Das nimmt den heutigen Stand an und
+   gibt das Aufräumen wieder frei. Beispiele: ein wiederholter WAL-Upload oder eine neue
+   Datenbank-Zeitlinie im Ernstfall.
+
+   ```bash
+   PSAGENT_VERSIONEN_STAND_ANNEHMEN=1 bash /boot/config/psagent/versionen.sh \
+       /mnt/user/psagent-sicherung /mnt/disk1/psagent-versionen
+   ```
+
+Den letzten unauffälligen Stand merkt sich `psagent-versionen/.referenz` (Datum und Größe).
 
 ## 3. Server einrichten
 
@@ -127,6 +234,25 @@ neueste Datei-Archiv, migriert, startet und prüft die Hash-Kette. Am Ende steht
 | 0 | Wiederhergestellt, Kette unverändert |
 | 1 | Kette verändert (Sicherheitsvorfall, `pruefwerkzeug.md`) oder ein Schritt ist gescheitert |
 | 2 | Wiederhergestellt, aber etwas war nicht prüfbar (z. B. Zertifikat fehlt) |
+
+### Älteren Stand von Unraid zurückholen
+
+Nötig, wenn die Sicherung im Share `psagent-sicherung` gelöscht oder beschädigt ist, oder wenn
+ein Stand vor einem bestimmten Tag gebraucht wird (`vorfall-kette.md`). Auf Unraid als root,
+`<Datum>` ist ein Ordner unter `psagent-versionen`:
+
+```bash
+ls /mnt/disk1/psagent-versionen/
+mv /mnt/user/psagent-sicherung/psagent /mnt/user/psagent-sicherung/psagent.beiseite-$(date +%F)
+rsync -rt /mnt/disk1/psagent-versionen/<Datum>/ /mnt/user/psagent-sicherung/
+chown -R psagent-sicherung: /mnt/user/psagent-sicherung/psagent
+```
+
+- **Kopieren, nie verlinken** (kein `cp -l`, kein `--link-dest`): Sonst könnte der Server über
+  die Sicherung auch die Versionsstände ändern.
+- `psagent.beiseite-…` erst löschen, wenn die Wiederherstellung geklappt hat. Nach einem Angriff
+  ist es ein Beweisstück.
+- Danach wiederherstellen wie unten. Der Stand enthält alles bis zum Lauf um 05:00 des Tages.
 
 ### Probe auf dem Ersatzgerät
 

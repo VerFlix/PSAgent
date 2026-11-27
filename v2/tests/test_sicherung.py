@@ -2,7 +2,8 @@
 
 Festlegungen (Felix, 24.10.2026): eigenes DB-Image mit dem offiziellen WAL-G-Build, Dateien als
 nächtliches tar-Archiv mit demselben Schlüssel, der Server löscht nach 30 Vollsicherungen; die
-Monatsstände halten die Snapshots auf Unraid. Den echten Durchlauf mit WAL-G, SFTP und
+Monatsstände halten die Snapshots auf Unraid (seit 21.11.2026 die Versionsstände aus
+`deploy/unraid/versionen.sh`, #175). Den echten Durchlauf mit WAL-G, SFTP und
 Wiederherstellung macht der CI-Job „Sicherung und Wiederherstellung (Probe)“.
 """
 

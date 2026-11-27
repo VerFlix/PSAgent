@@ -39,8 +39,11 @@ Vorstand.
    ```
 
    `sicherung.sh` löscht sonst Vollsicherungen über die 30 neuesten hinaus, `loeschfristen`
-   Personendaten nach Frist. Die Snapshots auf Unraid (30 Tage täglich, 12 Monate monatlich,
-   `sicherung.md`) bleiben unberührt. Die übrigen Timer laufen weiter; `kettenkopf` hält
+   Personendaten nach Frist. Die Versionsstände auf Unraid (30 Tage täglich, 12 Monate monatlich,
+   `sicherung.md`, Abschnitt 2) erreicht der Server nicht. Damit Unraid keine alten Stände
+   wegräumt, in „User Scripts“ beim Skript `psagent-versionen` vor `bash` einfügen:
+   `PSAGENT_VERSIONEN_TAGE=3650`. Es legt dann weiter täglich Stände an, löscht aber keine.
+   Nach dem Vorfall wieder entfernen. Die übrigen Timer laufen weiter; `kettenkopf` hält
    weiterhin täglich den Kopf fest.
 4. **Zeitpunkt notieren:** wann der Befund auffiel, durch wen (Timer, Monitoring, Quartalsprüfung).
 5. **Vorstand informieren** (Zeugen-Postfach bzw. direkt), mit der Datei aus Schritt 2.

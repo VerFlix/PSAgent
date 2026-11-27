@@ -5,8 +5,8 @@
 #   2. Dateien (GAL, Scans, Notfallmappen) als ein tar-Archiv, verschlüsselt, unter dateien/.
 #   3. Neue Kettenköpfe unverschlüsselt unter kettenkopf/ (nur Prüfsummen, für den Zeugen).
 #   4. Aufräumen: Es bleiben die letzten 30 Vollsicherungen samt WAL und die letzten 30
-#      Datei-Archive. Ältere Stände halten die Snapshots auf Unraid, die der Server nicht
-#      löschen kann.
+#      Datei-Archive. Ältere Stände halten die Versionsstände auf Unraid
+#      (unraid/versionen.sh), die der Server nicht löschen kann.
 #
 #     sudo ./sicherung.sh
 #

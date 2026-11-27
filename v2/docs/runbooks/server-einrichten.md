@@ -498,6 +498,8 @@ man sie nur selten braucht.
 - [ ] `systemctl list-timers 'psagent-*'` zeigt sieben Timer
 - [ ] Monitoring abgenommen (`monitoring.md`, Abschnitt 4)
 - [ ] Erste Sicherung vollständig (`sicherung.md`, Abschnitt 3), `failed_count` steigt nicht
+- [ ] Am Morgen nach der ersten Sicherung liegt auf Unraid ein Versionsstand (`sicherung.md`,
+      Abschnitt 2), es gibt keine Meldung von „User Scripts“, und der Monitor „Versionsstände“ ist grün
 - [ ] Nach `sudo reboot` startet der Server **ohne Passphrase** (TPM), und App, Datenbank und
       `tailscale serve` laufen wieder
 - [ ] `sudo clevis luks list -d /dev/sda3` zeigt die TPM-Bindung; die Passphrase liegt im Tresor
