@@ -124,27 +124,46 @@ Ein zweiter Lauf am selben Tag ändert nichts. Bricht ein Lauf ab, bleibt nur de
 
 ### Prüfung vor dem Aufräumen
 
-Bevor das Skript alte Stände löscht, prüft es den neuen. Auffällig ist er, wenn
+Bevor das Skript alte Stände löscht, prüft es den neuen. Es gibt zwei Arten von Befunden.
+
+**Befunde am Inhalt.** Sie bleiben offen, bis jemand sie bestätigt. Auffällig ist ein Stand, wenn
 
 - er leer ist,
-- seine neueste Datei älter als 26 Stunden ist (die Sicherung um 02:00 kam nicht an) oder
+- eine Datei, die es gestern schon gab, heute anders ist. Datei-Archive, Kettenköpfe und die
+  Objekte von WAL-G schreibt der Server nur einmal. Einzige harmlose Ausnahme: Ein
+  WAL-Abschnitt wurde wiederholt hochgeladen, weil die erste Bestätigung verloren ging.
+- eine Kettenkopf-Datei von gestern fehlt (die löscht der Server nie),
+- Zeitstempel in der Zukunft liegen oder
 - er kleiner als die Hälfte des letzten unauffälligen Stands ist.
 
-Dann legt es den Stand trotzdem an, **löscht aber nichts**, meldet „Sicherung auf Unraid
-auffällig“ (Unraid und Uptime Kuma) und endet mit Fehler. Das wiederholt sich jeden Tag, bis der
-Stand wieder unauffällig ist. Grund: Ein gehackter Server könnte seine Sicherung löschen oder
-ersetzen und dazu seine eigenen Meldungen abschalten. Ohne diese Prüfung wären nach 30 Tagen auch
-die täglichen Stände von vor dem Angriff weg.
+**Veraltet.** Die neueste Datei ist älter als 26 Stunden, die Sicherung um 02:00 kam also nicht
+an. Das erledigt sich mit der nächsten Sicherung von selbst.
+
+Bei einem Befund legt das Skript den Stand trotzdem an, **löscht aber nichts**, meldet „Sicherung
+auf Unraid auffällig“ (Unraid und Uptime Kuma) und endet mit Fehler. Befunde am Inhalt merkt sich
+`psagent-versionen/.befund`. Bis jemand sie bestätigt, meldet das Skript jeden Tag „Offener
+Befund vom …“ und löscht weiter nichts.
+
+Grund: Ein gehackter Server könnte seine Sicherung löschen oder ersetzen und dazu seine eigenen
+Meldungen abschalten. Ohne diese Prüfung wären nach 30 Tagen auch die täglichen Stände von vor dem
+Angriff weg. Was die Prüfung erkennt, braucht keinen Schlüssel: Größe und Zeitstempel kann der
+Server fälschen, eine geänderte Datei von gestern oder einen fehlenden Kettenkopf nicht verbergen.
+
+Grenzen: Wer das Verfahren kennt, kann es umgehen, etwa indem er nur neue Dateien in passender
+Größe hinzufügt. Die Monatsstände bleiben dann trotzdem 12 Monate erhalten. Ob der Inhalt stimmt,
+zeigt nur die Wiederherstellungsprobe (Abschnitt 5).
 
 Bei einer Meldung:
 
 1. Auf dem Server nachsehen, ob die Sicherung läuft: `journalctl -u psagent-sicherung -n 50`.
-   Läuft der Server gar nicht (Urlaub, Ausfall), ist die Meldung erklärt; sie verschwindet mit
-   der nächsten Sicherung.
-2. Ist die Sicherung geschrumpft oder leer, ohne dass jemand etwas gelöscht hat: als möglichen
-   Angriff behandeln (`vorfall-kette.md`) und nichts auf Unraid löschen.
-3. Ist ein kleinerer Stand erklärbar (z. B. nach einer neuen Datenbank-Zeitlinie im Ernstfall),
-   ihn einmal von Hand annehmen:
+   Läuft der Server gar nicht (Urlaub, Ausfall), ist „veraltet“ erklärt. Die Meldung verschwindet
+   mit der nächsten Sicherung.
+2. Befund am Inhalt ohne Erklärung: als möglichen Angriff behandeln (`vorfall-kette.md`) und
+   nichts auf Unraid löschen. Ein Vergleich hilft, z. B.
+   `diff -rq /mnt/disk1/psagent-versionen/<gestern> /mnt/disk1/psagent-versionen/<heute>`.
+3. Ist der Befund erklärt, ihn einmal von Hand bestätigen. Das nimmt den heutigen Stand an und
+   gibt das Aufräumen wieder frei. Beispiele: ein wiederholter WAL-Upload oder eine neue
+   Datenbank-Zeitlinie im Ernstfall.
 
    ```bash
    PSAGENT_VERSIONEN_STAND_ANNEHMEN=1 bash /boot/config/psagent/versionen.sh \

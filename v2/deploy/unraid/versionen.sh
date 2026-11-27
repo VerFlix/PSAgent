@@ -14,12 +14,13 @@
 # ZIEL muss auf einer einzelnen Platte liegen (/mnt/diskN/… oder ein Pool), nicht unter
 # /mnt/user: Hardlinks gehen nur innerhalb einer Platte.
 #
-# Vor dem Aufräumen prüft es den neuen Stand. Ist er leer, ist die neueste Datei älter als
-# 26 Stunden oder ist er auf weniger als die Hälfte des letzten unauffälligen Stands geschrumpft,
-# löscht es nichts und meldet (Exit 1). Sonst hätte ein gehackter Server, der seine Sicherung
-# löscht oder ersetzt, nach 30 Tagen auch die täglichen Stände von vor dem Angriff beseitigt. Den
-# letzten unauffälligen Stand merkt sich ZIEL/.referenz („<Datum> <Byte>“). Ist ein kleinerer
-# Stand erklärbar, nimmt ihn ein Lauf von Hand mit PSAGENT_VERSIONEN_STAND_ANNEHMEN=1 an.
+# Vor dem Aufräumen prüft es den neuen Stand. Auffällig ist er, wenn er leer ist, eine Datei von
+# gestern verändert wurde, ein Kettenkopf fehlt, Zeitstempel in der Zukunft liegen, die neueste
+# Datei älter als 26 Stunden ist oder er auf weniger als die Hälfte des letzten unauffälligen
+# Stands (ZIEL/.referenz) geschrumpft ist. Dann löscht es nichts und meldet (Exit 1). Sonst hätte
+# ein gehackter Server, der seine Sicherung löscht oder ersetzt, nach 30 Tagen auch die täglichen
+# Stände von vor dem Angriff beseitigt. Befunde am Inhalt bleiben offen (ZIEL/.befund), bis ein
+# Lauf von Hand mit PSAGENT_VERSIONEN_STAND_ANNEHMEN=1 sie bestätigt.
 #
 # Meldungen gehen an Unraid (Glocke) und, wenn PSAGENT_VERSIONEN_PUSH gesetzt ist, an die
 # Push-Adresse eines Monitors in Uptime Kuma (status=up bzw. down, nie Inhalte der Sicherung).
@@ -117,23 +118,68 @@ else
     echo "Stand $heute angelegt."
 fi
 
-# Prüfung vor dem Aufräumen (siehe oben).
+# Prüfung vor dem Aufräumen (siehe oben). Zwei Arten von Befunden:
+# - „veraltet“ (Server aus, Sicherung gestört): erledigt sich mit der nächsten Sicherung.
+# - Befunde am Inhalt (leer, verändert, Kettenkopf fehlt, Zeit in der Zukunft, geschrumpft): Sie
+#   bleiben in ZIEL/.befund offen, bis jemand sie mit PSAGENT_VERSIONEN_STAND_ANNEHMEN=1 bestätigt.
+# Größe und Zeitstempel kann ein gehackter Server fälschen; dass eine Datei von gestern heute anders
+# ist oder ein Kettenkopf fehlt, sieht Unraid aber ohne Schlüssel. Datei-Archive, Kettenköpfe und
+# Objekte von WAL-G schreibt der Server nur einmal; sie ändern sich nie an Ort und Stelle.
 stand="$ziel/$heute"
 referenz="$ziel/.referenz"
+offen="$ziel/.befund"
+annehmen="${PSAGENT_VERSIONEN_STAND_ANNEHMEN:-}"
+jetzt="$(date +%s)"
+vorher=""
+while IFS= read -r name; do
+    if [[ "$name" < "$heute" ]]; then
+        vorher="$name"
+    fi
+done < <(staende)
 dateien="$(find "$stand" -type f | wc -l)"
 bytes="$(find "$stand" -type f -printf '%s\n' | awk '{ s += $1 } END { print s + 0 }')"
-befund=()
+veraltet=()
+inhalt=()
 if ((dateien == 0)); then
-    befund+=("Die Sicherung ist leer.")
+    inhalt+=("Die Sicherung ist leer.")
 else
     neueste="$(find "$stand" -type f -printf '%T@\n' | sort -n | tail -n 1)"
     neueste="${neueste%.*}"
-    if (($(date +%s) - neueste > frisch * 3600)); then
+    if ((neueste > jetzt + 3600)); then
+        inhalt+=("Dateien haben einen Zeitstempel in der Zukunft ($(date -d "@$neueste" '+%d.%m.%Y %H:%M')).")
+    elif ((jetzt - neueste > frisch * 3600)); then
         einheit="Stunden"
         if ((frisch == 1)); then
             einheit="Stunde"
         fi
-        befund+=("Die neueste Datei ist älter als $frisch $einheit (vom $(date -d "@$neueste" '+%d.%m.%Y %H:%M')).")
+        veraltet+=("Die neueste Datei ist älter als $frisch $einheit (vom $(date -d "@$neueste" '+%d.%m.%Y %H:%M')).")
+    fi
+fi
+if [[ -n "$vorher" ]]; then
+    # Neu kopierte Dateien haben genau einen Link; gab es den Pfad gestern schon, wurde er geändert.
+    geaendert=0
+    beispiel=""
+    while IFS= read -r -d '' pfad; do
+        if [[ -e "$ziel/$vorher/$pfad" ]]; then
+            geaendert=$((geaendert + 1))
+            beispiel="${beispiel:-$pfad}"
+        fi
+    done < <(find "$stand" -type f -links 1 -printf '%P\0')
+    if ((geaendert > 0)); then
+        wort="Dateien"
+        if ((geaendert == 1)); then
+            wort="Datei"
+        fi
+        inhalt+=("Seit dem Stand vom $vorher wurde $geaendert $wort verändert, z. B. $beispiel. Das macht der Server nie (Ausnahme: ein wiederholter Upload desselben WAL-Abschnitts). Gehen Hardlinks nicht, liegt ZIEL nicht auf einer Platte.")
+    fi
+    fehlend=0
+    while IFS= read -r -d '' pfad; do
+        if [[ ! -e "$stand/$pfad" ]]; then
+            fehlend=$((fehlend + 1))
+        fi
+    done < <(find "$ziel/$vorher" -type f -path '*/kettenkopf/*' -printf '%P\0')
+    if ((fehlend > 0)); then
+        inhalt+=("$fehlend Kettenkopf-Datei(en) vom $vorher fehlen. Kettenköpfe löscht der Server nie.")
     fi
 fi
 referenz_tag=""
@@ -143,12 +189,24 @@ if [[ -f "$referenz" ]]; then
 fi
 [[ "$referenz_bytes" =~ ^[0-9]+$ ]] || referenz_bytes=0
 if ((referenz_bytes > 0 && bytes * 100 < referenz_bytes * min_prozent)); then
-    if [[ "${PSAGENT_VERSIONEN_STAND_ANNEHMEN:-}" == 1 ]]; then
-        echo "Kleinerer Stand angenommen: $bytes Byte statt $referenz_bytes Byte vom $referenz_tag."
-    else
-        befund+=("Die Sicherung ist auf $((bytes * 100 / referenz_bytes)) % des Stands vom $referenz_tag geschrumpft.")
-    fi
+    inhalt+=("Die Sicherung ist auf $((bytes * 100 / referenz_bytes)) % des Stands vom $referenz_tag geschrumpft.")
 fi
+
+befund=()
+if [[ "$annehmen" == 1 ]]; then
+    for zeile in "${inhalt[@]}"; do
+        echo "Angenommen: $zeile"
+    done
+    rm -f -- "$offen"
+    inhalt=()
+elif [[ -f "$offen" ]]; then
+    befund+=("Offener Befund vom $(cat -- "$offen")")
+fi
+if ((${#inhalt[@]})) && [[ ! -f "$offen" ]]; then
+    printf '%s: %s\n' "$heute" "${inhalt[*]}" >"$offen"
+    chmod 600 "$offen"
+fi
+befund+=("${inhalt[@]}" "${veraltet[@]}")
 if ((${#befund[@]})); then
     text="${befund[*]} Alte Stände werden nicht gelöscht; erst prüfen (sicherung.md, Abschnitt 2)."
     echo "WARNUNG: $text" >&2

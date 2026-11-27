@@ -90,7 +90,8 @@ def test_overwritten_or_deleted_files_stay_in_older_versions(source: Path, targe
 
     result = run(source, target, "2026-11-23")
 
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 1
+    assert "verändert" in result.stderr
     assert wal(target / "2026-11-22").read_bytes() == b"wal 1"
     tar = Path("psagent") / "dateien" / "dateien-2026-11-21T020000Z.tar"
     assert (target / "2026-11-22" / tar).read_bytes() == b"tar 1"
@@ -358,10 +359,11 @@ def test_a_shrunk_backup_is_reported_until_someone_accepts_it(
 
 def test_a_moderate_change_in_size_is_fine(source: Path, target: Path) -> None:
     """Alte Vollsicherungen löscht der Server jeden Tag; das ist kein Befund."""
-    tar = source / "psagent" / "dateien" / "dateien-2026-11-21T020000Z.tar"
-    tar.write_bytes(b"x" * 100)
+    archives = source / "psagent" / "dateien"
+    (archives / "dateien-2026-11-21T020000Z.tar").write_bytes(b"x" * 100)
     run(source, target, "2026-11-21")
-    tar.write_bytes(b"x" * 60)
+    (archives / "dateien-2026-11-21T020000Z.tar").unlink()
+    (archives / "dateien-2026-11-22T020000Z.tar").write_bytes(b"x" * 60)
 
     assert run(source, target, "2026-11-22").returncode == 0
 
@@ -387,6 +389,76 @@ def test_the_reference_is_not_a_version(source: Path, target: Path) -> None:
 
     assert (target / ".referenz").read_text().split() == ["2026-11-22", "10"]
     assert (target / ".referenz").stat().st_mode & 0o777 == 0o600
+
+
+def test_a_file_changed_in_place_is_a_finding_until_someone_confirms_it(
+    source: Path, target: Path, alarm: Path
+) -> None:
+    """WAL-G, Datei-Archive und Kettenköpfe schreibt der Server nur einmal; Ändern ist ein Befund.
+
+    Größe und Zeitstempel kann ein gehackter Server fälschen. Dass eine Datei von gestern heute
+    anders ist, sieht Unraid aber ohne Schlüssel: Sie ist dann kein Hardlink auf gestern.
+    """
+    run(source, target, "2026-11-20")
+    names = old_versions(target)
+    wal(source).write_bytes(b"wal X")
+    os.utime(wal(source), (time.time() + 60, time.time() + 60))
+
+    changed = run(source, target, "2026-11-21", PSAGENT_UNRAID_NOTIFY=str(alarm))
+    still_open = run(source, target, "2026-11-22")
+
+    assert changed.returncode == 1
+    assert "1 Datei" in changed.stderr
+    assert "wal_005/000000010000000000000001.br" in changed.stderr
+    assert "-i|alert|" in alarms(alarm)
+    assert still_open.returncode == 1
+    assert "Offener Befund vom 2026-11-21" in still_open.stderr
+    assert kept(target) == sorted([*names, "2026-11-20", "2026-11-21", "2026-11-22"])
+
+    confirmed = run(source, target, "2026-11-22", PSAGENT_VERSIONEN_STAND_ANNEHMEN="1")
+    later = run(source, target, "2026-11-23")
+
+    assert confirmed.returncode == 0, confirmed.stderr
+    assert later.returncode == 0, later.stderr
+    assert not (target / ".befund").exists()
+    assert "2026-10-06" not in kept(target)
+
+
+def test_a_missing_chain_head_is_a_finding(source: Path, target: Path) -> None:
+    """Kettenköpfe löscht der Server nie (sicherung.sh, Schritt 3)."""
+    heads = source / "psagent" / "kettenkopf"
+    heads.mkdir()
+    (heads / "kopf-0001.txt").write_text("1:abc")
+    run(source, target, "2026-11-21")
+    (heads / "kopf-0001.txt").unlink()
+    (heads / "kopf-0002.txt").write_text("2:def")
+
+    result = run(source, target, "2026-11-22")
+
+    assert result.returncode == 1
+    assert "Kettenkopf" in result.stderr
+
+
+def test_a_timestamp_in_the_future_is_a_finding(source: Path, target: Path) -> None:
+    later = time.time() + 2 * 86400
+    os.utime(wal(source), (later, later))
+
+    result = run(source, target, "2026-11-22")
+
+    assert result.returncode == 1
+    assert "Zukunft" in result.stderr
+
+
+def test_a_stale_backup_clears_itself_once_new_data_arrives(source: Path, target: Path) -> None:
+    """Server aus (Urlaub, Ausfall) ist kein Angriff; dafür braucht es keine Bestätigung."""
+    age(source, 27)
+    assert run(source, target, "2026-11-21").returncode == 1
+    (source / "psagent" / "wal_005" / "000000010000000000000002.br").write_bytes(b"wal 2")
+
+    result = run(source, target, "2026-11-22")
+
+    assert result.returncode == 0, result.stderr
+    assert not (target / ".befund").exists()
 
 
 @pytest.fixture
