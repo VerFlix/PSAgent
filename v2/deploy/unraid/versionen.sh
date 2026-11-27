@@ -41,6 +41,11 @@ unraid_melden() {
     fi
 }
 
+# Dateinamen kommen vom Server: In Meldungen nur Buchstaben, Ziffern und ._/-, höchstens 120 Zeichen.
+sauber() {
+    printf '%s' "$1" | LC_ALL=C tr -c 'A-Za-z0-9._/-' '_' | cut -c1-120
+}
+
 kuma_melden() {
     if [[ -n "$push" ]]; then
         curl -fsS --max-time 10 --retry 2 -o /dev/null -G \
@@ -156,28 +161,33 @@ else
     fi
 fi
 if [[ -n "$vorher" ]]; then
-    # Neu kopierte Dateien haben genau einen Link; gab es den Pfad gestern schon, wurde er geändert.
+    # Jede Datei von gestern muss heute dieselbe Datei sein (Hardlink, -ef) oder fehlen. Ist sie
+    # eine andere Datei oder etwas anderes als eine Datei, wurde sie verändert. Kettenköpfe dürfen
+    # auch nicht fehlen.
     geaendert=0
+    fehlend=0
     beispiel=""
     while IFS= read -r -d '' pfad; do
-        if [[ -e "$ziel/$vorher/$pfad" ]]; then
+        jetzt_pfad="$stand/$pfad"
+        if [[ -f "$jetzt_pfad" && ! -L "$jetzt_pfad" ]]; then
+            if [[ ! "$jetzt_pfad" -ef "$ziel/$vorher/$pfad" ]]; then
+                geaendert=$((geaendert + 1))
+                beispiel="${beispiel:-$pfad}"
+            fi
+        elif [[ -e "$jetzt_pfad" || -L "$jetzt_pfad" ]]; then
             geaendert=$((geaendert + 1))
             beispiel="${beispiel:-$pfad}"
+        elif [[ "/$pfad" == */kettenkopf/* ]]; then
+            fehlend=$((fehlend + 1))
         fi
-    done < <(find "$stand" -type f -links 1 -printf '%P\0')
+    done < <(find "$ziel/$vorher" -type f -printf '%P\0')
     if ((geaendert > 0)); then
         wort="Dateien"
         if ((geaendert == 1)); then
             wort="Datei"
         fi
-        inhalt+=("Seit dem Stand vom $vorher wurde $geaendert $wort verändert, z. B. $beispiel. Das macht der Server nie (Ausnahme: ein wiederholter Upload desselben WAL-Abschnitts). Gehen Hardlinks nicht, liegt ZIEL nicht auf einer Platte.")
+        inhalt+=("Seit dem Stand vom $vorher wurde $geaendert $wort verändert, z. B. $(sauber "$beispiel"). Das macht der Server nie (Ausnahme: ein wiederholter Upload desselben WAL-Abschnitts). Gehen Hardlinks nicht, liegt ZIEL nicht auf einer Platte.")
     fi
-    fehlend=0
-    while IFS= read -r -d '' pfad; do
-        if [[ ! -e "$stand/$pfad" ]]; then
-            fehlend=$((fehlend + 1))
-        fi
-    done < <(find "$ziel/$vorher" -type f -path '*/kettenkopf/*' -printf '%P\0')
     if ((fehlend > 0)); then
         inhalt+=("$fehlend Kettenkopf-Datei(en) vom $vorher fehlen. Kettenköpfe löscht der Server nie.")
     fi

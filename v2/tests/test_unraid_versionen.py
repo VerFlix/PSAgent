@@ -439,6 +439,50 @@ def test_a_missing_chain_head_is_a_finding(source: Path, target: Path) -> None:
     assert "Kettenkopf" in result.stderr
 
 
+def test_a_chain_head_replaced_by_a_folder_is_a_finding(source: Path, target: Path) -> None:
+    heads = source / "psagent" / "kettenkopf"
+    heads.mkdir()
+    (heads / "kopf-0001.txt").write_text("1:abc")
+    run(source, target, "2026-11-21")
+    (heads / "kopf-0001.txt").unlink()
+    (heads / "kopf-0001.txt").mkdir()
+    (heads / "kopf-0001.txt" / "x").write_text("x")
+
+    result = run(source, target, "2026-11-22")
+
+    assert result.returncode == 1
+
+
+def test_a_file_replaced_by_a_folder_is_a_finding(source: Path, target: Path) -> None:
+    run(source, target, "2026-11-21")
+    wal(source).unlink()
+    wal(source).mkdir()
+    (wal(source) / "x").write_bytes(b"x" * 10)
+
+    result = run(source, target, "2026-11-22")
+
+    assert result.returncode == 1
+    assert "verändert" in result.stderr
+
+
+def test_file_names_from_the_server_are_cleaned_in_messages(
+    source: Path, target: Path, alarm: Path
+) -> None:
+    """Dateinamen kommen vom Server; in Meldungen nur Buchstaben, Ziffern und ._/-."""
+    odd = source / "psagent" / "<script>böse\nzeile&amp;"
+    odd.write_bytes(b"1")
+    run(source, target, "2026-11-21")
+    odd.write_bytes(b"22")
+
+    result = run(source, target, "2026-11-22", PSAGENT_UNRAID_NOTIFY=str(alarm))
+
+    assert result.returncode == 1
+    sent = alarms(alarm) + (target / ".befund").read_text()
+    assert "<" not in sent
+    assert "zeile" in sent
+    assert (target / ".befund").read_text().count("\n") == 1
+
+
 def test_a_timestamp_in_the_future_is_a_finding(source: Path, target: Path) -> None:
     later = time.time() + 2 * 86400
     os.utime(wal(source), (later, later))
