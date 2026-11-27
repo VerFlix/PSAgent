@@ -9,6 +9,7 @@ SFTP-Benutzer des Servers weder sehen noch ändern kann. Aufbewahrt werden 30 Ta
 import os
 import shutil
 import subprocess
+import time
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -53,7 +54,7 @@ def test_first_run_copies_the_backup_into_a_dated_folder(source: Path, target: P
     result = run(source, target, "2026-11-22")
 
     assert result.returncode == 0, result.stderr
-    assert sorted(p.name for p in target.iterdir()) == ["2026-11-22"]
+    assert kept(target) == ["2026-11-22"]
     assert wal(target / "2026-11-22").read_bytes() == b"wal 1"
 
 
@@ -145,10 +146,9 @@ def test_keeps_30_days_and_the_first_version_of_each_of_12_months(
     result = run(source, target, today.isoformat())
 
     assert result.returncode == 0, result.stderr
-    kept = sorted(p.name for p in target.iterdir())
     daily = [d.isoformat() for d in days(today - timedelta(29), today)]
     monthly = [f"{y}-{m:02}-01" for y, m in [(2025, 12)] + [(2026, m) for m in range(1, 12)]]
-    assert kept == sorted(set(daily + monthly))
+    assert kept(target) == sorted(set(daily + monthly))
 
 
 def test_a_missing_first_of_month_keeps_the_earliest_version_of_that_month(
@@ -160,7 +160,7 @@ def test_a_missing_first_of_month_keeps_the_earliest_version_of_that_month(
 
     run(source, target, "2026-11-22")
 
-    assert sorted(p.name for p in target.iterdir()) == ["2026-03-04", "2026-04-01", "2026-11-22"]
+    assert kept(target) == ["2026-03-04", "2026-04-01", "2026-11-22"]
 
 
 def test_retention_can_be_set(source: Path, target: Path) -> None:
@@ -169,7 +169,7 @@ def test_retention_can_be_set(source: Path, target: Path) -> None:
 
     run(source, target, "2026-11-22", PSAGENT_VERSIONEN_TAGE="2", PSAGENT_VERSIONEN_MONATE="1")
 
-    assert sorted(p.name for p in target.iterdir()) == ["2026-11-01", "2026-11-21", "2026-11-22"]
+    assert kept(target) == ["2026-11-01", "2026-11-21", "2026-11-22"]
 
 
 def test_other_folders_in_the_target_are_left_alone(source: Path, target: Path) -> None:
@@ -232,7 +232,7 @@ def test_stops_when_the_clock_is_behind_the_newest_version(source: Path, target:
     result = run(source, target, "2026-11-22")
 
     assert result.returncode == 1
-    assert sorted(p.name for p in target.iterdir()) == ["2026-10-01", "2026-11-25"]
+    assert kept(target) == ["2026-10-01", "2026-11-25"]
 
 
 def test_reports_failures_to_unraid(source: Path, target: Path, tmp_path: Path) -> None:
@@ -247,6 +247,198 @@ def test_reports_failures_to_unraid(source: Path, target: Path, tmp_path: Path) 
     assert result.returncode == 1
     assert "-i\nalert" in log.read_text()
     assert "fehlt" in log.read_text()
+
+
+# --- Prüfung vor dem Aufräumen ---
+#
+# Löscht oder ersetzt ein gehackter Server die Sicherung, würde das Aufräumen nach 30 Tagen alle
+# täglichen Stände von vor dem Angriff löschen. Darum räumt das Skript nur auf, wenn der neue
+# Stand unauffällig ist, und meldet sonst an Unraid und Uptime Kuma.
+
+
+@pytest.fixture
+def alarm(tmp_path: Path) -> Path:
+    """Unraid-Meldeskript, das jeden Aufruf in eine Datei schreibt."""
+    log = tmp_path / "meldungen"
+    notify = tmp_path / "notify"
+    notify.write_text(f'#!/usr/bin/env bash\nprintf "%s|" "$@" >> {log}\necho >> {log}\n')
+    notify.chmod(0o755)
+    return notify
+
+
+def alarms(notify: Path) -> str:
+    log = notify.parent / "meldungen"
+    return log.read_text() if log.exists() else ""
+
+
+def old_versions(target: Path) -> list[str]:
+    """Alte Stände; am 22.11.2026 räumt das Aufräumen 2026-03-03 und 2026-10-06 weg."""
+    names = ["2026-03-02", "2026-03-03", "2026-10-05", "2026-10-06"]
+    for name in names:
+        (target / name).mkdir(parents=True)
+    return names
+
+
+def kept(target: Path) -> list[str]:
+    return sorted(p.name for p in target.iterdir() if not p.name.startswith("."))
+
+
+def age(root: Path, hours: float) -> None:
+    stamp = time.time() - hours * 3600
+    for path in root.rglob("*"):
+        os.utime(path, (stamp, stamp))
+
+
+def test_a_healthy_version_allows_cleaning_up(source: Path, target: Path, alarm: Path) -> None:
+    old_versions(target)
+
+    result = run(source, target, "2026-11-22", PSAGENT_UNRAID_NOTIFY=str(alarm))
+
+    assert result.returncode == 0, result.stderr
+    assert kept(target) == ["2026-03-02", "2026-10-05", "2026-11-22"]
+    assert alarms(alarm) == ""
+
+
+def test_an_empty_backup_is_reported_and_nothing_is_deleted(
+    source: Path, target: Path, alarm: Path
+) -> None:
+    names = old_versions(target)
+    shutil.rmtree(source / "psagent")
+
+    result = run(source, target, "2026-11-22", PSAGENT_UNRAID_NOTIFY=str(alarm))
+
+    assert result.returncode == 1
+    assert kept(target) == sorted([*names, "2026-11-22"])
+    assert "leer" in result.stderr
+    assert "-i|alert|" in alarms(alarm)
+
+
+def test_a_stale_backup_is_reported_and_nothing_is_deleted(
+    source: Path, target: Path, alarm: Path
+) -> None:
+    """Seit über 26 Stunden kam nichts Neues: Server aus, Sicherung gestört oder gehackt."""
+    names = old_versions(target)
+    age(source, 27)
+
+    result = run(source, target, "2026-11-22", PSAGENT_UNRAID_NOTIFY=str(alarm))
+
+    assert result.returncode == 1
+    assert kept(target) == sorted([*names, "2026-11-22"])
+    assert "26 Stunden" in result.stderr
+    assert "-i|alert|" in alarms(alarm)
+
+
+def test_a_shrunk_backup_is_reported_until_someone_accepts_it(
+    source: Path, target: Path, alarm: Path
+) -> None:
+    """Der Vergleich gilt dem letzten unauffälligen Stand, nicht dem Vortag."""
+    big = source / "psagent" / "wal_005" / "000000010000000000000002.br"
+    big.write_bytes(b"x" * 1000)
+    assert run(source, target, "2026-11-20").returncode == 0
+    big.unlink()
+    names = old_versions(target)
+
+    first = run(source, target, "2026-11-21", PSAGENT_UNRAID_NOTIFY=str(alarm))
+    second = run(source, target, "2026-11-22", PSAGENT_UNRAID_NOTIFY=str(alarm))
+
+    assert first.returncode == 1
+    assert second.returncode == 1
+    assert "geschrumpft" in second.stderr
+    assert "2026-11-20" in second.stderr
+    assert kept(target) == sorted([*names, "2026-11-20", "2026-11-21", "2026-11-22"])
+
+    accepted = run(source, target, "2026-11-22", PSAGENT_VERSIONEN_STAND_ANNEHMEN="1")
+    later = run(source, target, "2026-11-23")
+
+    assert accepted.returncode == 0, accepted.stderr
+    assert later.returncode == 0, later.stderr
+    assert "2026-10-06" not in kept(target)
+    assert "2026-03-03" not in kept(target)
+
+
+def test_a_moderate_change_in_size_is_fine(source: Path, target: Path) -> None:
+    """Alte Vollsicherungen löscht der Server jeden Tag; das ist kein Befund."""
+    tar = source / "psagent" / "dateien" / "dateien-2026-11-21T020000Z.tar"
+    tar.write_bytes(b"x" * 100)
+    run(source, target, "2026-11-21")
+    tar.write_bytes(b"x" * 60)
+
+    assert run(source, target, "2026-11-22").returncode == 0
+
+
+def test_thresholds_can_be_set(source: Path, target: Path) -> None:
+    age(source, 2)
+
+    stale = run(source, target, "2026-11-22", PSAGENT_VERSIONEN_FRISCH_STUNDEN="1")
+
+    assert stale.returncode == 1
+    assert "älter als 1 Stunde " in stale.stderr
+
+    big = source / "psagent" / "gross"
+    big.write_bytes(b"x" * 500)
+    assert run(source, target, "2026-11-23").returncode == 0
+    big.unlink()
+    assert run(source, target, "2026-11-24", PSAGENT_VERSIONEN_MIN_PROZENT="1").returncode == 0
+
+
+def test_the_reference_is_not_a_version(source: Path, target: Path) -> None:
+    run(source, target, "2026-11-21")
+    run(source, target, "2026-11-22")
+
+    assert (target / ".referenz").read_text().split() == ["2026-11-22", "10"]
+    assert (target / ".referenz").stat().st_mode & 0o777 == 0o600
+
+
+@pytest.fixture
+def kuma(tmp_path: Path) -> tuple[Path, dict[str, str]]:
+    """Ein falsches curl im PATH, das die Anfrage an Uptime Kuma in eine Datei schreibt."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "kuma"
+    curl = bin_dir / "curl"
+    curl.write_text(f'#!/usr/bin/env bash\nprintf "%s|" "$@" >> {log}\necho >> {log}\n')
+    curl.chmod(0o755)
+    env = {
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "PSAGENT_VERSIONEN_PUSH": "http://127.0.0.1:3001/api/push/Beispiel",
+    }
+    return log, env
+
+
+def test_reports_success_to_uptime_kuma(
+    source: Path, target: Path, kuma: tuple[Path, dict[str, str]]
+) -> None:
+    log, env = kuma
+
+    run(source, target, "2026-11-22", **env)
+
+    request = log.read_text()
+    assert "status=up" in request
+    assert "http://127.0.0.1:3001/api/push/Beispiel" in request
+
+
+def test_reports_findings_and_failures_to_uptime_kuma(
+    source: Path, target: Path, tmp_path: Path, kuma: tuple[Path, dict[str, str]]
+) -> None:
+    log, env = kuma
+    age(source, 27)
+
+    run(source, target, "2026-11-22", **env)
+    run(tmp_path / "fehlt", target, "2026-11-23", **env)
+
+    requests = log.read_text().splitlines()
+    assert len(requests) == 2
+    assert all("status=down" in request for request in requests)
+
+
+def test_without_a_push_address_nothing_is_sent(
+    source: Path, target: Path, kuma: tuple[Path, dict[str, str]]
+) -> None:
+    log, env = kuma
+    env.pop("PSAGENT_VERSIONEN_PUSH")
+
+    assert run(source, target, "2026-11-22", **env).returncode == 0
+    assert not log.exists()
 
 
 def test_script_is_valid_bash() -> None:

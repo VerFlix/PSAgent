@@ -14,19 +14,44 @@
 # ZIEL muss auf einer einzelnen Platte liegen (/mnt/diskN/… oder ein Pool), nicht unter
 # /mnt/user: Hardlinks gehen nur innerhalb einer Platte.
 #
-# Aufbewahrung ändern: PSAGENT_VERSIONEN_TAGE (30) und PSAGENT_VERSIONEN_MONATE (12). Bei einem
-# Vorfall PSAGENT_VERSIONEN_TAGE=3650, dann löscht es nichts (`vorfall-kette.md`).
+# Vor dem Aufräumen prüft es den neuen Stand. Ist er leer, ist die neueste Datei älter als
+# 26 Stunden oder ist er auf weniger als die Hälfte des letzten unauffälligen Stands geschrumpft,
+# löscht es nichts und meldet (Exit 1). Sonst hätte ein gehackter Server, der seine Sicherung
+# löscht oder ersetzt, nach 30 Tagen auch die täglichen Stände von vor dem Angriff beseitigt. Den
+# letzten unauffälligen Stand merkt sich ZIEL/.referenz („<Datum> <Byte>“). Ist ein kleinerer
+# Stand erklärbar, nimmt ihn ein Lauf von Hand mit PSAGENT_VERSIONEN_STAND_ANNEHMEN=1 an.
+#
+# Meldungen gehen an Unraid (Glocke) und, wenn PSAGENT_VERSIONEN_PUSH gesetzt ist, an die
+# Push-Adresse eines Monitors in Uptime Kuma (status=up bzw. down, nie Inhalte der Sicherung).
+#
+# Einstellbar: PSAGENT_VERSIONEN_TAGE (30) und PSAGENT_VERSIONEN_MONATE (12); bei einem Vorfall
+# PSAGENT_VERSIONEN_TAGE=3650, dann löscht es nichts (`vorfall-kette.md`).
+# PSAGENT_VERSIONEN_FRISCH_STUNDEN (26) und PSAGENT_VERSIONEN_MIN_PROZENT (50) für die Prüfung.
 # Für Tests: PSAGENT_HEUTE (Datum) und PSAGENT_UNRAID_NOTIFY (Meldeskript von Unraid).
 set -euo pipefail
 shopt -s nullglob
 
 notify="${PSAGENT_UNRAID_NOTIFY:-/usr/local/emhttp/webGui/scripts/notify}"
+push="${PSAGENT_VERSIONEN_PUSH:-}"
+
+unraid_melden() {
+    if [[ -x "$notify" ]]; then
+        "$notify" -e "PSAgent-Sicherung" -s "$1" -d "$2" -i alert || true
+    fi
+}
+
+kuma_melden() {
+    if [[ -n "$push" ]]; then
+        curl -fsS --max-time 10 --retry 2 -o /dev/null -G \
+            --data-urlencode "status=$1" --data-urlencode "msg=$2" "$push" \
+            || echo "Meldung an Uptime Kuma fehlgeschlagen." >&2
+    fi
+}
 
 fehler() {
     echo "FEHLER: $1" >&2
-    if [[ -x "$notify" ]]; then
-        "$notify" -e "PSAgent-Sicherung" -s "Versionsstand fehlgeschlagen" -d "$1" -i alert || true
-    fi
+    unraid_melden "Versionsstand fehlgeschlagen" "$1"
+    kuma_melden down "Fehler: $1"
     exit 1
 }
 
@@ -42,6 +67,9 @@ heute="${PSAGENT_HEUTE:-$(date +%F)}"
 
 [[ "$heute" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || fehler "Datum ungültig: $heute"
 [[ "$tage" =~ ^[1-9][0-9]*$ && "$monate" =~ ^[1-9][0-9]*$ ]] || fehler "Aufbewahrung ungültig"
+frisch="${PSAGENT_VERSIONEN_FRISCH_STUNDEN:-26}"
+min_prozent="${PSAGENT_VERSIONEN_MIN_PROZENT:-50}"
+[[ "$frisch" =~ ^[1-9][0-9]*$ && "$min_prozent" =~ ^[0-9]+$ ]] || fehler "Prüfwerte ungültig"
 case "$ziel/" in
     /mnt/user/* | /mnt/user0/*)
         fehler "ZIEL muss auf einer Platte liegen (/mnt/diskN/…), nicht unter /mnt/user: $ziel"
@@ -89,6 +117,50 @@ else
     echo "Stand $heute angelegt."
 fi
 
+# Prüfung vor dem Aufräumen (siehe oben).
+stand="$ziel/$heute"
+referenz="$ziel/.referenz"
+dateien="$(find "$stand" -type f | wc -l)"
+bytes="$(find "$stand" -type f -printf '%s\n' | awk '{ s += $1 } END { print s + 0 }')"
+befund=()
+if ((dateien == 0)); then
+    befund+=("Die Sicherung ist leer.")
+else
+    neueste="$(find "$stand" -type f -printf '%T@\n' | sort -n | tail -n 1)"
+    neueste="${neueste%.*}"
+    if (($(date +%s) - neueste > frisch * 3600)); then
+        einheit="Stunden"
+        if ((frisch == 1)); then
+            einheit="Stunde"
+        fi
+        befund+=("Die neueste Datei ist älter als $frisch $einheit (vom $(date -d "@$neueste" '+%d.%m.%Y %H:%M')).")
+    fi
+fi
+referenz_tag=""
+referenz_bytes=0
+if [[ -f "$referenz" ]]; then
+    read -r referenz_tag referenz_bytes <"$referenz" || true
+fi
+[[ "$referenz_bytes" =~ ^[0-9]+$ ]] || referenz_bytes=0
+if ((referenz_bytes > 0 && bytes * 100 < referenz_bytes * min_prozent)); then
+    if [[ "${PSAGENT_VERSIONEN_STAND_ANNEHMEN:-}" == 1 ]]; then
+        echo "Kleinerer Stand angenommen: $bytes Byte statt $referenz_bytes Byte vom $referenz_tag."
+    else
+        befund+=("Die Sicherung ist auf $((bytes * 100 / referenz_bytes)) % des Stands vom $referenz_tag geschrumpft.")
+    fi
+fi
+if ((${#befund[@]})); then
+    text="${befund[*]} Alte Stände werden nicht gelöscht; erst prüfen (sicherung.md, Abschnitt 2)."
+    echo "WARNUNG: $text" >&2
+    unraid_melden "Sicherung auf Unraid auffällig" "$text"
+    kuma_melden down "$text"
+    echo "Nichts gelöscht. Belegt: $(du -sh "$ziel" | cut -f1)"
+    exit 1
+fi
+printf '%s %s\n' "$heute" "$bytes" >"$referenz.neu"
+chmod 600 "$referenz.neu"
+mv -- "$referenz.neu" "$referenz"
+
 # Aufräumen: die letzten $tage Tage und je Monat der erste Stand der letzten $monate Monate.
 ab_tag="$(date -d "$heute -$((tage - 1)) days" +%F)"
 ab_monat="$(date -d "${heute:0:7}-01 -$((monate - 1)) months" +%Y-%m)"
@@ -119,3 +191,4 @@ if ((behalten == 1)); then
     wort="Stand"
 fi
 echo "Behalten: $behalten $wort. Belegt: $(du -sh "$ziel" | cut -f1)"
+kuma_melden up "ok: $behalten $wort, $dateien Dateien"

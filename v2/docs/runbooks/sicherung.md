@@ -73,9 +73,11 @@ Aufbewahrung, die der SFTP-Benutzer weder sehen noch löschen darf.
    - `psagent-sicherung`: Hier schreibt der Server.
    - `psagent-versionen`: die Versionsstände. Unter „Included disk(s)“ genau **eine** Platte
      wählen, z. B. `disk1`; Hardlinks gehen nur innerhalb einer Platte.
-2. **Benutzer `psagent-sicherung`**, nur SFTP (`ForceCommand internal-sftp`), nur mit Schlüssel,
-   schreibt nur in `psagent-sicherung`. In `authorized_keys` kommt `ssh_key.pub` vom Server
-   (Abschnitt 3).
+2. **SFTP-Ziel für den Server:** nur SFTP, nur mit dem Schlüssel des Servers, sichtbar nur der
+   eigene Ordner, erreichbar nur über Tailscale. Unraids eigener sshd taugt dafür nicht: Er
+   erlaubt nur root, lauscht nur im LAN, und `ForceCommand internal-sftp` allein sperrt den
+   Benutzer nicht in seinen Ordner. Festlegung (Felix, 27.11.2026): ein eigener SFTP-Container,
+   umgesetzt mit #177. Bis dahin kein anderes SFTP-Ziel einrichten.
 3. **Skript auf den USB-Stick von Unraid**, im selben Stand wie der Klon auf dem Server. Auf dem
    Server den Commit und die Prüfsumme anzeigen:
 
@@ -99,22 +101,57 @@ Aufbewahrung, die der SFTP-Benutzer weder sehen noch löschen darf.
 
    ```bash
    #!/bin/bash
+   export PSAGENT_VERSIONEN_PUSH=http://127.0.0.1:3001/api/push/<Schlüssel>
    bash /boot/config/psagent/versionen.sh /mnt/user/psagent-sicherung /mnt/disk1/psagent-versionen
    ```
 
    `disk1` durch die Platte aus Punkt 1 ersetzen. Das Ziel muss unter `/mnt/diskN/` stehen, nicht
-   unter `/mnt/user/`; sonst bricht das Skript ab.
-5. **Meldungen:** Scheitert das Skript, meldet es das in Unraid (Glocke oben rechts). Per Mail
-   kommt die Meldung nur, wenn Unraid unter „Settings → Notification Settings“ Mails für
-   Warnungen und Alarme schickt. Das Protokoll zeigt „User Scripts“ unter „Show Log“.
+   unter `/mnt/user/`; sonst bricht das Skript ab. Die Push-Adresse stammt vom Monitor
+   „Versionsstände“ in Uptime Kuma (`monitoring.md`, Abschnitt 2), mit `127.0.0.1:3001` als
+   Host, weil Uptime Kuma auf Unraid selbst läuft. Ohne die Zeile meldet das Skript nur an Unraid.
+5. **Meldungen:** Scheitert das Skript, meldet es das in Unraid (Glocke oben rechts) und an
+   Uptime Kuma. Per Mail kommt die Unraid-Meldung nur, wenn Unraid unter „Settings → Notification
+   Settings“ Mails für Warnungen und Alarme schickt. Das Protokoll zeigt „User Scripts“ unter
+   „Show Log“.
 6. **Probelauf** nach der ersten Sicherung (`server-einrichten.md`, Schritt 6.3): in „User
    Scripts“ auf „Run Script“. Die Ausgabe endet mit „Behalten: 1 Stand. Belegt: …“. Danach
    `ls -l /mnt/disk1/psagent-versionen/` zeigt einen Ordner mit dem heutigen Datum, und
-   `ls -ld` zeigt `drwx------ root root`.
+   `ls -ld` zeigt `drwx------ root root`. Der Monitor „Versionsstände“ steht auf grün.
 7. Unraid im Tailnet; Richtlinie wie oben.
 
 Ein zweiter Lauf am selben Tag ändert nichts. Bricht ein Lauf ab, bleibt nur der Ordner
 `.unfertig` liegen; der nächste Lauf ersetzt ihn.
+
+### Prüfung vor dem Aufräumen
+
+Bevor das Skript alte Stände löscht, prüft es den neuen. Auffällig ist er, wenn
+
+- er leer ist,
+- seine neueste Datei älter als 26 Stunden ist (die Sicherung um 02:00 kam nicht an) oder
+- er kleiner als die Hälfte des letzten unauffälligen Stands ist.
+
+Dann legt es den Stand trotzdem an, **löscht aber nichts**, meldet „Sicherung auf Unraid
+auffällig“ (Unraid und Uptime Kuma) und endet mit Fehler. Das wiederholt sich jeden Tag, bis der
+Stand wieder unauffällig ist. Grund: Ein gehackter Server könnte seine Sicherung löschen oder
+ersetzen und dazu seine eigenen Meldungen abschalten. Ohne diese Prüfung wären nach 30 Tagen auch
+die täglichen Stände von vor dem Angriff weg.
+
+Bei einer Meldung:
+
+1. Auf dem Server nachsehen, ob die Sicherung läuft: `journalctl -u psagent-sicherung -n 50`.
+   Läuft der Server gar nicht (Urlaub, Ausfall), ist die Meldung erklärt; sie verschwindet mit
+   der nächsten Sicherung.
+2. Ist die Sicherung geschrumpft oder leer, ohne dass jemand etwas gelöscht hat: als möglichen
+   Angriff behandeln (`vorfall-kette.md`) und nichts auf Unraid löschen.
+3. Ist ein kleinerer Stand erklärbar (z. B. nach einer neuen Datenbank-Zeitlinie im Ernstfall),
+   ihn einmal von Hand annehmen:
+
+   ```bash
+   PSAGENT_VERSIONEN_STAND_ANNEHMEN=1 bash /boot/config/psagent/versionen.sh \
+       /mnt/user/psagent-sicherung /mnt/disk1/psagent-versionen
+   ```
+
+Den letzten unauffälligen Stand merkt sich `psagent-versionen/.referenz` (Datum und Größe).
 
 ## 3. Server einrichten
 
